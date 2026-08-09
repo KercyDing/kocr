@@ -8,7 +8,7 @@ mod ocr;
 use std::env;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 use clap::builder::styling::{AnsiColor, Effects, Styles};
@@ -210,8 +210,9 @@ fn run_capture(output: Option<PathBuf>, recognize: bool, oneline: bool) -> Resul
         .clone()
         .unwrap_or_else(|| temp_dir.path().join("capture.png"));
 
+    let release_capture = spectacle_supports_release_capture(&spectacle);
     let status = Command::new(spectacle)
-        .args(spectacle_args())
+        .args(spectacle_args(release_capture))
         .arg(&capture_path)
         .stderr(Stdio::null())
         .status()
@@ -250,14 +251,28 @@ fn run_capture(output: Option<PathBuf>, recognize: bool, oneline: bool) -> Resul
     Ok(())
 }
 
-fn spectacle_args() -> [&'static str; 5] {
-    [
-        "--region",
-        "--background",
-        "--nonotify",
-        "--release-capture",
-        "--output",
-    ]
+fn spectacle_supports_release_capture(spectacle: &Path) -> bool {
+    const OPTION: &[u8] = b"--release-capture";
+
+    Command::new(spectacle)
+        .arg("--help")
+        .output()
+        .is_ok_and(|output| {
+            output
+                .stdout
+                .windows(OPTION.len())
+                .chain(output.stderr.windows(OPTION.len()))
+                .any(|window| window == OPTION)
+        })
+}
+
+fn spectacle_args(release_capture: bool) -> Vec<&'static str> {
+    let mut args = vec!["--region", "--background", "--nonotify"];
+    if release_capture {
+        args.push("--release-capture");
+    }
+    args.push("--output");
+    args
 }
 
 fn require_command(name: &str) -> Result<PathBuf, AppError> {
@@ -430,8 +445,13 @@ mod tests {
     }
 
     #[test]
-    fn uses_release_capture() {
-        assert!(spectacle_args().contains(&"--release-capture"));
+    fn uses_release_capture_when_supported() {
+        assert!(spectacle_args(true).contains(&"--release-capture"));
+    }
+
+    #[test]
+    fn omits_release_capture_when_unsupported() {
+        assert!(!spectacle_args(false).contains(&"--release-capture"));
     }
 
     #[test]
