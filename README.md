@@ -10,18 +10,9 @@ Recognize text from existing images or capture a screen region with Spectacle. R
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kdeocr/main/script.sh)"
 ```
 
-Requires:
-- Linux with KDE Plasma 6 on Wayland
-- `Spectacle`, `wl-copy`, ONNX Runtime
-- `curl` (for model installation)
+The installer downloads `kocr`, installs any missing runtime dependencies, and then installs the selected OCR model.
 
-Install ONNX Runtime:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kdeocr/main/onnxruntime.sh)"
-```
-
-The script installs `onnxruntime-cpu` from the repository on Arch Linux and CachyOS. On Debian, Ubuntu, Fedora, RHEL, and compatible distributions, it installs the official ONNX Runtime 1.28.0 CPU archive.
+Supported package-manager families are Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
 
 ## Usage
 

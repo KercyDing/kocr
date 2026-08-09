@@ -3,6 +3,7 @@
 set -euo pipefail
 
 repo=KercyDing/kdeocr
+onnxruntime_version=1.28.0
 install_dir=${KOCR_INSTALL_DIR:-"$HOME/.local/bin"}
 unit_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/systemd/user
 binary_path=$install_dir/kocr
@@ -16,6 +17,157 @@ fail() {
 
 require() {
     command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
+}
+
+run_as_root() {
+    if (( EUID == 0 )); then
+        "$@"
+    else
+        require sudo
+        sudo "$@"
+    fi
+}
+
+distribution_family() {
+    [[ -r /etc/os-release ]] || return 1
+    local ID= ID_LIKE= identifiers
+
+    # os-release is the system-defined source of distribution identifiers.
+    source /etc/os-release
+    identifiers=" ${ID,,} ${ID_LIKE,,} "
+    case $identifiers in
+        *" arch "*) printf '%s\n' arch ;;
+        *" debian "* | *" ubuntu "*) printf '%s\n' debian ;;
+        *" fedora "* | *" rhel "*) printf '%s\n' fedora ;;
+        *) return 1 ;;
+    esac
+}
+
+install_packages() {
+    local family=$1
+    shift
+    (( $# > 0 )) || return
+
+    echo "Installing missing system packages: $*"
+    case $family in
+        arch)
+            require pacman
+            run_as_root pacman -S --needed --noconfirm "$@"
+            ;;
+        debian)
+            require apt-get
+            run_as_root apt-get update
+            run_as_root apt-get install -y "$@"
+            ;;
+        fedora)
+            require dnf
+            run_as_root dnf install -y "$@"
+            ;;
+        *) fail "unsupported Linux distribution" ;;
+    esac
+}
+
+install_command_dependencies() {
+    local family command_name spectacle_package
+    local -a missing=() packages=()
+
+    for command_name in spectacle wl-copy notify-send curl; do
+        if ! command -v "$command_name" >/dev/null 2>&1; then
+            missing+=("$command_name")
+        fi
+    done
+    (( ${#missing[@]} > 0 )) || return
+
+    family=$(distribution_family) \
+        || fail "unsupported Linux distribution; missing commands: ${missing[*]}"
+    case $family in
+        arch)
+            command -v spectacle >/dev/null 2>&1 || packages+=(spectacle)
+            command -v wl-copy >/dev/null 2>&1 || packages+=(wl-clipboard)
+            command -v notify-send >/dev/null 2>&1 || packages+=(libnotify)
+            command -v curl >/dev/null 2>&1 || packages+=(curl)
+            ;;
+        debian)
+            spectacle_package=spectacle
+            if command -v apt-cache >/dev/null 2>&1 \
+                && apt-cache show kde-spectacle >/dev/null 2>&1; then
+                spectacle_package=kde-spectacle
+            fi
+            command -v spectacle >/dev/null 2>&1 || packages+=("$spectacle_package")
+            command -v wl-copy >/dev/null 2>&1 || packages+=(wl-clipboard)
+            command -v notify-send >/dev/null 2>&1 || packages+=(libnotify-bin)
+            command -v curl >/dev/null 2>&1 || packages+=(curl)
+            ;;
+        fedora)
+            command -v spectacle >/dev/null 2>&1 || packages+=(spectacle)
+            command -v wl-copy >/dev/null 2>&1 || packages+=(wl-clipboard)
+            command -v notify-send >/dev/null 2>&1 || packages+=(libnotify)
+            command -v curl >/dev/null 2>&1 || packages+=(curl)
+            ;;
+    esac
+
+    install_packages "$family" "${packages[@]}"
+    hash -r
+    for command_name in "${missing[@]}"; do
+        command -v "$command_name" >/dev/null 2>&1 \
+            || fail "dependency installer did not provide command: $command_name"
+    done
+}
+
+onnxruntime_available() {
+    local doctor_output
+
+    doctor_output=$("$binary_path" doctor 2>&1 || true)
+    [[ $doctor_output == *"[ok] onnxruntime"* ]]
+}
+
+install_onnxruntime_archive() {
+    local architecture archive_url onnxruntime_dir onnxruntime_temporary
+
+    require curl
+    require install
+    require ldconfig
+    require tar
+    require tee
+
+    case $(uname -m) in
+        x86_64) architecture=x64 ;;
+        aarch64 | arm64) architecture=aarch64 ;;
+        *) fail "unsupported architecture: $(uname -m)" ;;
+    esac
+
+    onnxruntime_dir=/opt/onnxruntime-$onnxruntime_version
+    onnxruntime_temporary=$temporary_dir/onnxruntime
+    archive_url="https://github.com/microsoft/onnxruntime/releases/download/v$onnxruntime_version/onnxruntime-linux-$architecture-$onnxruntime_version.tgz"
+    mkdir -p -- "$onnxruntime_temporary"
+    curl -fL --progress-bar "$archive_url" \
+        -o "$onnxruntime_temporary/onnxruntime.tgz"
+    run_as_root install -d "$onnxruntime_dir"
+    run_as_root tar -xzf "$onnxruntime_temporary/onnxruntime.tgz" \
+        -C "$onnxruntime_dir" --strip-components=1
+    printf '%s\n' "$onnxruntime_dir/lib" \
+        | run_as_root tee /etc/ld.so.conf.d/onnxruntime.conf >/dev/null
+    run_as_root ldconfig
+}
+
+install_onnxruntime() {
+    local family=unknown
+
+    onnxruntime_available && return
+    family=$(distribution_family 2>/dev/null || printf '%s\n' unknown)
+    echo "Installing missing dependency: ONNX Runtime"
+    if [[ $family == arch ]]; then
+        install_packages arch onnxruntime-cpu
+    else
+        install_onnxruntime_archive
+    fi
+    onnxruntime_available \
+        || fail "ONNX Runtime was installed but could not be loaded by kocr"
+}
+
+install_dependencies() {
+    install_command_dependencies
+    install_onnxruntime
 }
 
 select_model() {
@@ -99,10 +251,9 @@ download_binary() {
 }
 
 install_kocr() {
-    local model model_dir source_binary unit_temporary
+    local model source_binary unit_temporary
 
     require install
-    require curl
     require mktemp
     require realpath
     require systemctl
@@ -118,13 +269,15 @@ install_kocr() {
     else
         source_binary=$(download_binary)
     fi
-    model=$(select_model)
 
     [[ $binary_path != *$'\n'* && $binary_path != *'"'* ]] \
         || fail "install path contains unsupported characters"
     mkdir -p -- "$install_dir" "$unit_dir"
     install -m 0755 "$source_binary" "$temporary_dir/kocr"
     mv -f -- "$temporary_dir/kocr" "$binary_path"
+
+    install_dependencies
+    model=$(select_model)
     if ! "$binary_path" use "$model" >/dev/null 2>&1; then
         "$binary_path" install "$model"
     fi
