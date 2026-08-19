@@ -1,70 +1,123 @@
+!version 0.4
 !shell bash
 
-# Build on debug mode
+[help] Build on debug mode
+[pass] Debug build complete.
+[fail] Debug build failed.
 b():
     cargo build
 
-# Build on release mode
+[help] Build on release mode
+[pass] Release build complete.
+[fail] Release build failed.
 rb(args..):
     cargo build --release
 
-# Run with args on debug mode
+[help] Run with args on debug mode
+[pass] Run complete.
+[fail] Run failed.
 r(args..):
     cargo run -- {{ args }}
 
-# Build the release binary for installation
-_release_build():
-    cargo build --release
+[help] Run the local CI
+[pass] CI passed.
+[fail] CI failed.
+ci() & check & test
 
-# Install the local kocr CLI
-install() & _release_build:
-    mkdir -p "$HOME/.local/bin"
-    cp target/release/kocr "$HOME/.local/bin/.kocr-install"
-    chmod +x "$HOME/.local/bin/.kocr-install"
-    mv "$HOME/.local/bin/.kocr-install" "$HOME/.local/bin/kocr"
-    echo "Installed kocr to $HOME/.local/bin"
-    systemctl --user restart kocr.service
-    echo "Restarted daemon."
-    du -sh $(which kocr)
-
-# Uninstall the local kocr CLI
-uninstall():
-    systemctl --user disable --now kocr.service 2>/dev/null || true
-    rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/kocr.service"
-    systemctl --user daemon-reload
-    echo "Removed kocr.service."
-    rm -f "$HOME/.local/bin/kocr"
-    echo "Uninstalled kocr."
-
-# Run the local CI
-ci() & check & test:
-    echo 'CI done.'
-
-# Fmt, check and clippy
+[help] Fmt, check and clippy
+[pass] Check passed.
+[fail] Check failed.
 check():
     cargo fmt --all
     cargo check --all-targets
     cargo clippy --all-targets -- -D warnings
 
-# Run tests
+[help] Run tests
+[pass] Tests passed.
+[fail] Tests failed.
 test() ? @has("cargo-nextest"):
     cargo nextest run
 
 test():
     cargo test --all-targets --workspace
 
-# Remove build and generated model artifacts
+[help] Remove build and generated model artifacts
+[pass] Clean complete.
+[fail] Clean failed.
 clean():
     cargo clean
     find PaddleOCR -maxdepth 1 -type d -name 'kdeocr-ppocrv6-*-r*' -exec rm -r -- {} +
     find PaddleOCR -maxdepth 1 -type f -name 'kdeocr-ppocrv6-*-r*.tar.zst' -delete
 
-# Show current version
-show():
+[help] Build the release binary for installation
+[pass] Release build complete.
+[fail] Release build failed.
+_release_build():
+    cargo build --release
+
+[help] Install the local kocr CLI
+[desc] Stage the release binary before replacing the installed version.
+[pass] Installation complete.
+[fail] Installation failed.
+install() & _release_build:
+    | install_dir="$HOME/.local/bin"
+    | install_path="$install_dir/kocr"
+    | staged_path="$install_dir/.kocr-install"
+    | unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    | unit_path="$unit_dir/kocr.service"
+    |
+    | mkdir -p "$install_dir"
+    | mkdir -p "$unit_dir"
+    | unit_staged=$(mktemp "$unit_dir/.kocr.service.XXXXXX")
+    | cp target/release/kocr "$staged_path"
+    | chmod +x "$staged_path"
+    | mv "$staged_path" "$install_path"
+    |
+    | printf '%s\n' \
+    |     '[Unit]' \
+    |     'Description=KOCR global shortcut daemon' \
+    |     'PartOf=graphical-session.target' \
+    |     'After=graphical-session.target' \
+    |     '' \
+    |     '[Service]' \
+    |     'Type=dbus' \
+    |     'BusName=io.github.KercyDing.kocr' \
+    |     "ExecStart=\"$install_path\" daemon" \
+    |     'Restart=on-failure' \
+    |     'RestartSec=2' \
+    |     '' \
+    |     '[Install]' \
+    |     'WantedBy=graphical-session.target' > "$unit_staged"
+    | chmod 0644 "$unit_staged"
+    | mv "$unit_staged" "$unit_path"
+    | systemctl --user daemon-reload
+    | systemctl --user enable kocr.service
+    | systemctl --user restart kocr.service
+    | du -sh "$install_path"
+
+[help] Uninstall the local kocr CLI
+[desc] Remove the user service and installed binary.
+[pass] Uninstallation complete.
+[fail] Uninstallation failed.
+uninstall():
+    | config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
+    | service_path="$config_dir/systemd/user/kocr.service"
+    | install_path="$HOME/.local/bin/kocr"
+    |
+    | systemctl --user disable --now kocr.service 2>/dev/null || true
+    | rm -f "$service_path"
+    | systemctl --user daemon-reload
+    | rm -f "$install_path"
+
+[help] Show current version
+[fail] Could not display version.
+show() ? @has("uv"):
     uv run scripts/version.py show
 
-# Update version and publish
-publish(version):
+[help] Update version and publish
+[pass] Publish complete.
+[fail] Publish failed.
+publish(version) ? @has("uv"):
     test -z "$(git status --porcelain)"
     uv run scripts/version.py change {{ version }}
     uv run scripts/notice.py
@@ -74,12 +127,8 @@ publish(version):
     git tag {{ version }}
     git push --atomic origin HEAD {{ version }}
 
-// ========================================
-[bundle]
-# Bundle small to tar.zst
-small() ? @has("uv"):
-    uv run PaddleOCR/bundle.py --name ppocrv6-small-r1
-
-# Bundle medium to tar.zst
-medium() ? @has("uv"):
-    uv run PaddleOCR/bundle.py --name ppocrv6-medium-r1
+[help] Bundle PaddleOCR models
+[desc] Avaiabel models:
+[desc] tiny, small, medium
+bundle(model) ? @has("uv"):
+    uv run PaddleOCR/bundle.py --name ppocrv6-{{ model }}-r1
