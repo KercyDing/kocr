@@ -1,119 +1,78 @@
 # KOCR
 
-Offline OCR for desktop.
+Offline OCR for desktop and CLI. Capture a screen region or recognize an existing image; text and PNGs are copied to the clipboard. No ONNX Runtime required.
 
-Recognize text from existing images with the CLI, or capture a screen region with the desktop app on Linux and macOS. Results are copied directly to the clipboard.
+## Install
 
-## Installation
-
-### CLI
-
-Debian/Ubuntu:
+Linux packages are published as `.deb`, `.rpm`, and AUR builds. Replace `<version>` and `<arch>` with the downloaded release values.
 
 ```bash
-sudo apt install ./kocr-cli-<version>-linux-<arch>.deb
-```
+# Debian / Ubuntu
+sudo apt install ./kocr-cli-<version>-linux-<arch>.deb   # CLI
+sudo apt install ./kocr-gui-<version>-linux-<arch>.deb   # GUI
 
-Fedora/RHEL:
+# Fedora / RHEL
+sudo dnf install ./kocr-cli-<version>-linux-<arch>.rpm   # CLI
+sudo dnf install ./kocr-gui-<version>-linux-<arch>.rpm   # GUI
 
-```bash
-sudo dnf install ./kocr-cli-<version>-linux-<arch>.rpm
-```
-
-Arch Linux:
-
-```bash
-paru -S kocr-bin
+# Arch Linux
+paru -S kocr-bin        # CLI
+paru -S kocr-gui-bin    # GUI
 ```
 
 macOS:
 
 ```bash
+# CLI
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kocr/main/cli.sh)"
+
+# GUI: download kocr-gui-<version>-<arch>-apple-darwin.zip and open kocr.app
 ```
-
-Windows (PowerShell):
-
-```powershell
-irm https://raw.githubusercontent.com/KercyDing/kocr/main/cli.ps1 -OutFile cli.ps1
-.\cli.ps1
-```
-
-Use `.\cli.ps1 uninstall` to remove it.
-
-The CLI package installs `kocr` only. It does not install the GUI or desktop packages. Install a model with `kocr install 1`. No ONNX Runtime required.
-
-### GUI
-
-Debian/Ubuntu:
-
-```bash
-sudo apt install ./kocr-gui-<version>-linux-<arch>.deb
-```
-
-Fedora/RHEL:
-
-```bash
-sudo dnf install ./kocr-gui-<version>-linux-<arch>.rpm
-```
-
-Arch Linux:
-
-```bash
-paru -S kocr-gui-bin
-```
-
-The GUI package installs `kocr-gui` and a KOCR menu entry, without the CLI. Open KOCR to capture, install a model, and manage shortcuts.
-
-macOS:
-
-Download `kocr-gui-<version>-<arch>-apple-darwin.zip`, unzip it, and open `kocr.app`.
 
 Windows:
 
-Download `kocr-gui-<version>-<arch>-pc-windows-msvc.zip` and run `kocr-gui.exe`. The app runs from the system tray.
+```powershell
+# CLI
+irm https://raw.githubusercontent.com/KercyDing/kocr/main/cli.ps1 -OutFile cli.ps1
+.\cli.ps1
 
-## Usage
-
-### Existing Image
-
-```bash
-kocr image test.png   # Recognize text and print to stdout
+# GUI: download kocr-gui-<version>-<arch>-pc-windows-msvc.zip and run kocr-gui.exe
 ```
 
-### OCR Models
+## Use
+
+GUI:
+
+- **Copy** captures a region and copies the PNG.
+- **Save** captures a region, asks for a path, saves the PNG, and copies it.
+- **Extract** captures a region, runs OCR, and copies the text.
+- **Extract as one line** merges OCR text into one line before copying.
+
+CLI:
 
 ```bash
-kocr list                      # Show config path and list models
-kocr install 1                 # Install by ID or name
-kocr install 1 -p <DIRECTORY>  # parent directory for the model
-kocr use 1                     # Set active model
-kocr uninstall 1               # Remove a model
-kocr-gui                       # Capture, models, and shortcuts
+kocr image test.png          # Print recognized text to stdout
+kocr list                    # Show models and config path
+kocr install 1               # Install a model by ID
+kocr install 1 -p <DIR>      # Choose the model parent directory
+kocr use 1                   # Select the active model
+kocr uninstall 1             # Remove a model
 ```
 
-`--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kocr/models`.
+The GUI also installs and selects models. Models are INT8-quantized RTen packages.
 
-Models are INT8-quantized RTen packages, available in small, medium, and tiny tiers.
+## Shortcuts And Config
 
-## Keyboard Shortcuts
+Open **Shortcuts** in the GUI and assign keys. Shortcuts are unset by default; Extract actions require an installed model.
 
-Open KOCR and use the Shortcuts page. Shortcuts are unset by default; assign the keys you want.
+| Action | Default |
+|--------|---------|
+| Copy | unset |
+| Save | unset |
+| Extract | unset |
+| Extract as one line | unset |
 
-| Action | Description |
-|--------|-------------|
-| Copy | Capture a region and copy the PNG |
-| Save | Capture a region, choose a path, save the PNG, and copy it |
-| Extract | Capture, OCR, and copy text |
-| Extract as one line | Capture, OCR, merge into one line, and copy text |
-
-Shortcut changes take effect after saving.
-
-## Configuration
-
-`kocr list` prints the configuration path. Edit it with your own editor; there is no `kocr config` command. The GUI writes the same file.
-
-Example:
+`kocr list` prints the config path. Edit `config.toml` directly:
 
 ```toml
 [shortcut]
@@ -124,19 +83,13 @@ oneline = "Alt+4"
 
 [models]
 select = "ppocrv6-small-int8-r1"
-
-[models.ppocrv6-small-int8-r1]
-path = "/home/user/.local/share/kocr/models/ppocrv6-small-int8-r1"
 ```
 
-Supported modifiers: `Mod`, `Super`, `Ctrl`, `Alt`, `Shift`. The UI records shortcuts directly and displays macOS `Opt` / `Cmd` names.  
-Key examples: `A-Z`, `0-9`, `F1-F35`, `Escape`, `Space`, `Slash`.  
-Set a shortcut to an empty string to disable it.
+Supported modifiers: `Mod`, `Super`, `Ctrl`, `Alt`, `Shift`. Set a shortcut to an empty string to disable it.
 
 ## License
 
 [Apache License 2.0](LICENSE)
 
-Third-party notices: [NOTICE](NOTICE)
-
+Third-party notices: [NOTICE](NOTICE)  
 OCR models are based on PaddleOCR: [LICENSE-PaddleOCR](LICENSE-PaddleOCR).
