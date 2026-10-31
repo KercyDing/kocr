@@ -18,8 +18,6 @@ pub(crate) use list::run as list;
 pub(crate) use uninstall::run as uninstall;
 pub(crate) use r#use::run as use_model;
 
-include!(concat!(env!("OUT_DIR"), "/model_index.rs"));
-
 const CONFIG_FILE: &str = "kdeocr/config.toml";
 const DEFAULT_COPY_SHORTCUT: &str = "Alt+1";
 const DEFAULT_OCR_SHORTCUT: &str = "Alt+2";
@@ -98,13 +96,13 @@ struct InstalledModel {
     path: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct ModelIndex {
     pub(crate) format: u32,
     pub(crate) profiles: BTreeMap<String, ModelProfile>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct ModelProfile {
     pub(crate) id: u32,
     pub(crate) url: String,
@@ -139,7 +137,8 @@ pub enum ModelError {
 }
 
 pub(crate) fn load_index() -> Result<ModelIndex, ModelError> {
-    let index = model_index();
+    let index: ModelIndex = toml::from_str(include_str!("../index.toml"))
+        .map_err(|error| ModelError::Index(format!("could not parse index.toml: {error}")))?;
     if index.format != 1 {
         return Err(ModelError::Index(format!(
             "unsupported model index format {}",
@@ -443,19 +442,19 @@ mod tests {
 
     use super::{
         InstalledModel, ModelConfig, ModelsConfig, ShortcutConfig, installed_profiles_from,
-        model_index, resolve_profile,
+        load_index, resolve_profile,
     };
 
     #[test]
     fn resolves_id() {
-        let index = model_index();
+        let index = load_index().unwrap();
         let (name, _) = resolve_profile(&index, "1").unwrap();
         assert_eq!(name, "ppocrv6-small-r1");
     }
 
     #[test]
     fn resolves_name() {
-        let index = model_index();
+        let index = load_index().unwrap();
         let (name, _) = resolve_profile(&index, "ppocrv6-small-r1").unwrap();
         assert_eq!(name, "ppocrv6-small-r1");
     }
@@ -522,7 +521,7 @@ mod tests {
 
     #[test]
     fn finds_custom_path() {
-        let index = model_index();
+        let index = load_index().unwrap();
         let temporary = tempfile::tempdir().unwrap();
         let path = temporary.path().join("custom-small");
         fs::create_dir(&path).unwrap();

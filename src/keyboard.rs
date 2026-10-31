@@ -6,9 +6,10 @@ use std::sync::mpsc::{self, SyncSender};
 use std::thread;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use thiserror::Error;
-use zbus::blocking::{Connection, Proxy};
-use zbus::zvariant::OwnedObjectPath;
+use zbus::fdo::RequestNameFlags;
+use zbus::{Connection, OwnedObjectPath, Proxy};
 
 const BUS_NAME: &str = "io.github.KercyDing.kocr";
 const SERVICE: &str = "org.kde.kglobalaccel";
@@ -71,10 +72,11 @@ where
     F: FnMut(bool, bool) -> Result<(), E>,
     E: std::fmt::Display,
 {
-    let connection = Connection::session()
+    let connection = zbus::block_on(Connection::session())
         .map_err(|error| operation("could not connect to the session bus", error))?;
-    connection
-        .request_name(BUS_NAME)
+    // zbus defaults to REPLACE_EXISTING, which would silently displace an
+    // already-running daemon. Queuing is also undesirable for a singleton.
+    zbus::block_on(connection.request_name_with_flags(BUS_NAME, RequestNameFlags::DO_NOT_QUEUE))
         .map_err(|error| operation("another daemon is already running", error))?;
 
     let mut bindings = load_bindings()?;
@@ -163,7 +165,7 @@ fn spawn_listener(
 ) {
     thread::spawn(move || {
         loop {
-            if let Err(error) = listen(&connection, &events, &trigger_pending) {
+            if let Err(error) = zbus::block_on(listen(&connection, &events, &trigger_pending)) {
                 eprintln!("\x1b[31mShortcut listener failed: {error}\x1b[0m");
             }
             thread::sleep(POLL_INTERVAL);
@@ -172,16 +174,17 @@ fn spawn_listener(
     });
 }
 
-fn listen(
+async fn listen(
     connection: &Connection,
     events: &SyncSender<Event>,
     trigger_pending: &AtomicBool,
 ) -> Result<(), KeyboardError> {
-    let component = component_proxy(connection)?;
-    let signals = component
+    let component = component_proxy(connection).await?;
+    let mut signals = component
         .receive_signal("globalShortcutPressed")
+        .await
         .map_err(|error| operation("could not subscribe to shortcut events", error))?;
-    for message in signals {
+    while let Some(message) = signals.next().await {
         let body = message.body();
         let Ok((component, action, _timestamp)) = body.deserialize::<(String, String, i64)>()
         else {
@@ -204,28 +207,35 @@ fn listen(
 }
 
 fn register(connection: &Connection, bindings: &Bindings) -> Result<(), KeyboardError> {
-    let proxy = service_proxy(connection)?;
+    zbus::block_on(register_async(connection, bindings))
+}
+
+async fn register_async(connection: &Connection, bindings: &Bindings) -> Result<(), KeyboardError> {
+    let proxy = service_proxy(connection).await?;
     register_action(
         &proxy,
         COPY_ACTION,
         "Capture and copy screenshot",
         bindings.copy.as_ref(),
-    )?;
+    )
+    .await?;
     register_action(
         &proxy,
         OCR_ACTION,
         "Capture screenshot and recognize text",
         bindings.ocr.as_ref(),
-    )?;
+    )
+    .await?;
     register_action(
         &proxy,
         ONELINE_ACTION,
         "Capture screenshot and recognize text in one line",
         bindings.oneline.as_ref(),
     )
+    .await
 }
 
-fn register_action(
+async fn register_action(
     proxy: &Proxy<'static>,
     action_name: &str,
     description: &str,
@@ -234,12 +244,14 @@ fn register_action(
     let action = action_id(action_name, description);
     let _: () = proxy
         .call("doRegister", &(action.clone(),))
+        .await
         .map_err(|error| operation("could not register shortcut action", error))?;
     let keys = binding
         .map(|binding| vec![(vec![binding.key, 0, 0, 0],)])
         .unwrap_or_default();
     let assigned: Vec<(Vec<i32>,)> = proxy
         .call("setShortcutKeys", &(action, keys, SET_PRESENT_NO_AUTOLOAD))
+        .await
         .map_err(|error| operation("could not set global shortcut", error))?;
     if let Some(binding) = binding
         && !assigned.iter().any(|(keys,)| keys.contains(&binding.key))
@@ -252,16 +264,20 @@ fn register_action(
     Ok(())
 }
 
-fn service_proxy(connection: &Connection) -> Result<Proxy<'static>, KeyboardError> {
+async fn service_proxy(connection: &Connection) -> Result<Proxy<'static>, KeyboardError> {
     Proxy::new(connection, SERVICE, SERVICE_PATH, "org.kde.KGlobalAccel")
+        .await
         .map_err(|error| operation("could not connect to KGlobalAccel", error))
 }
 
-fn component_proxy(connection: &Connection) -> Result<Proxy<'static>, KeyboardError> {
-    let path: OwnedObjectPath = service_proxy(connection)?
+async fn component_proxy(connection: &Connection) -> Result<Proxy<'static>, KeyboardError> {
+    let path: OwnedObjectPath = service_proxy(connection)
+        .await?
         .call("getComponent", &(COMPONENT,))
+        .await
         .map_err(|error| operation("could not find shortcut component", error))?;
     Proxy::new(connection, SERVICE, path, "org.kde.kglobalaccel.Component")
+        .await
         .map_err(|error| operation("could not connect to shortcut component", error))
 }
 

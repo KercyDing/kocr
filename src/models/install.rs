@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use ruzstd::decoding::StreamingDecoder;
-use sha2::{Digest, Sha256};
 use tar::Archive;
 use tempfile::TempDir;
 
@@ -56,7 +55,8 @@ pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError>
     if !status.success() {
         return Err(ModelError::Operation(format!("download failed: {status}")));
     }
-    let actual = file_sha256(&archive_path)?;
+    let actual = crate::hash::file_sha256(&archive_path)
+        .map_err(|error| ModelError::Operation(format!("could not read archive: {error}")))?;
     if actual != profile.sha256 {
         return Err(ModelError::Operation(format!(
             "SHA-256 mismatch: expected {}, got {actual}",
@@ -112,13 +112,6 @@ fn single_directory(root: &Path) -> Result<PathBuf, ModelError> {
         ));
     }
     Ok(first)
-}
-
-fn file_sha256(path: &Path) -> Result<String, ModelError> {
-    let bytes = fs::read(path)
-        .map_err(|error| ModelError::Operation(format!("could not read archive: {error}")))?;
-    let digest = Sha256::digest(bytes);
-    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 fn find_command(name: &str) -> Option<PathBuf> {

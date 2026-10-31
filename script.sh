@@ -3,7 +3,6 @@
 set -euo pipefail
 
 repo=KercyDing/kdeocr
-onnxruntime_version=1.28.0
 install_dir=${KOCR_INSTALL_DIR:-"$HOME/.local/bin"}
 unit_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/systemd/user
 binary_path=$install_dir/kocr
@@ -114,60 +113,9 @@ install_command_dependencies() {
     done
 }
 
-onnxruntime_available() {
-    local doctor_output
-
-    doctor_output=$("$binary_path" doctor 2>&1 || true)
-    [[ $doctor_output == *"[ok] onnxruntime"* ]]
-}
-
-install_onnxruntime_archive() {
-    local architecture archive_url onnxruntime_dir onnxruntime_temporary
-
-    require curl
-    require install
-    require ldconfig
-    require tar
-    require tee
-
-    case $(uname -m) in
-        x86_64) architecture=x64 ;;
-        aarch64 | arm64) architecture=aarch64 ;;
-        *) fail "unsupported architecture: $(uname -m)" ;;
-    esac
-
-    onnxruntime_dir=/opt/onnxruntime-$onnxruntime_version
-    onnxruntime_temporary=$temporary_dir/onnxruntime
-    archive_url="https://github.com/microsoft/onnxruntime/releases/download/v$onnxruntime_version/onnxruntime-linux-$architecture-$onnxruntime_version.tgz"
-    mkdir -p -- "$onnxruntime_temporary"
-    curl -fL --progress-bar "$archive_url" \
-        -o "$onnxruntime_temporary/onnxruntime.tgz"
-    run_as_root install -d "$onnxruntime_dir"
-    run_as_root tar -xzf "$onnxruntime_temporary/onnxruntime.tgz" \
-        -C "$onnxruntime_dir" --strip-components=1
-    printf '%s\n' "$onnxruntime_dir/lib" \
-        | run_as_root tee /etc/ld.so.conf.d/onnxruntime.conf >/dev/null
-    run_as_root ldconfig
-}
-
-install_onnxruntime() {
-    local family=unknown
-
-    onnxruntime_available && return
-    family=$(distribution_family 2>/dev/null || printf '%s\n' unknown)
-    echo "Installing missing dependency: ONNX Runtime"
-    if [[ $family == arch ]]; then
-        install_packages arch onnxruntime-cpu
-    else
-        install_onnxruntime_archive
-    fi
-    onnxruntime_available \
-        || fail "ONNX Runtime was installed but could not be loaded by kocr"
-}
-
 install_dependencies() {
+    [[ ${KOCR_SKIP_DEPENDENCIES:-0} == 1 ]] && return
     install_command_dependencies
-    install_onnxruntime
 }
 
 select_model() {
@@ -251,7 +199,7 @@ download_binary() {
 }
 
 install_kocr() {
-    local model source_binary unit_temporary
+    local model= source_binary unit_temporary
 
     require install
     require mktemp
@@ -277,11 +225,13 @@ install_kocr() {
     mv -f -- "$temporary_dir/kocr" "$binary_path"
 
     install_dependencies
-    model=$(select_model)
-    if ! "$binary_path" use "$model" >/dev/null 2>&1; then
-        "$binary_path" install "$model"
+    if [[ ${KOCR_SKIP_MODEL:-0} != 1 ]]; then
+        model=$(select_model)
+        if ! "$binary_path" use "$model" >/dev/null 2>&1; then
+            "$binary_path" install "$model"
+        fi
+        "$binary_path" use "$model"
     fi
-    "$binary_path" use "$model"
 
     unit_temporary=$(mktemp --tmpdir="$unit_dir" .kocr.service.XXXXXX)
     cat > "$unit_temporary" <<EOF
@@ -309,7 +259,9 @@ EOF
     systemctl --user restart kocr.service
 
     echo "Installed kocr to $binary_path"
-    echo "Model: $model"
+    if [[ -n $model ]]; then
+        echo "Model: $model"
+    fi
     echo "Shortcuts: Alt+1 (copy), Alt+2 (OCR), Alt+3 (one-line OCR)"
 }
 
@@ -347,15 +299,20 @@ uninstall_kocr() {
 }
 
 usage() {
-    echo "Usage: $0" >&2
+    echo "Usage: $0 [install|uninstall]" >&2
 }
 
-if (( $# != 0 )); then
+if (( $# > 1 )); then
     usage
     exit 2
 fi
 
-case $(select_action) in
+action=${1:-}
+if [[ -z $action ]]; then
+    action=$(select_action)
+fi
+
+case $action in
     install)
         install_kocr
         ;;
@@ -363,6 +320,6 @@ case $(select_action) in
         uninstall_kocr
         ;;
     *)
-        fail "unknown action"
+        fail "unknown action: $action"
         ;;
 esac

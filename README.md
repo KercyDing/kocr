@@ -10,7 +10,7 @@ Recognize text from existing images or capture a screen region with Spectacle. R
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kdeocr/main/script.sh)"
 ```
 
-The installer downloads `kocr`, installs any missing runtime dependencies, and then installs the selected OCR model.
+The installer downloads `kocr`, installs any missing runtime dependencies, and then installs the selected OCR model. OCR runs on the pure-Rust RTen engine, so ONNX Runtime is not required.
 
 Supported package-manager families are Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
 

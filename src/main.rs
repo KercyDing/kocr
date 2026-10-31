@@ -1,6 +1,7 @@
 #[cfg(not(target_os = "linux"))]
 compile_error!("kdeocr only supports Linux.");
 
+mod hash;
 mod keyboard;
 mod models;
 mod ocr;
@@ -128,28 +129,15 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::from(EXIT_OK),
         Err(AppError::Cancelled) => ExitCode::from(EXIT_CANCELLED),
-        Err(AppError::Model(error)) => {
-            let error = AppError::Model(error);
-            eprintln!("\x1b[31m{error}\x1b[0m");
-            ExitCode::from(EXIT_INVALID_INPUT)
-        }
-        Err(AppError::Config(error)) => {
-            let error = AppError::Config(error);
-            eprintln!("\x1b[31m{error}\x1b[0m");
-            ExitCode::from(EXIT_OUTPUT)
-        }
-        Err(AppError::Ocr(error)) => {
-            let error = AppError::Ocr(error);
-            eprintln!("\x1b[31m{error}\x1b[0m");
-            ExitCode::from(EXIT_OCR)
-        }
-        Err(AppError::Keyboard(error)) => {
-            let error = AppError::Keyboard(error);
-            eprintln!("\x1b[31m{error}\x1b[0m");
-            ExitCode::from(EXIT_OUTPUT)
-        }
         Err(error) => {
-            eprintln!("kocr: {error}");
+            if matches!(
+                &error,
+                AppError::Model(_) | AppError::Config(_) | AppError::Ocr(_) | AppError::Keyboard(_)
+            ) {
+                eprintln!("\x1b[31m{error}\x1b[0m");
+            } else {
+                eprintln!("kocr: {error}");
+            }
             ExitCode::from(error_code(&error))
         }
     }
@@ -335,8 +323,7 @@ fn run_doctor() -> Result<(), AppError> {
         command_check("wl-copy"),
         command_check("notify-send"),
         command_check("curl"),
-        runtime_check(),
-        model_dir_check(),
+        engine_check(),
     ];
 
     for check in &checks {
@@ -374,50 +361,19 @@ fn command_check(name: &'static str) -> Check {
     }
 }
 
-fn runtime_check() -> Check {
-    let library = ocr::runtime_library();
-    match ocr::init_runtime() {
-        Ok(()) => Check {
-            name: "onnxruntime",
+fn engine_check() -> Check {
+    match ocr::check() {
+        Ok(detail) => Check {
+            name: "rten",
             ok: true,
-            detail: format!("loaded {}", library.display()),
+            detail,
         },
         Err(error) => Check {
-            name: "onnxruntime",
+            name: "rten",
             ok: false,
             detail: error.to_string(),
         },
     }
-}
-
-fn model_dir_check() -> Check {
-    let path = model_dir();
-    Check {
-        name: "model-dir",
-        ok: path.is_dir(),
-        detail: format!(
-            "{}{}",
-            path.display(),
-            if path.is_dir() {
-                ""
-            } else {
-                " (created by model setup)"
-            }
-        ),
-    }
-}
-
-fn model_dir() -> PathBuf {
-    env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home_dir().join(".local/share"))
-        .join("kdeocr/models")
-}
-
-fn home_dir() -> PathBuf {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn find_command(name: &str) -> Option<PathBuf> {
