@@ -24,10 +24,15 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
-            name: Linux
-            key: linux
+            name: Linux x64
+            key: linux-x64
             deps: true
             fmt: true
+          - platform: ubuntu-24.04-arm
+            name: Linux ARM64
+            key: linux-arm64
+            deps: true
+            fmt: false
           - platform: macos-15
             name: macOS ARM64
             key: macos-arm64
