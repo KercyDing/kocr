@@ -1,9 +1,10 @@
 use std::env;
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
 
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Args, CommandFactory, Parser, Subcommand};
+use comfy_table::{Cell, Color, Table, presets::UTF8_BORDERS_ONLY};
 use kocr_core::models;
 use kocr_core::ocr;
 use kocr_core::platform;
@@ -49,19 +50,19 @@ enum CommandKind {
     List,
 
     /// Install a model by ID or name
-    Install(models::InstallArgs),
+    Install(InstallArgs),
 
     /// Uninstall a model by ID or name
-    Uninstall(models::ProfileArgs),
+    Uninstall(ProfileArgs),
 
     /// Select the active OCR model
-    Use(models::ProfileArgs),
+    Use(ProfileArgs),
 
     /// Open the configuration file
     Config,
 
     /// Recognize text from an image
-    Image(ocr::ImageArgs),
+    Image(ImageArgs),
 
     /// Show configuration and daemon state
     Status,
@@ -89,6 +90,35 @@ struct CaptureArgs {
     oneline: bool,
 }
 
+#[derive(Debug, Args)]
+struct ProfileArgs {
+    /// Model ID or name
+    #[arg(value_name = "ID_OR_MODEL")]
+    profile: String,
+}
+
+#[derive(Debug, Args)]
+struct InstallArgs {
+    /// Model ID or name
+    #[arg(value_name = "ID_OR_MODEL")]
+    profile: String,
+
+    /// Parent directory for the model installation
+    #[arg(short, long, value_name = "DIRECTORY")]
+    path: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct ImageArgs {
+    /// Input image path
+    #[arg(value_name = "PNG")]
+    image: PathBuf,
+
+    /// Merge recognized lines into a single line
+    #[arg(long)]
+    oneline: bool,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(cli) {
@@ -110,18 +140,14 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), AppError> {
     match cli.command {
-        Some(CommandKind::Capture(args)) => capture::run(args.output, args.ocr, args.oneline),
+        Some(CommandKind::Capture(args)) => run_capture(args),
         Some(CommandKind::Doctor) => run_doctor(),
-        Some(CommandKind::List) => models::list().map_err(AppError::Model),
-        Some(CommandKind::Install(args)) => {
-            models::install(&args.profile, args.path.as_deref()).map_err(AppError::Model)
-        }
-        Some(CommandKind::Uninstall(args)) => {
-            models::uninstall(&args.profile).map_err(AppError::Model)
-        }
-        Some(CommandKind::Use(args)) => models::use_model(&args.profile).map_err(AppError::Model),
-        Some(CommandKind::Config) => models::edit_config().map_err(AppError::Config),
-        Some(CommandKind::Image(args)) => ocr::run(args.image, args.oneline).map_err(AppError::Ocr),
+        Some(CommandKind::List) => run_list(),
+        Some(CommandKind::Install(args)) => run_install(args),
+        Some(CommandKind::Uninstall(args)) => run_uninstall(args),
+        Some(CommandKind::Use(args)) => run_use(args),
+        Some(CommandKind::Config) => run_config(),
+        Some(CommandKind::Image(args)) => run_image(args),
         Some(CommandKind::Status) => run_status(),
         Some(CommandKind::Help) => print_help(),
         Some(CommandKind::Version) => {
@@ -152,13 +178,13 @@ fn error_code(error: &AppError) -> u8 {
 }
 
 fn run_status() -> Result<(), AppError> {
-    let config_path = kocr_config::config_path();
+    let config_path = models::config_path();
     let config = models::load_config().map_err(AppError::Config)?;
     let installed = models::installed_model_names().map_err(AppError::Model)?;
     let shortcuts = config.shortcut.clone();
 
     println!("config     {}", config_path.display());
-    println!("daemon     {}", platform::daemon_state());
+    println!("daemon     {}", platform::service_state("kocr.service"));
     println!(
         "model      {}",
         config.models.select.as_deref().unwrap_or("none")
@@ -184,6 +210,117 @@ fn shortcut_state(shortcut: Option<&str>) -> &str {
     match shortcut {
         Some(shortcut) if !shortcut.trim().is_empty() => shortcut,
         _ => "disabled",
+    }
+}
+
+fn run_capture(args: CaptureArgs) -> Result<(), AppError> {
+    let result = capture::run(args.output, args.ocr, args.oneline)?;
+    if let Some(text) = result.text {
+        println!("{text}");
+    }
+    if let Some(path) = result.path {
+        println!("{}", path.display());
+    }
+    Ok(())
+}
+
+fn run_list() -> Result<(), AppError> {
+    let entries = models::list().map_err(AppError::Model)?;
+    let id_width = entries
+        .iter()
+        .map(|entry| entry.id.to_string().len())
+        .max()
+        .unwrap_or(1)
+        + 1;
+    let mut table = Table::new();
+    table
+        .enforce_styling()
+        .load_style(UTF8_BORDERS_ONLY)
+        .set_header(["ID", "Model", "Location"]);
+    for entry in entries {
+        let id = if entry.active {
+            format!("*{:>width$}", entry.id, width = id_width - 1)
+        } else {
+            format!("{:>id_width$}", entry.id)
+        };
+        if entry.installed {
+            table.add_row([
+                Cell::new(id),
+                Cell::new(entry.name.as_str()).fg(Color::Green),
+                Cell::new(display_path(&entry.path)),
+            ]);
+        } else {
+            table.add_row([
+                Cell::new(id),
+                Cell::new(entry.name.as_str()),
+                Cell::new("Not installed"),
+            ]);
+        }
+    }
+    println!("{table}");
+    Ok(())
+}
+
+fn run_install(args: InstallArgs) -> Result<(), AppError> {
+    let installed =
+        models::install(&args.profile, args.path.as_deref()).map_err(AppError::Model)?;
+    if let Some(error) = &installed.config_error {
+        eprintln!("\x1b[31mCould not update model configuration: {error}\x1b[0m");
+    }
+    println!("Installed {}", installed.name);
+    println!("Path: {}", display_path(&installed.path));
+    Ok(())
+}
+
+fn run_uninstall(args: ProfileArgs) -> Result<(), AppError> {
+    let name = models::uninstall(&args.profile).map_err(AppError::Model)?;
+    println!("Uninstalled {name}");
+    Ok(())
+}
+
+fn run_use(args: ProfileArgs) -> Result<(), AppError> {
+    let name = models::use_model(&args.profile).map_err(AppError::Model)?;
+    println!("Using {name}");
+    Ok(())
+}
+
+fn run_image(args: ImageArgs) -> Result<(), AppError> {
+    let text = ocr::recognize(args.image, args.oneline).map_err(AppError::Ocr)?;
+    println!("{text}");
+    Ok(())
+}
+
+fn run_config() -> Result<(), AppError> {
+    let path = models::prepare_config().map_err(AppError::Config)?;
+    let editor = env::var_os("VISUAL")
+        .filter(|value| !value.is_empty())
+        .or_else(|| env::var_os("EDITOR").filter(|value| !value.is_empty()))
+        .map(PathBuf::from);
+    let result = match editor {
+        Some(editor) => run_editor(&editor, &path),
+        None => platform::open_file(&path).map_err(|error| error.to_string()),
+    };
+    result.map_err(|error| AppError::Config(models::ModelError::Operation(error)))
+}
+
+fn run_editor(editor: &Path, path: &Path) -> Result<(), String> {
+    let status = Command::new(editor)
+        .arg(path)
+        .status()
+        .map_err(|error| format!("could not start editor {}: {error}", editor.display()))?;
+    if !status.success() {
+        return Err(format!("editor {} exited with {status}", editor.display()));
+    }
+    Ok(())
+}
+
+fn display_path(path: &Path) -> String {
+    let Some(home) = platform::home_dir() else {
+        return path.display().to_string();
+    };
+    match path.strip_prefix(home) {
+        Ok(relative) => format!("~/{}", relative.display()),
+        Err(_) => path.display().to_string(),
     }
 }
 

@@ -89,6 +89,16 @@ pub struct InstalledModel {
     pub path: String,
 }
 
+impl InstalledModel {
+    pub fn is_installed(&self) -> bool {
+        is_model_installed(Path::new(&self.path))
+    }
+}
+
+pub fn is_model_installed(path: &Path) -> bool {
+    path.is_absolute() && path.join("manifest.toml").is_file()
+}
+
 impl Config {
     pub fn load() -> Result<Self, ConfigError> {
         Self::load_from(&config_path())
@@ -135,6 +145,15 @@ impl Config {
             && self.models == ModelsConfig::default()
             && self.extra.is_empty()
     }
+
+    pub fn installed_model_names(&self) -> Vec<&str> {
+        self.models
+            .installed
+            .iter()
+            .filter(|(_, model)| model.is_installed())
+            .map(|(name, _)| name.as_str())
+            .collect()
+    }
 }
 
 pub fn config_path() -> PathBuf {
@@ -148,6 +167,7 @@ fn config_home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::fs;
 
     use super::{Config, InstalledModel, ModelsConfig, ShortcutConfig};
     use crate::CONFIG_COMMENTS;
@@ -250,6 +270,37 @@ mod tests {
         let path = directory.path().join("missing.toml");
 
         assert_eq!(Config::load_from(&path).unwrap(), Config::default());
+    }
+
+    #[test]
+    fn filters_installed_models() {
+        let directory = tempfile::tempdir().unwrap();
+        let installed = directory.path().join("installed");
+        fs::create_dir(&installed).unwrap();
+        fs::write(installed.join("manifest.toml"), "").unwrap();
+        let missing = directory.path().join("missing");
+        let config = Config {
+            models: ModelsConfig {
+                select: None,
+                installed: BTreeMap::from([
+                    (
+                        "installed".to_owned(),
+                        InstalledModel {
+                            path: installed.display().to_string(),
+                        },
+                    ),
+                    (
+                        "missing".to_owned(),
+                        InstalledModel {
+                            path: missing.display().to_string(),
+                        },
+                    ),
+                ]),
+            },
+            ..Config::default()
+        };
+
+        assert_eq!(config.installed_model_names(), vec!["installed"]);
     }
 
     #[test]

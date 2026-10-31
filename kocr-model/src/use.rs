@@ -1,6 +1,6 @@
 use super::{ModelError, load_index, model_path, resolve_profile, sync_config, write_config};
 
-pub fn run(selector: &str) -> Result<(), ModelError> {
+pub fn run(selector: &str) -> Result<String, ModelError> {
     sync_config()?;
     let index = load_index()?;
     let (name, _) = resolve_profile(&index, selector)?;
@@ -8,6 +8,5 @@ pub fn run(selector: &str) -> Result<(), ModelError> {
         return Err(ModelError::Operation(format!("{name} is not installed")));
     }
     write_config(name)?;
-    println!("Using {name}");
-    Ok(())
+    Ok(name.to_owned())
 }

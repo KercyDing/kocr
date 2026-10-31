@@ -1,4 +1,4 @@
-//! Platform-specific capabilities used by the core.
+//! Platform integration shared by kocr frontends.
 //!
 //! Only module selection in this file is conditional. Callers use the same
 //! functions on every platform.
@@ -6,17 +6,35 @@
 use std::env;
 use std::path::PathBuf;
 
+use thiserror::Error;
+
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(not(target_os = "linux"))]
 mod unsupported;
 
 #[cfg(target_os = "linux")]
-pub use linux::{capture_region, copy_clipboard, daemon_state, dependencies, open_file};
+pub use linux::{
+    capture_region, copy_clipboard, dependencies, open_file, service_start, service_state,
+    service_stop,
+};
 #[cfg(not(target_os = "linux"))]
-pub use unsupported::{capture_region, copy_clipboard, daemon_state, dependencies, open_file};
+pub use unsupported::{
+    capture_region, copy_clipboard, dependencies, open_file, service_start, service_state,
+    service_stop,
+};
 
 const NO_OPENER: &str = "no text editor found; set VISUAL or EDITOR and retry";
+
+#[derive(Debug, Error)]
+pub enum PlatformError {
+    #[error("Missing dependency: {0}")]
+    MissingDependency(String),
+    #[error("{0}")]
+    Output(String),
+    #[error("{0}")]
+    Operation(String),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Capture {

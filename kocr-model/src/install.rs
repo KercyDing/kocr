@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::TempDir;
@@ -10,9 +10,14 @@ use super::{
     ModelError, default_model_path, load_index, model_path, record_install, resolve_profile,
     sync_config,
 };
-use crate::platform;
 
-pub fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
+pub struct InstallResult {
+    pub name: String,
+    pub path: PathBuf,
+    pub config_error: Option<String>,
+}
+
+pub fn run(selector: &str, path: Option<&Path>) -> Result<InstallResult, ModelError> {
     sync_config()?;
     let index = load_index()?;
     let (name, profile) = resolve_profile(&index, selector)?;
@@ -45,7 +50,7 @@ pub fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
         ModelError::Operation(format!("could not create temporary directory: {error}"))
     })?;
     let archive_path = temporary.path().join("model.zip");
-    let curl = platform::find_command("curl")
+    let curl = kocr_platform::find_command("curl")
         .ok_or_else(|| ModelError::Operation("curl not found in PATH".to_owned()))?;
     let status = Command::new(curl)
         .args(["-fL", "--retry", "3", "--progress-bar", "--output"])
@@ -79,12 +84,14 @@ pub fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
     fs::rename(&package, &destination).map_err(|error| {
         ModelError::Operation(format!("could not install model profile: {error}"))
     })?;
-    if let Err(error) = record_install(name, &destination) {
-        eprintln!("\x1b[31mCould not update model configuration: {error}\x1b[0m");
-    }
-    println!("Installed {name}");
-    println!("Path: {}", display_path(&destination));
-    Ok(())
+    let config_error = record_install(name, &destination)
+        .err()
+        .map(|error| error.to_string());
+    Ok(InstallResult {
+        name: name.to_owned(),
+        path: destination,
+        config_error,
+    })
 }
 
 fn extract(archive_path: &Path, destination: &Path) -> Result<(), ModelError> {
@@ -177,14 +184,4 @@ fn write_manifest(package: &Path, name: &str) -> Result<(), ModelError> {
     );
     fs::write(package.join("manifest.toml"), manifest)
         .map_err(|error| ModelError::Operation(format!("could not write model manifest: {error}")))
-}
-
-fn display_path(path: &Path) -> String {
-    let Some(home) = platform::home_dir() else {
-        return path.display().to_string();
-    };
-    match path.strip_prefix(home) {
-        Ok(relative) => format!("~/{}", relative.display()),
-        Err(_) => path.display().to_string(),
-    }
 }

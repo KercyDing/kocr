@@ -6,7 +6,16 @@ use tempfile::TempDir;
 use crate::platform::{self, Capture};
 use crate::{AppError, ocr};
 
-pub fn run(output: Option<PathBuf>, recognize: bool, oneline: bool) -> Result<(), AppError> {
+pub struct CaptureResult {
+    pub text: Option<String>,
+    pub path: Option<PathBuf>,
+}
+
+pub fn run(
+    output: Option<PathBuf>,
+    recognize: bool,
+    oneline: bool,
+) -> Result<CaptureResult, AppError> {
     let temp_dir = TempDir::new().map_err(|error| {
         AppError::Output(format!("could not create temporary directory: {error}"))
     })?;
@@ -26,17 +35,15 @@ pub fn run(output: Option<PathBuf>, recognize: bool, oneline: bool) -> Result<()
     })?;
     validate_png(&png)?;
 
-    if recognize {
+    let text = if recognize {
         let text = ocr::recognize(capture_path, oneline)?;
         platform::copy_clipboard(text.as_bytes(), "text/plain;charset=utf-8")?;
-        println!("{text}");
+        Some(text)
     } else {
         platform::copy_clipboard(&png, "image/png")?;
-    }
-    if let Some(path) = output {
-        println!("{}", path.display());
-    }
-    Ok(())
+        None
+    };
+    Ok(CaptureResult { text, path: output })
 }
 
 fn validate_png(bytes: &[u8]) -> Result<(), AppError> {

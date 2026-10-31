@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 kocr-config.workspace = true
 kocr-core.workspace = true
+
 thiserror.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

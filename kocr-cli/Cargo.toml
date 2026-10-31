@@ -1,9 +1,9 @@
 [package]
-name = "kocr"
+name = "kocr-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "An offline OCR tool"
+description = "Command-line interface for kocr"
 autobins = false
 
 [[bin]]
@@ -11,6 +11,7 @@ name = "kocr"
 path = "src/main.rs"
 
 [dependencies]
-clap.workspace = true
-kocr-config.workspace = true
 kocr-core.workspace = true
+
+clap.workspace = true
+comfy-table.workspace = true

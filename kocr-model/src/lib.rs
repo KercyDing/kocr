@@ -1,23 +1,21 @@
+mod catalog;
+pub mod hash;
 pub mod install;
 pub mod list;
 pub mod uninstall;
 pub mod r#use;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-use clap::Args;
 use kocr_config::{Config as ModelConfig, InstalledModel, ModelsConfig, ShortcutConfig};
 use thiserror::Error;
 
-use crate::config::{ModelIndex, ModelProfile, profiles};
-use crate::platform;
+use crate::catalog::{ModelIndex, ModelProfile, profiles};
 
-pub use install::run as install;
-pub use list::run as list;
+pub use install::{InstallResult, run as install};
+pub use list::{Entry as ModelEntry, run as list};
 pub use uninstall::run as uninstall;
 pub use r#use::run as use_model;
 
@@ -27,24 +25,6 @@ impl From<kocr_config::ConfigError> for ModelError {
     fn from(error: kocr_config::ConfigError) -> Self {
         Self::Operation(error.to_string())
     }
-}
-
-#[derive(Debug, Args)]
-pub struct ProfileArgs {
-    /// Model ID or name
-    #[arg(value_name = "ID_OR_MODEL")]
-    pub profile: String,
-}
-
-#[derive(Debug, Args)]
-pub struct InstallArgs {
-    /// Model ID or name
-    #[arg(value_name = "ID_OR_MODEL")]
-    pub profile: String,
-
-    /// Parent directory for the model installation
-    #[arg(short, long, value_name = "DIRECTORY")]
-    pub path: Option<PathBuf>,
 }
 
 #[derive(Debug, Error)]
@@ -100,7 +80,7 @@ pub fn shortcuts() -> Result<ShortcutConfig, ModelError> {
     Ok(shortcuts)
 }
 
-pub(crate) fn model_path(name: &str) -> Result<PathBuf, ModelError> {
+pub fn model_path(name: &str) -> Result<PathBuf, ModelError> {
     let config = ModelConfig::load()?;
     Ok(configured_path(&config, name).unwrap_or_else(|| default_model_path(name)))
 }
@@ -153,7 +133,7 @@ pub fn read_config() -> Result<Option<String>, ModelError> {
     Ok(load_config()?.models.select)
 }
 
-pub(crate) fn sync_config() -> Result<(), ModelError> {
+pub fn sync_config() -> Result<(), ModelError> {
     let index = load_index()?;
     let path = kocr_config::config_path();
     let had_config = path.is_file();
@@ -233,33 +213,17 @@ fn save_config(config: &ModelConfig) -> Result<(), ModelError> {
     Ok(config.save()?)
 }
 
-pub fn edit_config() -> Result<(), ModelError> {
+pub fn config_path() -> PathBuf {
+    kocr_config::config_path()
+}
+
+pub fn prepare_config() -> Result<PathBuf, ModelError> {
     sync_config()?;
-    let path = kocr_config::config_path();
+    let path = config_path();
     if !path.is_file() {
         save_config(&ModelConfig::default())?;
     }
-
-    let editor = env::var_os("VISUAL")
-        .filter(|value| !value.is_empty())
-        .or_else(|| env::var_os("EDITOR").filter(|value| !value.is_empty()))
-        .map(PathBuf::from);
-    let Some(editor) = editor else {
-        return platform::open_file(&path).map_err(ModelError::Operation);
-    };
-    let status = Command::new(&editor).arg(&path).status().map_err(|error| {
-        ModelError::Operation(format!(
-            "could not start editor {}: {error}",
-            editor.display()
-        ))
-    })?;
-    if !status.success() {
-        return Err(ModelError::Operation(format!(
-            "editor {} exited with {status}",
-            editor.display()
-        )));
-    }
-    Ok(())
+    Ok(path)
 }
 
 pub(crate) fn validate_index(index: &ModelIndex) -> Result<(), ModelError> {
@@ -281,7 +245,7 @@ pub(crate) fn validate_index(index: &ModelIndex) -> Result<(), ModelError> {
 }
 
 fn model_root() -> PathBuf {
-    platform::data_home().join(MODEL_DIR)
+    kocr_platform::data_home().join(MODEL_DIR)
 }
 
 pub(crate) fn default_model_path(name: &str) -> PathBuf {
@@ -297,7 +261,7 @@ fn configured_path(config: &ModelConfig, name: &str) -> Option<PathBuf> {
 }
 
 fn has_manifest(path: &Path) -> bool {
-    path.is_absolute() && path.join("manifest.toml").is_file()
+    kocr_config::is_model_installed(path)
 }
 
 fn non_empty(value: Option<String>) -> Option<String> {

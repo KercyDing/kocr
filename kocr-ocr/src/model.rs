@@ -77,7 +77,7 @@ fn verify_charset(path: &Path, manifest: &Manifest) -> Result<(), OcrError> {
     let content = fs::read(path).map_err(|error| {
         OcrError::ModelFile(format!("could not read {}: {error}", path.display()))
     })?;
-    let actual = crate::hash::hex_sha256(&content);
+    let actual = kocr_model::hash::hex_sha256(&content);
     if actual != manifest.charset_sha256 {
         return Err(OcrError::ModelFile(format!(
             "charset SHA-256 mismatch: expected {}, got {actual}",
@@ -105,7 +105,7 @@ fn verify_charset(path: &Path, manifest: &Manifest) -> Result<(), OcrError> {
 }
 
 fn verify_file(path: &Path, expected: &str) -> Result<(), OcrError> {
-    let actual = crate::hash::file_sha256(path).map_err(|error| {
+    let actual = kocr_model::hash::file_sha256(path).map_err(|error| {
         OcrError::ModelFile(format!("could not read {}: {error}", path.display()))
     })?;
     if actual != expected {

@@ -2,10 +2,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{Capture, NO_OPENER, find_command};
-use crate::AppError;
+use super::{Capture, NO_OPENER, PlatformError, find_command};
 
-pub fn capture_region(output: &Path) -> Result<Capture, AppError> {
+pub fn capture_region(output: &Path) -> Result<Capture, PlatformError> {
     let spectacle = require_command("spectacle")?;
     let release_capture = spectacle_supports_release_capture(&spectacle);
     let status = Command::new(spectacle)
@@ -13,63 +12,73 @@ pub fn capture_region(output: &Path) -> Result<Capture, AppError> {
         .arg(output)
         .stderr(Stdio::null())
         .status()
-        .map_err(|error| AppError::Output(format!("could not start Spectacle: {error}")))?;
+        .map_err(|error| PlatformError::Output(format!("could not start Spectacle: {error}")))?;
 
     if !output.is_file() {
         if status.success() {
             return Ok(Capture::Cancelled);
         }
-        return Err(AppError::Output(format!(
+        return Err(PlatformError::Output(format!(
             "Spectacle exited with {status} and produced no screenshot"
         )));
     }
     if !status.success() {
-        return Err(AppError::Output(format!("Spectacle exited with {status}")));
+        return Err(PlatformError::Output(format!(
+            "Spectacle exited with {status}"
+        )));
     }
     Ok(Capture::Saved)
 }
 
-pub fn copy_clipboard(content: &[u8], mime: &str) -> Result<(), AppError> {
+pub fn copy_clipboard(content: &[u8], mime: &str) -> Result<(), PlatformError> {
     let wl_copy = require_command("wl-copy")?;
     let mut child = Command::new(wl_copy)
         .args(["--type", mime])
         .stdin(Stdio::piped())
         .spawn()
-        .map_err(|error| AppError::Output(format!("could not start wl-copy: {error}")))?;
+        .map_err(|error| PlatformError::Output(format!("could not start wl-copy: {error}")))?;
 
     let mut stdin = child
         .stdin
         .take()
-        .ok_or_else(|| AppError::Output("wl-copy stdin was not available".to_owned()))?;
+        .ok_or_else(|| PlatformError::Output("wl-copy stdin was not available".to_owned()))?;
     stdin
         .write_all(content)
-        .map_err(|error| AppError::Output(format!("could not write to wl-copy: {error}")))?;
+        .map_err(|error| PlatformError::Output(format!("could not write to wl-copy: {error}")))?;
     drop(stdin);
 
     let status = child
         .wait()
-        .map_err(|error| AppError::Output(format!("could not wait for wl-copy: {error}")))?;
+        .map_err(|error| PlatformError::Output(format!("could not wait for wl-copy: {error}")))?;
     if !status.success() {
-        return Err(AppError::Output(format!("wl-copy exited with {status}")));
+        return Err(PlatformError::Output(format!(
+            "wl-copy exited with {status}"
+        )));
     }
     Ok(())
 }
 
-pub fn open_file(path: &Path) -> Result<(), String> {
-    let opener = find_command("xdg-open").ok_or_else(|| NO_OPENER.to_owned())?;
-    let status = Command::new(&opener)
-        .arg(path)
-        .status()
-        .map_err(|error| format!("could not start editor {}: {error}", opener.display()))?;
+pub fn open_file(path: &Path) -> Result<(), PlatformError> {
+    let opener =
+        find_command("xdg-open").ok_or_else(|| PlatformError::Operation(NO_OPENER.to_owned()))?;
+    let status = Command::new(&opener).arg(path).status().map_err(|error| {
+        PlatformError::Operation(format!(
+            "could not start editor {}: {error}",
+            opener.display()
+        ))
+    })?;
     if !status.success() {
-        return Err(format!("editor {} exited with {status}", opener.display()));
+        return Err(PlatformError::Operation(format!(
+            "editor {} exited with {status}",
+            opener.display()
+        )));
     }
     Ok(())
 }
 
-pub fn daemon_state() -> String {
+pub fn service_state(unit: &str) -> String {
     match Command::new("systemctl")
-        .args(["--user", "is-active", "kocr.service"])
+        .args(["--user", "is-active", unit])
         .output()
     {
         Ok(output) => {
@@ -84,13 +93,36 @@ pub fn daemon_state() -> String {
     }
 }
 
+pub fn service_start(unit: &str) -> Result<(), PlatformError> {
+    service_action("start", unit)
+}
+
+pub fn service_stop(unit: &str) -> Result<(), PlatformError> {
+    service_action("stop", unit)
+}
+
+fn service_action(action: &str, unit: &str) -> Result<(), PlatformError> {
+    let status = Command::new("systemctl")
+        .args(["--user", action, unit])
+        .status()
+        .map_err(|error| {
+            PlatformError::Operation(format!("could not run systemctl {action}: {error}"))
+        })?;
+    if !status.success() {
+        return Err(PlatformError::Operation(format!(
+            "could not {action} {unit}: {status}"
+        )));
+    }
+    Ok(())
+}
+
 pub fn dependencies() -> &'static [&'static str] {
     &["spectacle", "wl-copy", "notify-send"]
 }
 
-fn require_command(name: &str) -> Result<PathBuf, AppError> {
+fn require_command(name: &str) -> Result<PathBuf, PlatformError> {
     find_command(name)
-        .ok_or_else(|| AppError::MissingDependency(format!("{name} not found in PATH")))
+        .ok_or_else(|| PlatformError::MissingDependency(format!("{name} not found in PATH")))
 }
 
 fn spectacle_supports_release_capture(spectacle: &Path) -> bool {

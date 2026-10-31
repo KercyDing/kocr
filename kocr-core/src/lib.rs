@@ -1,12 +1,9 @@
-//! Capture and OCR logic shared by the CLI and the shortcut daemon.
-
-mod config;
-mod hash;
+//! Capture and OCR orchestration shared by the CLI and the shortcut daemon.
 
 pub mod capture;
 pub mod error;
-pub mod models;
-pub mod ocr;
-pub mod platform;
 
 pub use error::AppError;
+pub use kocr_model as models;
+pub use kocr_ocr as ocr;
+pub use kocr_platform as platform;

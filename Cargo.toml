@@ -1,5 +1,14 @@
 [workspace]
-members = ["kocr", "kocr-config", "kocr-core", "kocr-daemon", "kocr-gui"]
+members = [
+    "kocr-cli",
+    "kocr-config",
+    "kocr-core",
+    "kocr-daemon",
+    "kocr-gui",
+    "kocr-model",
+    "kocr-ocr",
+    "kocr-platform",
+]
 resolver = "3"
 
 [workspace.package]
@@ -11,6 +20,9 @@ repository = "https://github.com/KercyDing/kocr"
 [workspace.dependencies]
 kocr-config = { path = "kocr-config" }
 kocr-core = { path = "kocr-core" }
+kocr-model = { path = "kocr-model" }
+kocr-ocr = { path = "kocr-ocr" }
+kocr-platform = { path = "kocr-platform" }
 
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

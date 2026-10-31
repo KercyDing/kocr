@@ -1090,11 +1090,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "kocr"
+name = "kocr-cli"
 version = "0.3.3"
 dependencies = [
  "clap",
- "kocr-config",
+ "comfy-table",
  "kocr-core",
 ]
 
@@ -1113,17 +1113,11 @@ dependencies = [
 name = "kocr-core"
 version = "0.3.3"
 dependencies = [
- "clap",
- "comfy-table",
- "dirs",
- "kocr-config",
- "rusto-rs",
- "serde",
- "sha2",
+ "kocr-model",
+ "kocr-ocr",
+ "kocr-platform",
  "tempfile",
  "thiserror 2.0.21",
- "toml",
- "zip",
 ]
 
 [[package]]
@@ -1145,6 +1139,37 @@ dependencies = [
  "anyhow",
  "kocr-config",
  "winio",
+]
+
+[[package]]
+name = "kocr-model"
+version = "0.3.3"
+dependencies = [
+ "kocr-config",
+ "kocr-platform",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "kocr-ocr"
+version = "0.3.3"
+dependencies = [
+ "kocr-model",
+ "rusto-rs",
+ "serde",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "kocr-platform"
+version = "0.3.3"
+dependencies = [
+ "dirs",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

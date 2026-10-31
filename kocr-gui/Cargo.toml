@@ -11,6 +11,7 @@ name = "kocr-gui"
 path = "src/main.rs"
 
 [dependencies]
-anyhow.workspace = true
 kocr-config.workspace = true
+
+anyhow.workspace = true
 winio.workspace = true

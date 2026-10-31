@@ -37,8 +37,11 @@ impl Component for Settings {
             Ok(config) => (config, None),
             Err(error) => (Config::default(), Some(error.to_string())),
         };
-        let mut models: Vec<String> = config.models.installed.keys().cloned().collect();
-        models.sort();
+        let models: Vec<String> = config
+            .installed_model_names()
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
         let copy = config.shortcut.copy.clone().unwrap_or_default();
         let ocr = config.shortcut.ocr.clone().unwrap_or_default();
         let oneline = config.shortcut.oneline.clone().unwrap_or_default();
