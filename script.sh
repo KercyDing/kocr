@@ -45,7 +45,7 @@ distribution_family() {
 install_packages() {
     local family=$1
     shift
-    (( $# > 0 )) || return
+    (( $# > 0 )) || return 0
 
     echo "Installing missing system packages: $*"
     case $family in
@@ -75,7 +75,7 @@ install_command_dependencies() {
             missing+=("$command_name")
         fi
     done
-    (( ${#missing[@]} > 0 )) || return
+    (( ${#missing[@]} > 0 )) || return 0
 
     family=$(distribution_family) \
         || fail "unsupported Linux distribution; missing commands: ${missing[*]}"
