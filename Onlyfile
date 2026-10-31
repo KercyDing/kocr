@@ -48,19 +48,19 @@ clean():
     cargo clean
 
 [help] Install the local kocr CLI
-[desc] Reuse script.sh's install path with the local release binary.
+[desc] Reuse cli.sh's install path with the local release binary.
 [pass] Installation complete.
 [fail] Installation failed.
 install() & build-release:
-    | KOCR_BINARY=target/release/kocr KOCR_SKIP_DEPENDENCIES=1 KOCR_SKIP_MODEL=1 bash script.sh install
+    | KOCR_BINARY=target/release/kocr bash cli.sh install
     | du -sh "$HOME/.local/bin/kocr"
 
 [help] Uninstall the local kocr CLI
-[desc] Reuse script.sh's uninstall path.
+[desc] Reuse cli.sh's uninstall path.
 [pass] Uninstallation complete.
 [fail] Uninstallation failed.
 uninstall():
-    | bash script.sh uninstall
+    | bash cli.sh uninstall
 
 [help] Show current version
 [fail] Could not display version.

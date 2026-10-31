@@ -154,9 +154,15 @@ jobs:
           - label: Linux x86_64
             runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            suffix: amd64
+            deb_arch: amd64
+            rpm_arch: x86_64
           - label: Linux ARM64
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            suffix: arm64
+            deb_arch: arm64
+            rpm_arch: aarch64
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -171,7 +177,7 @@ jobs:
       - name: Install GUI dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev
+          sudo apt-get install -y qt6-base-dev rpm
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -187,32 +193,41 @@ jobs:
         env:
           VERSION: ${{ needs.validate-tag.outputs.version }}
           TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.suffix }}
+          DEB_ARCH: ${{ matrix.deb_arch }}
+          RPM_ARCH: ${{ matrix.rpm_arch }}
         run: |
           set -euo pipefail
+          mkdir -p dist
+          bin_dir="target/${TARGET}/release"
+          packaging/linux/package.sh deb kocr "$VERSION" "$TARGET" cli "$bin_dir" dist
+          packaging/linux/package.sh rpm kocr "$VERSION" "$TARGET" cli "$bin_dir" dist
+          packaging/linux/package.sh deb kocr-gui-qt "$VERSION" "$TARGET" qt "$bin_dir" dist
+          packaging/linux/package.sh rpm kocr-gui-qt "$VERSION" "$TARGET" qt "$bin_dir" dist
+
+          mv "dist/kocr_${VERSION}_${DEB_ARCH}.deb" \
+            "dist/kocr-cli-${VERSION}-linux-${SUFFIX}.deb"
+          mv "dist/kocr-${VERSION}-1.${RPM_ARCH}.rpm" \
+            "dist/kocr-cli-${VERSION}-linux-${SUFFIX}.rpm"
+          mv "dist/kocr-gui-qt_${VERSION}_${DEB_ARCH}.deb" \
+            "dist/kocr-gui-qt-${VERSION}-linux-${SUFFIX}.deb"
+          mv "dist/kocr-gui-qt-${VERSION}-1.${RPM_ARCH}.rpm" \
+            "dist/kocr-gui-qt-${VERSION}-linux-${SUFFIX}.rpm"
+
           cli_package="kocr-${VERSION}-${TARGET}"
           mkdir -p "dist/${cli_package}"
-          install -m 0755 "target/${TARGET}/release/kocr" "dist/${cli_package}/kocr"
+          install -m 0755 "$bin_dir/kocr" "dist/${cli_package}/kocr"
           install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${cli_package}/"
           tar -C dist -czf "dist/${cli_package}.tar.gz" "$cli_package"
           sha256sum "dist/${cli_package}.tar.gz" > "dist/${cli_package}.tar.gz.sha256"
-
-          gui_package="kocr-gui-qt-setup-${VERSION}-${TARGET}"
-          mkdir -p "dist/${gui_package}"
-          for binary in kocr kocr-daemon kocr-gui; do
-            install -m 0755 "target/${TARGET}/release/${binary}" "dist/${gui_package}/${binary}"
-          done
-          install -m 0755 script.sh "dist/${gui_package}/script.sh"
-          install -m 0755 gui-setup.sh "dist/${gui_package}/setup.sh"
-          printf 'qt\n' > "dist/${gui_package}/gui-backend"
-          install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${gui_package}/"
-          tar -C dist -czf "dist/${gui_package}.tar.gz" "$gui_package"
-          sha256sum "dist/${gui_package}.tar.gz" > "dist/${gui_package}.tar.gz.sha256"
 
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.target }}
           path: |
+            dist/*.deb
+            dist/*.rpm
             dist/*.tar.gz
             dist/*.tar.gz.sha256
           if-no-files-found: error
@@ -230,9 +245,15 @@ jobs:
           - label: Linux x86_64
             runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            suffix: amd64
+            deb_arch: amd64
+            rpm_arch: x86_64
           - label: Linux ARM64
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            suffix: arm64
+            deb_arch: arm64
+            rpm_arch: aarch64
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -242,7 +263,7 @@ jobs:
       - name: Install GTK
         run: |
           apt-get update
-          apt-get install -y libgtk-4-dev pkg-config
+          apt-get install -y libgtk-4-dev pkg-config rpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -257,31 +278,31 @@ jobs:
           cargo build --release --locked -p kocr-cli -p kocr-daemon
           cargo build --release --locked -p kocr-gui --no-default-features --features gtk
 
-      - name: Package GTK setup
+      - name: Package GTK
         env:
           VERSION: ${{ needs.validate-tag.outputs.version }}
           TARGET: ${{ matrix.target }}
+          SUFFIX: ${{ matrix.suffix }}
+          DEB_ARCH: ${{ matrix.deb_arch }}
+          RPM_ARCH: ${{ matrix.rpm_arch }}
         run: |
           set -euo pipefail
-          package="kocr-gui-gtk-setup-${VERSION}-${TARGET}"
-          mkdir -p "dist/${package}"
-          for binary in kocr kocr-daemon kocr-gui; do
-            install -m 0755 "target/release/${binary}" "dist/${package}/${binary}"
-          done
-          install -m 0755 script.sh "dist/${package}/script.sh"
-          install -m 0755 gui-setup.sh "dist/${package}/setup.sh"
-          printf 'gtk\n' > "dist/${package}/gui-backend"
-          install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${package}/"
-          tar -C dist -czf "dist/${package}.tar.gz" "$package"
-          sha256sum "dist/${package}.tar.gz" > "dist/${package}.tar.gz.sha256"
+          mkdir -p dist
+          packaging/linux/package.sh deb kocr-gui-gtk "$VERSION" "$TARGET" gtk target/release dist
+          packaging/linux/package.sh rpm kocr-gui-gtk "$VERSION" "$TARGET" gtk target/release dist
+
+          mv "dist/kocr-gui-gtk_${VERSION}_${DEB_ARCH}.deb" \
+            "dist/kocr-gui-gtk-${VERSION}-linux-${SUFFIX}.deb"
+          mv "dist/kocr-gui-gtk-${VERSION}-1.${RPM_ARCH}.rpm" \
+            "dist/kocr-gui-gtk-${VERSION}-linux-${SUFFIX}.rpm"
 
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
           name: release-gtk-${{ matrix.target }}
           path: |
-            dist/*.tar.gz
-            dist/*.tar.gz.sha256
+            dist/*.deb
+            dist/*.rpm
           if-no-files-found: error
 
   release:
@@ -307,6 +328,34 @@ jobs:
           draft: false
           prerelease: ${{ needs.validate-tag.outputs.prerelease }}
           generate_release_notes: true
+          body: |
+            ## 安装
+
+            | 包 | x86_64 | ARM64 |
+            | --- | --- | --- |
+            | CLI | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+            | GUI (Qt) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+            | GUI (GTK) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+
+            Arch Linux：
+
+            ```sh
+            paru -S kocr-bin        # CLI
+            paru -S kocr-qt-bin     # GUI, Qt
+            paru -S kocr-gtk-bin    # GUI, GTK
+            ```
+
+            GUI 包不包含 CLI。首次打开 KOCR Settings 后安装模型并启用快捷键。
           files: |
+            dist/*.deb
+            dist/*.rpm
             dist/*.tar.gz
-            dist/*.tar.gz.sha256
+            dist/*.sha256
+
+  publish-aur:
+    name: Publish AUR
+    needs: [validate-tag, release]
+    uses: ./.github/workflows/aur.yml
+    with:
+      tag: ${{ needs.validate-tag.outputs.tag }}
+    secrets: inherit

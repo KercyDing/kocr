@@ -1,8 +1,10 @@
+use std::env;
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{Capture, NO_OPENER, PlatformError, find_command};
+use super::{Capture, NO_OPENER, PlatformError, find_command, home_dir};
 
 pub fn capture_region(output: &Path) -> Result<Capture, PlatformError> {
     let spectacle = require_command("spectacle")?;
@@ -99,6 +101,45 @@ pub fn service_start(unit: &str) -> Result<(), PlatformError> {
 
 pub fn service_stop(unit: &str) -> Result<(), PlatformError> {
     service_action("stop", unit)
+}
+
+pub fn service_install(unit: &str, executable: &Path) -> Result<(), PlatformError> {
+    let base = env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".config")
+        });
+    let directory = base.join("systemd/user");
+    fs::create_dir_all(&directory).map_err(|error| {
+        PlatformError::Operation(format!("could not create systemd user directory: {error}"))
+    })?;
+    let content = format!(
+        "[Unit]\nDescription=KOCR global shortcut daemon\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=dbus\nBusName=io.github.KercyDing.kocr\nExecStart=\"{}\"\nRestart=on-failure\nRestartSec=2\n\n[Install]\nWantedBy=graphical-session.target\n",
+        executable.display()
+    );
+    fs::write(directory.join(unit), content).map_err(|error| {
+        PlatformError::Operation(format!("could not write systemd user unit: {error}"))
+    })
+}
+
+pub fn service_enabled(unit: &str) -> bool {
+    Command::new("systemctl")
+        .args(["--user", "is-enabled", unit])
+        .output()
+        .is_ok_and(|output| String::from_utf8_lossy(&output.stdout).trim() == "enabled")
+}
+
+pub fn service_enable(unit: &str) -> Result<(), PlatformError> {
+    let _ = Command::new("systemctl")
+        .args(["--user", "daemon-reload"])
+        .status();
+    service_action("enable", unit)
+}
+
+pub fn service_disable(unit: &str) -> Result<(), PlatformError> {
+    service_action("disable", unit)
 }
 
 fn service_action(action: &str, unit: &str) -> Result<(), PlatformError> {

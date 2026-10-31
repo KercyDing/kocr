@@ -15,13 +15,13 @@ mod unsupported;
 
 #[cfg(target_os = "linux")]
 pub use linux::{
-    capture_region, copy_clipboard, dependencies, open_file, service_start, service_state,
-    service_stop,
+    capture_region, copy_clipboard, dependencies, open_file, service_disable, service_enable,
+    service_enabled, service_install, service_start, service_state, service_stop,
 };
 #[cfg(not(target_os = "linux"))]
 pub use unsupported::{
-    capture_region, copy_clipboard, dependencies, open_file, service_start, service_state,
-    service_stop,
+    capture_region, copy_clipboard, dependencies, open_file, service_disable, service_enable,
+    service_enabled, service_install, service_start, service_state, service_stop,
 };
 
 const NO_OPENER: &str = "no text editor found; set VISUAL or EDITOR and retry";

@@ -17,6 +17,8 @@ gtk = ["winio/gtk"]
 
 [dependencies]
 kocr-config.workspace = true
+kocr-model.workspace = true
+kocr-platform.workspace = true
 
 anyhow.workspace = true
 
