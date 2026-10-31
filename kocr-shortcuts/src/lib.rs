@@ -19,7 +19,7 @@ mod kglobalaccel;
 pub(crate) const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Error)]
-pub(crate) enum KeyboardError {
+pub enum KeyboardError {
     #[error("{0}")]
     Operation(String),
 }
@@ -113,7 +113,7 @@ pub(crate) fn notify_no_model() {
 
 /// Global shortcuts on Linux come from two backends: KGlobalAccel on Wayland
 /// and global-hotkey on X11. Other platforms are not implemented yet.
-pub(crate) fn run<F, E>(on_trigger: F) -> Result<(), KeyboardError>
+pub fn run<F, E>(on_trigger: F) -> Result<(), KeyboardError>
 where
     F: FnMut(bool, bool) -> Result<(), E>,
     E: Display,

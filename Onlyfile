@@ -33,30 +33,26 @@ group cli {
 group gui {
 
     [help] Build the GUI
-    [desc] Backend defaults to qt; pass gtk on GTK desktops.
     [pass] GUI build complete.
     [fail] GUI build failed.
-    build(backend = "qt"):
-        cargo build -p kocr-gui --no-default-features --features {{backend}}
+    build():
+        cargo build -p kocr-gui
 
     [help] Run the GUI
-    [desc] Backend defaults to qt; pass gtk on GTK desktops.
     [fail] GUI run failed.
-    run(backend = "qt"):
-        cargo run -p kocr-gui --no-default-features --features {{backend}}
+    run():
+        cargo run -p kocr-gui
 
     [help] Build the GUI in release mode
-    [desc] Backend defaults to qt; pass gtk on GTK desktops.
     [pass] GUI release build complete.
     [fail] GUI release build failed.
-    build-release(backend = "qt"):
-        cargo build --release -p kocr-gui --no-default-features --features {{backend}}
+    build-release():
+        cargo build --release -p kocr-gui
 
     [help] Run the GUI in release mode
-    [desc] Backend defaults to qt; pass gtk on GTK desktops.
     [fail] GUI release run failed.
-    run-release(backend = "qt"):
-        cargo run --release -p kocr-gui --no-default-features --features {{backend}}
+    run-release():
+        cargo run --release -p kocr-gui
 }
 
 # =============== Common ===============

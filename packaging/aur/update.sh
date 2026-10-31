@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ $# -ne 7 ]]; then
-    echo "usage: $0 <pkgbase> <pkgver> <asset-name> <asset-url> <sha256> <cli|qt|gtk> <repo>" >&2
+    echo "usage: $0 <pkgbase> <pkgver> <asset-name> <asset-url> <sha256> <cli|gui> <repo>" >&2
     exit 2
 fi
 
@@ -23,19 +23,12 @@ case $kind in
         conflicts="'kocr'"
         deb_doc=kocr
         ;;
-    qt)
-        pkgdesc="KOCR settings window and shortcut daemon (Qt, prebuilt binary)"
-        depends="'glibc' 'gcc-libs' 'qt6-base' 'spectacle' 'wl-clipboard' 'libnotify'"
+    gui)
+        pkgdesc="KOCR desktop app (prebuilt binary)"
+        depends="'glibc' 'gcc-libs' 'gtk3' 'libayatana-appindicator' 'libxkbcommon' 'wayland' 'mesa' 'libx11' 'libxrandr' 'libxi' 'libxcursor' 'libxinerama' 'spectacle' 'wl-clipboard' 'libnotify'"
         provides="'kocr-gui'"
-        conflicts="'kocr-gtk-bin'"
-        deb_doc=kocr-gui-qt
-        ;;
-    gtk)
-        pkgdesc="KOCR settings window and shortcut daemon (GTK, prebuilt binary)"
-        depends="'glibc' 'gcc-libs' 'gtk4' 'spectacle' 'wl-clipboard' 'libnotify'"
-        provides="'kocr-gui'"
-        conflicts="'kocr-qt-bin'"
-        deb_doc=kocr-gui-gtk
+        conflicts="'kocr-qt-bin' 'kocr-gtk-bin'"
+        deb_doc=kocr-gui
         ;;
     *)
         echo "unknown kind: $kind" >&2
@@ -70,6 +63,7 @@ package() {
   install -Dm644 "usr/share/doc/${deb_doc}/LICENSE" "\${pkgdir}/usr/share/licenses/${pkgbase}/LICENSE"
   install -Dm644 "usr/share/doc/${deb_doc}/NOTICE" "\${pkgdir}/usr/share/licenses/${pkgbase}/NOTICE"
   install -Dm644 "usr/share/doc/${deb_doc}/LICENSE-PaddleOCR" "\${pkgdir}/usr/share/licenses/${pkgbase}/LICENSE-PaddleOCR"
+  install -Dm644 "usr/share/doc/${deb_doc}/LICENSE-SourceHanSans" "\${pkgdir}/usr/share/licenses/${pkgbase}/LICENSE-SourceHanSans"
 EOF
 
 if [[ $kind == cli ]]; then
@@ -80,8 +74,8 @@ EOF
 else
     cat >> PKGBUILD <<'EOF'
   install -Dm755 usr/bin/kocr-gui "${pkgdir}/usr/bin/kocr-gui"
-  install -Dm755 usr/bin/kocr-daemon "${pkgdir}/usr/bin/kocr-daemon"
   install -Dm644 usr/share/applications/kocr-gui.desktop "${pkgdir}/usr/share/applications/kocr-gui.desktop"
+  install -Dm644 usr/share/pixmaps/kocr.png "${pkgdir}/usr/share/pixmaps/kocr.png"
 }
 EOF
 fi

@@ -14,15 +14,9 @@ mod linux;
 mod unsupported;
 
 #[cfg(target_os = "linux")]
-pub use linux::{
-    capture_region, copy_clipboard, dependencies, service_disable, service_enable, service_enabled,
-    service_install, service_start, service_state, service_stop,
-};
+pub use linux::{capture_region, copy_clipboard, dependencies};
 #[cfg(not(target_os = "linux"))]
-pub use unsupported::{
-    capture_region, copy_clipboard, dependencies, service_disable, service_enable, service_enabled,
-    service_install, service_start, service_state, service_stop,
-};
+pub use unsupported::{capture_region, copy_clipboard, dependencies};
 
 #[derive(Debug, Error)]
 pub enum PlatformError {
@@ -30,8 +24,6 @@ pub enum PlatformError {
     MissingDependency(String),
     #[error("{0}")]
     Output(String),
-    #[error("{0}")]
-    Operation(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

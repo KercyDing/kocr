@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=KOCR Settings
+Name=KOCR
+Icon=kocr
 Exec=kocr-gui
 Terminal=false
 Categories=Utility;

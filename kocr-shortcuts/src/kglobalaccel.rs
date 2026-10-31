@@ -70,9 +70,9 @@ where
     let connection = zbus::block_on(Connection::session())
         .map_err(|error| operation("could not connect to the session bus", error))?;
     // zbus defaults to REPLACE_EXISTING, which would silently displace an
-    // already-running daemon. Queuing is also undesirable for a singleton.
+    // already-running instance. Queuing is also undesirable for a singleton.
     zbus::block_on(connection.request_name_with_flags(BUS_NAME, RequestNameFlags::DO_NOT_QUEUE))
-        .map_err(|error| operation("another daemon is already running", error))?;
+        .map_err(|error| operation("another instance is already running", error))?;
 
     let mut bindings = Bindings::from_configured(Configured::load()?);
     register(&connection, &bindings)?;
@@ -85,7 +85,7 @@ where
     spawn_listener(connection.clone(), events_tx, Arc::clone(&trigger_pending));
 
     let mut config_content = read_config_content();
-    eprintln!("Shortcut daemon started (Wayland)");
+    eprintln!("KOCR shortcuts started (Wayland)");
     loop {
         match events_rx.recv_timeout(POLL_INTERVAL) {
             Ok(Event::Trigger(trigger)) => {

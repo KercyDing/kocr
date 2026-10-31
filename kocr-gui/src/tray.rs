@@ -1,0 +1,161 @@
+use crate::t;
+use eframe::egui;
+use std::sync::mpsc::{Receiver, SyncSender};
+use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+#[cfg(target_os = "windows")]
+use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
+use tray_icon::{TrayIcon, TrayIconBuilder};
+
+const SHOW_MENU_ID: &str = "kocr-show";
+const QUIT_MENU_ID: &str = "kocr-quit";
+const EVENT_CAPACITY: usize = 16;
+#[cfg(target_os = "linux")]
+const APPINDICATOR_DEPRECATION: &str = "libayatana-appindicator is deprecated. Please use libayatana-appindicator-glib in newly written code.";
+
+pub(crate) enum Event {
+    Ready,
+    Show,
+    Exit,
+    #[cfg(target_os = "linux")]
+    Failed(String),
+}
+
+pub(crate) struct Tray {
+    rx: Receiver<Event>,
+    #[cfg(not(target_os = "linux"))]
+    _icon: TrayIcon,
+}
+
+impl Tray {
+    pub(crate) fn new(repaint: egui::Context) -> Result<Self, String> {
+        let icon = load_icon()?;
+        let show_label = t!("tray_show").to_string();
+        let quit_label = t!("tray_quit").to_string();
+        let (tx, rx) = std::sync::mpsc::sync_channel(EVENT_CAPACITY);
+        install_event_handlers(tx.clone(), repaint.clone());
+
+        #[cfg(target_os = "linux")]
+        {
+            std::thread::Builder::new()
+                .name("kocr-tray".to_owned())
+                .spawn(move || run_gtk(icon, show_label, quit_label, tx, repaint))
+                .map_err(|error| error.to_string())?;
+            Ok(Self { rx })
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            let tray_icon = build_icon(icon, &show_label, &quit_label)?;
+            let _ = tx.try_send(Event::Ready);
+            Ok(Self {
+                rx,
+                _icon: tray_icon,
+            })
+        }
+    }
+
+    pub(crate) fn try_recv(&self) -> Option<Event> {
+        self.rx.try_recv().ok()
+    }
+}
+
+fn install_event_handlers(tx: SyncSender<Event>, repaint: egui::Context) {
+    #[cfg(target_os = "windows")]
+    let (tray_tx, tray_repaint) = (tx.clone(), repaint.clone());
+
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+        let action = match event.id.as_ref() {
+            SHOW_MENU_ID => Some(Event::Show),
+            QUIT_MENU_ID => Some(Event::Exit),
+            _ => None,
+        };
+        if let Some(action) = action {
+            let _ = tx.try_send(action);
+            repaint.request_repaint();
+        }
+    }));
+
+    #[cfg(target_os = "windows")]
+    TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
+        if matches!(
+            event,
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            }
+        ) {
+            let _ = tray_tx.try_send(Event::Show);
+            tray_repaint.request_repaint();
+        }
+    }));
+}
+
+fn build_icon(
+    icon: tray_icon::Icon,
+    show_label: &str,
+    quit_label: &str,
+) -> Result<TrayIcon, String> {
+    let menu = Menu::new();
+    let show = MenuItem::with_id(SHOW_MENU_ID, show_label, true, None);
+    let quit = MenuItem::with_id(QUIT_MENU_ID, quit_label, true, None);
+    menu.append_items(&[&show, &quit])
+        .map_err(|error| error.to_string())?;
+
+    let builder = TrayIconBuilder::new()
+        .with_menu(Box::new(menu))
+        .with_tooltip("KOCR")
+        .with_icon(icon);
+    #[cfg(target_os = "windows")]
+    let builder = builder.with_menu_on_left_click(false);
+
+    builder.build().map_err(|error| error.to_string())
+}
+
+fn load_icon() -> Result<tray_icon::Icon, String> {
+    let image = image::load_from_memory(include_bytes!("../assets/icon.png"))
+        .map_err(|error| error.to_string())?
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    tray_icon::Icon::from_rgba(image.into_raw(), width, height).map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn run_gtk(
+    icon: tray_icon::Icon,
+    show_label: String,
+    quit_label: String,
+    tx: SyncSender<Event>,
+    repaint: egui::Context,
+) {
+    gtk::glib::log_set_writer_func(|level, fields| {
+        let field = |key| {
+            fields
+                .iter()
+                .find(|field| field.key() == key)
+                .and_then(gtk::glib::LogField::value_str)
+        };
+        let is_deprecation = level == gtk::glib::LogLevel::Warning
+            && field("GLIB_DOMAIN") == Some("libayatana-appindicator")
+            && field("MESSAGE") == Some(APPINDICATOR_DEPRECATION);
+        if is_deprecation {
+            gtk::glib::LogWriterOutput::Handled
+        } else {
+            gtk::glib::log_writer_default(level, fields)
+        }
+    });
+    let result = gtk::init()
+        .map_err(|error| error.to_string())
+        .and_then(|()| build_icon(icon, &show_label, &quit_label));
+    let _icon = match result {
+        Ok(icon) => icon,
+        Err(error) => {
+            let _ = tx.try_send(Event::Failed(error));
+            repaint.request_repaint();
+            return;
+        }
+    };
+    let _ = tx.try_send(Event::Ready);
+    repaint.request_repaint();
+    gtk::main();
+}

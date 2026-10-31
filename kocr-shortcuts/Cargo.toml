@@ -1,19 +1,14 @@
 [package]
-name = "kocr-daemon"
+name = "kocr-shortcuts"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Global shortcut daemon for kocr"
+description = "Global shortcut backends for kocr"
 autobins = false
-
-[[bin]]
-name = "kocr-daemon"
-path = "src/main.rs"
 
 [dependencies]
 kocr-config.workspace = true
 kocr-core.workspace = true
-
 thiserror.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

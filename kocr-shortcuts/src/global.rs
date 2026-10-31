@@ -78,7 +78,7 @@ where
     }
 
     let mut config_content = read_config_content();
-    eprintln!("Shortcut daemon started (X11)");
+    eprintln!("KOCR shortcuts started (X11)");
     loop {
         if let Ok(event) = GlobalHotKeyEvent::receiver().recv_timeout(POLL_INTERVAL)
             && event.state() == HotKeyState::Pressed

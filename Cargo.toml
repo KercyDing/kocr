@@ -3,7 +3,7 @@ members = [
     "kocr-cli",
     "kocr-config",
     "kocr-core",
-    "kocr-daemon",
+    "kocr-shortcuts",
     "kocr-gui",
     "kocr-model",
     "kocr-ocr",
@@ -20,6 +20,7 @@ repository = "https://github.com/KercyDing/kocr"
 [workspace.dependencies]
 kocr-config = { path = "kocr-config" }
 kocr-core = { path = "kocr-core" }
+kocr-shortcuts = { path = "kocr-shortcuts" }
 kocr-model = { path = "kocr-model" }
 kocr-ocr = { path = "kocr-ocr" }
 kocr-platform = { path = "kocr-platform" }
@@ -28,16 +29,16 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
 dirs = "7"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
 futures-util = "0.3"
 global-hotkey = "0.9"
-rusto-rs = { version = "0.3.2", default-features = false }
+rusto-rs = { version = "0.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
 toml = "1"
 ureq = "3"
-winio = { version = "=0.13.0-beta.2", default-features = false }
 zbus = "6"
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 

@@ -28,12 +28,9 @@ jobs:
           - pkgbase: kocr-bin
             asset_prefix: kocr-cli
             kind: cli
-          - pkgbase: kocr-qt-bin
-            asset_prefix: kocr-gui-qt
-            kind: qt
-          - pkgbase: kocr-gtk-bin
-            asset_prefix: kocr-gui-gtk
-            kind: gtk
+          - pkgbase: kocr-gui-bin
+            asset_prefix: kocr-gui
+            kind: gui
     steps:
       - name: Checkout
         uses: actions/checkout@v7
