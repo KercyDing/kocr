@@ -9,6 +9,7 @@ use chrono::{Local, TimeZone};
 use eframe::egui;
 use kocr_config::Config;
 use kocr_model::Progress;
+use kocr_shortcuts::Action;
 
 use crate::history::{Content as StoredContent, History, Record as StoredRecord};
 use crate::models::{ModelRow, load_models};
@@ -27,6 +28,7 @@ pub(crate) enum Page {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ShortcutField {
     Copy,
+    Save,
     Ocr,
     Oneline,
 }
@@ -57,8 +59,8 @@ pub(crate) enum Event {
     Shortcuts(String),
     Progress(Progress),
     Installed(Result<String, String>),
-    Captured(Result<CaptureOutput, String>),
-    ShortcutCapture(bool, bool),
+    Captured(Action, Result<CaptureOutput, String>),
+    ShortcutCapture(Action),
 }
 
 pub(crate) struct KocrApp {
@@ -83,6 +85,7 @@ pub(crate) struct KocrApp {
     pub(crate) preview: Option<(i64, egui::TextureHandle)>,
     pub(crate) status: String,
     pub(crate) copy: String,
+    pub(crate) save: String,
     pub(crate) ocr: String,
     pub(crate) oneline: String,
     pub(crate) shortcut_recording: Option<ShortcutField>,
@@ -100,6 +103,7 @@ impl KocrApp {
         };
         let models = Vec::new();
         let copy = config.shortcut.copy.clone().unwrap_or_default();
+        let save = config.shortcut.save.clone().unwrap_or_default();
         let ocr = config.shortcut.ocr.clone().unwrap_or_default();
         let oneline = config.shortcut.oneline.clone().unwrap_or_default();
         let mut status = load_error
@@ -120,8 +124,8 @@ impl KocrApp {
         thread::spawn(move || {
             let capture_tx = shortcut_tx.clone();
             let capture_ctx = shortcut_ctx.clone();
-            let result = kocr_shortcuts::run(move |recognize, oneline| {
-                let _ = capture_tx.send(Event::ShortcutCapture(recognize, oneline));
+            let result = kocr_shortcuts::run(move |action| {
+                let _ = capture_tx.send(Event::ShortcutCapture(action));
                 capture_ctx.request_repaint();
                 Ok::<(), String>(())
             });
@@ -167,6 +171,7 @@ impl KocrApp {
             preview: None,
             status,
             copy,
+            save,
             ocr,
             oneline,
             shortcut_recording: None,
@@ -201,10 +206,10 @@ impl KocrApp {
                 Event::Shortcuts(status) => {
                     self.shortcuts_status = status;
                 }
-                Event::ShortcutCapture(recognize, oneline) => {
-                    self.capture(recognize, oneline);
+                Event::ShortcutCapture(action) => {
+                    self.capture(action);
                 }
-                Event::Captured(result) => {
+                Event::Captured(action, result) => {
                     self.capturing = false;
                     match result {
                         Ok(output) => {
@@ -248,7 +253,11 @@ impl KocrApp {
                                         },
                                     );
                                     self.trim_history();
-                                    self.status = t!("status_png_copied").to_string();
+                                    if action == Action::Save {
+                                        self.save_png(&output.png);
+                                    } else {
+                                        self.status = t!("status_png_copied").to_string();
+                                    }
                                 }
                             }
                         }
@@ -420,13 +429,18 @@ impl KocrApp {
         });
     }
 
-    pub(crate) fn capture(&mut self, recognize: bool, oneline: bool) {
+    pub(crate) fn capture(&mut self, action: Action) {
         if self.capturing {
             return;
         }
         self.capturing = true;
         self.status = t!("status_capturing").to_string();
 
+        let (recognize, oneline) = match action {
+            Action::Copy | Action::Save => (false, false),
+            Action::Ocr => (true, false),
+            Action::Oneline => (true, true),
+        };
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         thread::spawn(move || {
@@ -439,9 +453,28 @@ impl KocrApp {
                     kocr_core::AppError::Cancelled => t!("status_capture_cancelled").to_string(),
                     error => error.to_string(),
                 });
-            let _ = tx.send(Event::Captured(result));
+            let _ = tx.send(Event::Captured(action, result));
             ctx.request_repaint();
         });
+    }
+
+    fn save_png(&mut self, png: &[u8]) {
+        let file_name = format!("kocr-{}.png", Local::now().format("%Y%m%d-%H%M%S"));
+        let Some(mut path) = rfd::FileDialog::new()
+            .add_filter("PNG", &["png"])
+            .set_file_name(file_name)
+            .save_file()
+        else {
+            self.status = t!("status_save_cancelled").to_string();
+            return;
+        };
+        if path.extension().is_none() {
+            path.set_extension("png");
+        }
+        self.status = match std::fs::write(&path, png) {
+            Ok(()) => t!("status_image_saved").to_string(),
+            Err(error) => t!("status_save_failed", error = error).to_string(),
+        };
     }
 
     pub(crate) fn save(&mut self) {
@@ -451,17 +484,22 @@ impl KocrApp {
         }
 
         let copy = self.copy.trim();
+        let save = self.save.trim();
         let ocr = self.ocr.trim();
         let oneline = self.oneline.trim();
-        if let Err(error) =
-            validate_shortcuts(&[("copy", copy), ("ocr", ocr), ("one line", oneline)])
-        {
+        if let Err(error) = validate_shortcuts(&[
+            ("copy", copy),
+            ("save", save),
+            ("ocr", ocr),
+            ("one line", oneline),
+        ]) {
             self.status = error;
             return;
         }
 
         let mut config = self.config.clone();
         config.shortcut.copy = Some(copy.to_owned());
+        config.shortcut.save = Some(save.to_owned());
         config.shortcut.ocr = Some(ocr.to_owned());
         config.shortcut.oneline = Some(oneline.to_owned());
         if let Err(error) = config.save() {
@@ -518,6 +556,7 @@ impl KocrApp {
     pub(crate) fn shortcut_value(&self, field: ShortcutField) -> &str {
         match field {
             ShortcutField::Copy => &self.copy,
+            ShortcutField::Save => &self.save,
             ShortcutField::Ocr => &self.ocr,
             ShortcutField::Oneline => &self.oneline,
         }
@@ -526,6 +565,7 @@ impl KocrApp {
     pub(crate) fn set_shortcut(&mut self, field: ShortcutField, value: String) {
         match field {
             ShortcutField::Copy => self.copy = value,
+            ShortcutField::Save => self.save = value,
             ShortcutField::Ocr => self.ocr = value,
             ShortcutField::Oneline => self.oneline = value,
         }

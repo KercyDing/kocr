@@ -1,6 +1,7 @@
 //! Egui rendering.
 
 use eframe::egui;
+use kocr_shortcuts::Action;
 
 use crate::app::{CopyAction, KocrApp, Page, RecordContent, ShortcutField};
 use crate::models::{progress_fraction, progress_text};
@@ -58,7 +59,16 @@ impl KocrApp {
                 )
                 .clicked()
             {
-                self.capture(false, false);
+                self.capture(Action::Copy);
+            }
+            if ui
+                .add_enabled(
+                    !self.capturing,
+                    egui::Button::new(t!("capture_save").as_ref()),
+                )
+                .clicked()
+            {
+                self.capture(Action::Save);
             }
             if ui
                 .add_enabled(
@@ -67,7 +77,7 @@ impl KocrApp {
                 )
                 .clicked()
             {
-                self.capture(true, false);
+                self.capture(Action::Ocr);
             }
             if ui
                 .add_enabled(
@@ -76,7 +86,7 @@ impl KocrApp {
                 )
                 .clicked()
             {
-                self.capture(true, true);
+                self.capture(Action::Oneline);
             }
         });
 
@@ -596,6 +606,7 @@ impl KocrApp {
             .show(ui, |ui| {
                 for (field, label) in [
                     (ShortcutField::Copy, t!("copy")),
+                    (ShortcutField::Save, t!("save")),
                     (ShortcutField::Ocr, t!("ocr")),
                     (ShortcutField::Oneline, t!("one_line")),
                 ] {

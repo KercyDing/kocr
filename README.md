@@ -98,15 +98,16 @@ Models are INT8-quantized RTen packages, available in small, medium, and tiny ti
 
 ## Keyboard Shortcuts
 
-Open KOCR and use the Shortcuts page. The app provides three default shortcuts:
+Open KOCR and use the Shortcuts page. Shortcuts are unset by default; assign the keys you want.
 
-| Shortcut | Action |
-|----------|--------|
-| `Alt+1`  | Capture and copy PNG |
-| `Alt+2`  | Capture, OCR, and copy text |
-| `Alt+3`  | Capture, OCR, merge into one line, and copy text |
+| Action | Description |
+|--------|-------------|
+| Copy | Capture a region and copy the PNG |
+| Save | Capture a region, choose a path, save the PNG, and copy it |
+| Extract | Capture, OCR, and copy text |
+| Extract as one line | Capture, OCR, merge into one line, and copy text |
 
-Change shortcuts in the KOCR Shortcuts page. Shortcut changes take effect after saving.
+Shortcut changes take effect after saving.
 
 ## Configuration
 
@@ -117,8 +118,9 @@ Example:
 ```toml
 [shortcut]
 copy = "Alt+1"
-ocr  = "Alt+2"
-oneline = "Alt+3"
+save = "Alt+2"
+ocr = "Alt+3"
+oneline = "Alt+4"
 
 [models]
 select = "ppocrv6-small-int8-r1"

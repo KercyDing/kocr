@@ -21,33 +21,23 @@ pub(crate) fn operation(context: &str, error: impl Display) -> KeyboardError {
     KeyboardError::Operation(format!("{context}: {error}"))
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum Trigger {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Action {
     Copy,
+    Save,
     Ocr,
     Oneline,
 }
 
-impl Trigger {
-    pub(crate) fn capture_options(self) -> (bool, bool) {
-        match self {
-            Self::Copy => (false, false),
-            Self::Ocr => (true, false),
-            Self::Oneline => (true, true),
-        }
+impl Action {
+    pub(crate) fn requires_model(self) -> bool {
+        matches!(self, Self::Ocr | Self::Oneline)
     }
-}
-
-pub(crate) fn on_trigger_options<F, E>(on_trigger: &mut F, trigger: Trigger) -> Result<(), E>
-where
-    F: FnMut(bool, bool) -> Result<(), E>,
-{
-    let (recognize, oneline) = trigger.capture_options();
-    on_trigger(recognize, oneline)
 }
 
 pub(crate) struct Configured {
     pub(crate) copy: Option<(String, Shortcut)>,
+    pub(crate) save: Option<(String, Shortcut)>,
     pub(crate) ocr: Option<(String, Shortcut)>,
     pub(crate) oneline: Option<(String, Shortcut)>,
 }
@@ -59,6 +49,7 @@ impl Configured {
         })?;
         Ok(Self {
             copy: parse_binding(shortcuts.copy)?,
+            save: parse_binding(shortcuts.save)?,
             ocr: parse_binding(shortcuts.ocr)?,
             oneline: parse_binding(shortcuts.oneline)?,
         })
@@ -67,6 +58,7 @@ impl Configured {
 
 fn parse_binding(shortcut: Option<String>) -> Result<Option<(String, Shortcut)>, KeyboardError> {
     shortcut
+        .filter(|name| !name.trim().is_empty())
         .map(|name| {
             let shortcut = kocr_config::parse_shortcut(&name)
                 .map_err(|error| KeyboardError::Operation(error.to_string()))?;
@@ -104,7 +96,7 @@ pub(crate) fn notify_no_model() {
 /// on X11. macOS and Windows use global-hotkey directly.
 pub fn run<F, E>(on_trigger: F) -> Result<(), KeyboardError>
 where
-    F: FnMut(bool, bool) -> Result<(), E>,
+    F: FnMut(Action) -> Result<(), E>,
     E: Display,
 {
     #[cfg(target_os = "linux")]

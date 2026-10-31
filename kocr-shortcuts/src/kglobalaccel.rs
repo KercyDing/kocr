@@ -9,8 +9,8 @@ use zbus::fdo::RequestNameFlags;
 use zbus::{Connection, OwnedObjectPath, Proxy};
 
 use super::{
-    Configured, KeyboardError, POLL_INTERVAL, Trigger, notify_no_model, on_trigger_options,
-    operation, read_config_content,
+    Action, Configured, KeyboardError, POLL_INTERVAL, notify_no_model, operation,
+    read_config_content,
 };
 
 const BUS_NAME: &str = "io.github.KercyDing.kocr";
@@ -18,6 +18,7 @@ const SERVICE: &str = "org.kde.kglobalaccel";
 const SERVICE_PATH: &str = "/kglobalaccel";
 const COMPONENT: &str = "kocr";
 const COPY_ACTION: &str = "copy";
+const SAVE_ACTION: &str = "save";
 const OCR_ACTION: &str = "capture-ocr";
 const ONELINE_ACTION: &str = "capture-ocr-oneline";
 const SET_PRESENT_NO_AUTOLOAD: u32 = 2 | 4;
@@ -28,7 +29,7 @@ const QT_ALT: i32 = 0x0800_0000;
 const QT_META: i32 = 0x1000_0000;
 
 enum Event {
-    Trigger(Trigger),
+    Trigger(Action),
     Reregister,
 }
 
@@ -41,6 +42,7 @@ struct Binding {
 #[derive(Clone, Default, PartialEq, Eq)]
 struct Bindings {
     copy: Option<Binding>,
+    save: Option<Binding>,
     ocr: Option<Binding>,
     oneline: Option<Binding>,
 }
@@ -49,6 +51,7 @@ impl Bindings {
     fn from_configured(configured: Configured) -> Self {
         Self {
             copy: configured.copy.map(binding),
+            save: configured.save.map(binding),
             ocr: configured.ocr.map(binding),
             oneline: configured.oneline.map(binding),
         }
@@ -64,7 +67,7 @@ fn binding((name, shortcut): (String, Shortcut)) -> Binding {
 
 pub(super) fn run<F, E>(mut on_trigger: F) -> Result<(), KeyboardError>
 where
-    F: FnMut(bool, bool) -> Result<(), E>,
+    F: FnMut(Action) -> Result<(), E>,
     E: std::fmt::Display,
 {
     let connection = zbus::block_on(Connection::session())
@@ -88,10 +91,10 @@ where
     eprintln!("KOCR shortcuts started (Wayland)");
     loop {
         match events_rx.recv_timeout(POLL_INTERVAL) {
-            Ok(Event::Trigger(trigger)) => {
-                if kocr_core::models::selected_profile().is_err() {
+            Ok(Event::Trigger(action)) => {
+                if action.requires_model() && kocr_core::models::selected_profile().is_err() {
                     notify_no_model();
-                } else if let Err(error) = on_trigger_options(&mut on_trigger, trigger) {
+                } else if let Err(error) = on_trigger(action) {
                     eprintln!("\x1b[31mShortcut capture failed: {error}\x1b[0m");
                 }
                 trigger_pending.store(false, Ordering::Release);
@@ -177,15 +180,16 @@ async fn listen(
         else {
             continue;
         };
-        let trigger = match action.as_str() {
-            COPY_ACTION => Trigger::Copy,
-            OCR_ACTION => Trigger::Ocr,
-            ONELINE_ACTION => Trigger::Oneline,
+        let action = match action.as_str() {
+            COPY_ACTION => Action::Copy,
+            SAVE_ACTION => Action::Save,
+            OCR_ACTION => Action::Ocr,
+            ONELINE_ACTION => Action::Oneline,
             _ => continue,
         };
         if component == COMPONENT
             && !trigger_pending.swap(true, Ordering::AcqRel)
-            && events.try_send(Event::Trigger(trigger)).is_err()
+            && events.try_send(Event::Trigger(action)).is_err()
         {
             trigger_pending.store(false, Ordering::Release);
         }
@@ -204,6 +208,13 @@ async fn register_async(connection: &Connection, bindings: &Bindings) -> Result<
         COPY_ACTION,
         "Capture and copy screenshot",
         bindings.copy.as_ref(),
+    )
+    .await?;
+    register_action(
+        &proxy,
+        SAVE_ACTION,
+        "Capture screenshot and save",
+        bindings.save.as_ref(),
     )
     .await?;
     register_action(

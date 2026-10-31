@@ -18,11 +18,11 @@ kocr-core.workspace = true
 kocr-model.workspace = true
 kocr-shortcuts.workspace = true
 rust-i18n.workspace = true
+rfd.workspace = true
 rusqlite.workspace = true
-image = { version = "0.25", default-features = false, features = ["png"] }
-tray-icon = { version = "0.24", default-features = false }
+image.workspace = true
+tray-icon.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-gtk = "0.18"
-tray-icon = { version = "0.24", default-features = false, features = ["gtk"] }
-winit = { version = "0.30", default-features = false, features = ["x11"] }
+gtk.workspace = true
+winit.workspace = true

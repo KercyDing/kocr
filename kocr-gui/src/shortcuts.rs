@@ -305,6 +305,14 @@ mod tests {
     }
 
     #[test]
+    fn rejects_duplicate_save_shortcut() {
+        assert_eq!(
+            validate_shortcuts(&[("save", "Alt+1"), ("copy", "Alt+1")]),
+            Err("copy: shortcut is already used by save".to_owned())
+        );
+    }
+
+    #[test]
     fn accepts_distinct_shortcuts() {
         assert_eq!(
             validate_shortcuts(&[("copy", "Alt+1"), ("ocr", "Alt+2"), ("one line", "")]),

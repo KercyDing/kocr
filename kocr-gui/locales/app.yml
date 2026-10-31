@@ -14,14 +14,17 @@ tab_settings:
   zh-CN: 设置
 
 capture_png:
-  en: Capture and copy
-  zh-CN: 截屏并复制
+  en: Copy
+  zh-CN: 复制
+capture_save:
+  en: Save
+  zh-CN: 保存
 capture_text:
-  en: Capture and extract
-  zh-CN: 截屏并提取
+  en: Extract
+  zh-CN: 提取
 capture_oneline:
-  en: Capture and extract as one line
-  zh-CN: 截屏并提取为单行
+  en: Extract as one line
+  zh-CN: 提取为单行
 recent:
   en: Recent
   zh-CN: 最近结果
@@ -84,6 +87,9 @@ no_model_selected:
 copy:
   en: Copy
   zh-CN: 复制
+save:
+  en: Save
+  zh-CN: 保存
 delete:
   en: Delete
   zh-CN: 删除
@@ -190,6 +196,15 @@ status_record_deleted:
 status_history_cleared:
   en: History cleared
   zh-CN: 已清空历史
+status_save_cancelled:
+  en: Save cancelled
+  zh-CN: 已取消保存
+status_image_saved:
+  en: Image saved and copied
+  zh-CN: 已保存并复制图片
+status_save_failed:
+  en: "Could not save image: %{error}"
+  zh-CN: "保存图片失败：%{error}"
 status_close_action:
   en: "Close window: %{action}"
   zh-CN: "关闭窗口时：%{action}"

@@ -5,8 +5,8 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use kocr_config::{Key, Modifiers as ConfigModifiers, Shortcut};
 
 use super::{
-    Configured, KeyboardError, POLL_INTERVAL, Trigger, notify_no_model, on_trigger_options,
-    operation, read_config_content,
+    Action, Configured, KeyboardError, POLL_INTERVAL, notify_no_model, operation,
+    read_config_content,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -27,6 +27,7 @@ impl Binding {
 #[derive(Clone, Default, PartialEq, Eq)]
 struct Bindings {
     copy: Option<Binding>,
+    save: Option<Binding>,
     ocr: Option<Binding>,
     oneline: Option<Binding>,
 }
@@ -35,16 +36,18 @@ impl Bindings {
     fn from_configured(configured: Configured) -> Self {
         Self {
             copy: configured.copy.map(Binding::new),
+            save: configured.save.map(Binding::new),
             ocr: configured.ocr.map(Binding::new),
             oneline: configured.oneline.map(Binding::new),
         }
     }
 
-    fn trigger(&self, id: u32) -> Option<Trigger> {
+    fn trigger(&self, id: u32) -> Option<Action> {
         [
-            (&self.copy, Trigger::Copy),
-            (&self.ocr, Trigger::Ocr),
-            (&self.oneline, Trigger::Oneline),
+            (&self.copy, Action::Copy),
+            (&self.save, Action::Save),
+            (&self.ocr, Action::Ocr),
+            (&self.oneline, Action::Oneline),
         ]
         .into_iter()
         .find(|(binding, _)| {
@@ -58,7 +61,7 @@ impl Bindings {
 
 pub(super) fn run<F, E>(mut on_trigger: F) -> Result<(), KeyboardError>
 where
-    F: FnMut(bool, bool) -> Result<(), E>,
+    F: FnMut(Action) -> Result<(), E>,
     E: Display,
 {
     // Creating the manager also connects to the X server. On a Wayland
@@ -87,11 +90,11 @@ where
     loop {
         if let Ok(event) = GlobalHotKeyEvent::receiver().recv_timeout(POLL_INTERVAL)
             && event.state() == HotKeyState::Pressed
-            && let Some(trigger) = bindings.trigger(event.id())
+            && let Some(action) = bindings.trigger(event.id())
         {
-            if kocr_core::models::selected_profile().is_err() {
+            if action.requires_model() && kocr_core::models::selected_profile().is_err() {
                 notify_no_model();
-            } else if let Err(error) = on_trigger_options(&mut on_trigger, trigger) {
+            } else if let Err(error) = on_trigger(action) {
                 eprintln!("\x1b[31mShortcut capture failed: {error}\x1b[0m");
             }
         }
@@ -101,6 +104,7 @@ where
 
 fn register(manager: &GlobalHotKeyManager, bindings: &Bindings) -> Result<(), KeyboardError> {
     register_binding(manager, bindings.copy.as_ref())?;
+    register_binding(manager, bindings.save.as_ref())?;
     register_binding(manager, bindings.ocr.as_ref())?;
     register_binding(manager, bindings.oneline.as_ref())
 }
@@ -122,6 +126,7 @@ fn register_binding(
 
 fn unregister(manager: &GlobalHotKeyManager, bindings: &Bindings) {
     unregister_binding(manager, bindings.copy.as_ref());
+    unregister_binding(manager, bindings.save.as_ref());
     unregister_binding(manager, bindings.ocr.as_ref());
     unregister_binding(manager, bindings.oneline.as_ref());
 }
