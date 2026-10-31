@@ -6,7 +6,8 @@ mod i18n;
 mod preferences;
 mod tray;
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
@@ -32,10 +33,7 @@ struct CaptureOutput {
 
 enum RecordContent {
     Text(String),
-    Image {
-        texture: egui::TextureHandle,
-        png: Arc<Vec<u8>>,
-    },
+    Image(PathBuf),
 }
 
 struct CaptureRecord {
@@ -46,7 +44,7 @@ struct CaptureRecord {
 
 enum CopyAction {
     Text(String),
-    Image(Arc<Vec<u8>>),
+    Image(PathBuf),
 }
 
 #[derive(Clone)]
@@ -76,8 +74,10 @@ struct KocrApp {
     font_size_draft: f32,
     progress: Option<Progress>,
     capturing: bool,
+    confirm_clear: bool,
     history_store: Option<History>,
     history: Vec<CaptureRecord>,
+    texture_cache: HashMap<i64, egui::TextureHandle>,
     status: String,
     copy: String,
     ocr: String,
@@ -131,7 +131,7 @@ impl KocrApp {
             status = error;
         }
         let font_size_draft = preferences.font_size;
-        let (history_store, history, history_error) = load_history(&ctx);
+        let (history_store, history, history_error) = load_history(preferences.history_limit);
         if let Some(error) = history_error {
             status = error;
         }
@@ -149,8 +149,10 @@ impl KocrApp {
             font_size_draft,
             progress: None,
             capturing: false,
+            confirm_clear: false,
             history_store,
             history,
+            texture_cache: HashMap::new(),
             status,
             copy,
             ocr,
@@ -162,7 +164,7 @@ impl KocrApp {
         }
     }
 
-    fn poll(&mut self, ctx: &egui::Context) {
+    fn poll(&mut self) {
         while let Ok(event) = self.rx.try_recv() {
             match event {
                 Event::Models(result) => match result {
@@ -214,32 +216,24 @@ impl KocrApp {
                                     }
                                     self.status = t!("status_text_copied").to_string();
                                 }
-                                None => match texture_from_png(
-                                    ctx,
-                                    &output.png,
-                                    format!("capture-{created_at}"),
-                                ) {
-                                    Ok(texture) => {
-                                        let png = Arc::new(output.png);
-                                        let id = self.store_image(created_at, &png).unwrap_or_else(
-                                            |error| {
-                                                self.status = error;
-                                                -1
-                                            },
-                                        );
-                                        self.history.insert(
-                                            0,
-                                            CaptureRecord {
-                                                id,
-                                                content: RecordContent::Image { texture, png },
-                                                time,
-                                            },
-                                        );
-                                        self.trim_history();
-                                        self.status = t!("status_png_copied").to_string();
-                                    }
-                                    Err(error) => self.status = error,
-                                },
+                                None => {
+                                    let (id, path) = self
+                                        .store_image(created_at, &output.png)
+                                        .unwrap_or_else(|error| {
+                                            self.status = error;
+                                            (-1, PathBuf::new())
+                                        });
+                                    self.history.insert(
+                                        0,
+                                        CaptureRecord {
+                                            id,
+                                            content: RecordContent::Image(path),
+                                            time,
+                                        },
+                                    );
+                                    self.trim_history();
+                                    self.status = t!("status_png_copied").to_string();
+                                }
                             }
                         }
                         Err(error) => self.status = error,
@@ -255,35 +249,62 @@ impl KocrApp {
             .map_or(Ok(-1), |store| store.insert_text(created_at, text))
     }
 
-    fn store_image(&self, created_at: i64, png: &[u8]) -> Result<i64, String> {
+    fn store_image(&self, created_at: i64, png: &[u8]) -> Result<(i64, PathBuf), String> {
         self.history_store
             .as_ref()
-            .map_or(Ok(-1), |store| store.insert_image(created_at, png))
+            .map_or(Ok((-1, PathBuf::new())), |store| {
+                store.insert_image(created_at, png)
+            })
     }
 
     fn trim_history(&mut self) {
-        while self.history.len() > 50 {
-            self.history.pop();
+        self.apply_history_limit(self.preferences.history_limit);
+    }
+
+    fn apply_history_limit(&mut self, limit: usize) {
+        let mut removed = Vec::new();
+        while self.history.len() > limit {
+            if let Some(record) = self.history.pop() {
+                removed.push(record.id);
+            }
+        }
+        for id in removed {
+            self.texture_cache.remove(&id);
+        }
+        if let Some(store) = &self.history_store {
+            match store.prune(limit) {
+                Ok(paths) => history::remove_files(paths),
+                Err(error) => self.status = error,
+            }
         }
     }
 
     fn remove_record(&mut self, id: i64) {
-        if id >= 0
-            && let Some(store) = &self.history_store
-            && let Err(error) = store.delete(id)
-        {
-            self.status = error;
+        if let Some(store) = &self.history_store {
+            match store.delete(id) {
+                Ok(path) => {
+                    if let Some(path) = path {
+                        history::remove_files([path]);
+                    }
+                }
+                Err(error) => self.status = error,
+            }
         }
+        self.texture_cache.remove(&id);
         self.history.retain(|record| record.id != id);
     }
 
     fn clear_history(&mut self) {
-        if let Some(store) = &self.history_store
-            && let Err(error) = store.clear()
-        {
-            self.status = error;
-            return;
+        if let Some(store) = &self.history_store {
+            match store.clear() {
+                Ok(paths) => history::remove_files(paths),
+                Err(error) => {
+                    self.status = error;
+                    return;
+                }
+            }
         }
+        self.texture_cache.clear();
         self.history.clear();
     }
 
@@ -505,7 +526,6 @@ impl KocrApp {
         let mut copy = None;
         let mut delete_id = None;
         let mut clear = false;
-        const LIST_HEIGHT: f32 = 220.0;
         const ROW_HEIGHT: f32 = 32.0;
         const CONTENT_HEIGHT: f32 = 24.0;
         let total_rows = self.history.len();
@@ -513,80 +533,120 @@ impl KocrApp {
         ui.horizontal(|ui| {
             ui.label(t!("recent").as_ref());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let clear_label = if self.confirm_clear {
+                    t!("clear_history_confirm").into_owned()
+                } else {
+                    t!("clear_history").into_owned()
+                };
                 if ui
-                    .add_enabled(
-                        !self.history.is_empty(),
-                        egui::Button::new(t!("clear_history").as_ref()),
-                    )
+                    .add_enabled(!self.history.is_empty(), egui::Button::new(clear_label))
                     .clicked()
                 {
-                    clear = true;
+                    if self.confirm_clear {
+                        clear = true;
+                        self.confirm_clear = false;
+                    } else {
+                        self.confirm_clear = true;
+                    }
                 }
             });
         });
         ui.add_space(4.0);
 
+        let history = &self.history;
+        let texture_cache = &mut self.texture_cache;
+
         if total_rows == 0 {
             ui.weak(t!("recent_empty").as_ref());
         } else {
             egui::ScrollArea::vertical()
-                .max_height(LIST_HEIGHT)
-                .auto_shrink([false, true])
+                .max_height(ui.available_height())
+                .auto_shrink([false, false])
                 .show_rows(ui, ROW_HEIGHT, total_rows, |ui, rows| {
                     for row in rows {
-                        let record = &self.history[row];
+                        let record = &history[row];
                         egui::Frame::group(ui.style())
                             .inner_margin(egui::Margin::symmetric(6, 2))
                             .show(ui, |ui| {
                                 ui.set_width(ui.available_width());
                                 ui.set_min_height(CONTENT_HEIGHT);
-                                ui.horizontal_centered(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(&record.time)
-                                            .small()
-                                            .color(ui.visuals().weak_text_color()),
-                                    );
-                                    ui.add_space(6.0);
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(ui.available_width(), CONTENT_HEIGHT),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            egui::RichText::new(&record.time)
+                                                .small()
+                                                .color(ui.visuals().weak_text_color()),
+                                        );
+                                        ui.add_space(6.0);
 
-                                    let content_width = (ui.available_width() - 96.0).max(40.0);
-                                    ui.allocate_ui_with_layout(
-                                        egui::vec2(content_width, ROW_HEIGHT),
-                                        egui::Layout::left_to_right(egui::Align::Center),
-                                        |ui| {
-                                            ui.set_width(content_width);
-                                            match &record.content {
+                                        let content_width = (ui.available_width() - 96.0).max(40.0);
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(content_width, CONTENT_HEIGHT),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.set_width(content_width);
+                                                match &record.content {
+                                                    RecordContent::Text(text) => {
+                                                        let full = text.clone();
+                                                        let text = text.replace('\n', " ");
+                                                        ui.add(
+                                                            egui::Label::new(text)
+                                                                .truncate()
+                                                                .show_tooltip_when_elided(false),
+                                                        )
+                                                        .on_hover_text_at_pointer(full);
+                                                    }
+                                                    RecordContent::Image(path) => {
+                                                        if let std::collections::hash_map::Entry::Vacant(entry) =
+                                                            texture_cache.entry(record.id)
+                                                            && let Ok(texture) = texture_from_path(
+                                                                ui.ctx(),
+                                                                path,
+                                                                record.id,
+                                                            )
+                                                        {
+                                                            entry.insert(texture);
+                                                        }
+                                                        if let Some(texture) =
+                                                            texture_cache.get(&record.id)
+                                                        {
+                                                            let size = texture.size_vec2();
+                                                            let scale = (CONTENT_HEIGHT / size.y)
+                                                                .min(content_width / size.x)
+                                                                .min(1.0);
+                                                            ui.add(
+                                                                egui::Image::new(texture)
+                                                                    .fit_to_exact_size(
+                                                                        size * scale,
+                                                                    ),
+                                                            );
+                                                        } else {
+                                                            ui.weak(
+                                                                t!("image_unavailable").as_ref(),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                        );
+
+                                        if ui.small_button(t!("copy").as_ref()).clicked() {
+                                            copy = Some(match &record.content {
                                                 RecordContent::Text(text) => {
-                                                    let text = text.replace('\n', " ");
-                                                    ui.add(egui::Label::new(text).truncate());
+                                                    CopyAction::Text(text.clone())
                                                 }
-                                                RecordContent::Image { texture, .. } => {
-                                                    let size = texture.size_vec2();
-                                                    let scale = (CONTENT_HEIGHT / size.y)
-                                                        .min(content_width / size.x)
-                                                        .min(1.0);
-                                                    ui.add(
-                                                        egui::Image::new(texture)
-                                                            .fit_to_exact_size(size * scale),
-                                                    );
+                                                RecordContent::Image(path) => {
+                                                    CopyAction::Image(path.clone())
                                                 }
-                                            }
-                                        },
-                                    );
-
-                                    if ui.small_button(t!("copy").as_ref()).clicked() {
-                                        copy = Some(match &record.content {
-                                            RecordContent::Text(text) => {
-                                                CopyAction::Text(text.clone())
-                                            }
-                                            RecordContent::Image { png, .. } => {
-                                                CopyAction::Image(png.clone())
-                                            }
-                                        });
-                                    }
-                                    if ui.small_button(t!("delete").as_ref()).clicked() {
-                                        delete_id = Some(record.id);
-                                    }
-                                });
+                                            });
+                                        }
+                                        if ui.small_button(t!("delete").as_ref()).clicked() {
+                                            delete_id = Some(record.id);
+                                        }
+                                    },
+                                );
                             });
                     }
                 });
@@ -599,13 +659,21 @@ impl KocrApp {
         }
 
         if let Some(action) = copy {
+            let image = matches!(&action, CopyAction::Image(_));
             let result = match action {
                 CopyAction::Text(text) => {
                     kocr_core::platform::copy_clipboard(text.as_bytes(), "text/plain;charset=utf-8")
+                        .map_err(|error| error.to_string())
                 }
-                CopyAction::Image(png) => kocr_core::platform::copy_clipboard(&png, "image/png"),
+                CopyAction::Image(path) => std::fs::read(path)
+                    .map_err(|error| error.to_string())
+                    .and_then(|png| {
+                        kocr_core::platform::copy_clipboard(&png, "image/png")
+                            .map_err(|error| error.to_string())
+                    }),
             };
             self.status = match result {
+                Ok(()) if image => t!("status_image_copied").to_string(),
                 Ok(()) => t!("status_text_copied").to_string(),
                 Err(error) => error.to_string(),
             };
@@ -742,6 +810,22 @@ impl KocrApp {
 
         ui.add_space(8.0);
         ui.horizontal(|ui| {
+            ui.label(t!("history_limit").as_ref());
+            let mut limit = self.preferences.history_limit;
+            let response = ui.add(
+                egui::Slider::new(&mut limit, 10..=500)
+                    .step_by(10.0)
+                    .integer(),
+            );
+            if response.drag_stopped() {
+                self.preferences.history_limit = limit;
+                self.save_preferences();
+                self.apply_history_limit(limit);
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
             ui.label(t!("close_action").as_ref());
             let mut close_action = self.preferences.close_action;
             ui.radio_value(
@@ -816,7 +900,7 @@ impl KocrApp {
 
 impl eframe::App for KocrApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.poll(ctx);
+        self.poll();
         self.poll_tray(ctx);
         self.handle_close(ctx);
     }
@@ -837,44 +921,51 @@ fn selected_model_status(config: &Config) -> String {
     }
 }
 
-fn load_history(ctx: &egui::Context) -> (Option<History>, Vec<CaptureRecord>, Option<String>) {
+fn load_history(limit: usize) -> (Option<History>, Vec<CaptureRecord>, Option<String>) {
     let store = match History::open() {
         Ok(store) => store,
         Err(error) => return (None, Vec::new(), Some(error)),
     };
+    if let Err(error) = store.prune(limit) {
+        return (Some(store), Vec::new(), Some(error));
+    }
     let records = match store.recent() {
         Ok(records) => records,
         Err(error) => return (Some(store), Vec::new(), Some(error)),
     };
     let mut history = Vec::with_capacity(records.len());
     for record in records {
-        if let Some(record) = stored_record(ctx, record) {
+        if let Some(record) = stored_record(record) {
             history.push(record);
         }
     }
     (Some(store), history, None)
 }
 
-fn stored_record(ctx: &egui::Context, record: StoredRecord) -> Option<CaptureRecord> {
+fn stored_record(record: StoredRecord) -> Option<CaptureRecord> {
     let time = Local
         .timestamp_opt(record.created_at, 0)
         .single()
-        .map(|time| time.format("%H:%M:%S").to_string())
+        .map(|time| time.format("%m-%d %H:%M:%S").to_string())
         .unwrap_or_else(|| "--:--:--".to_owned());
     let content = match record.content {
         StoredContent::Text(text) => RecordContent::Text(text),
-        StoredContent::Image(png) => {
-            let png = Arc::new(png);
-            let texture =
-                texture_from_png(ctx, &png, format!("capture-{}", record.created_at)).ok()?;
-            RecordContent::Image { texture, png }
-        }
+        StoredContent::Image(path) => RecordContent::Image(path),
     };
     Some(CaptureRecord {
         id: record.id,
         content,
         time,
     })
+}
+
+fn texture_from_path(
+    ctx: &egui::Context,
+    path: &std::path::Path,
+    id: i64,
+) -> Result<egui::TextureHandle, String> {
+    let png = std::fs::read(path).map_err(|error| error.to_string())?;
+    texture_from_png(ctx, &png, format!("capture-{id}"))
 }
 
 fn texture_from_png(

@@ -26,6 +26,7 @@ pub struct Preferences {
     pub close_action: CloseAction,
     pub remember_window_state: bool,
     pub font_size: f32,
+    pub history_limit: usize,
 }
 
 impl Default for Preferences {
@@ -36,6 +37,7 @@ impl Default for Preferences {
             close_action: CloseAction::Exit,
             remember_window_state: true,
             font_size: 15.0,
+            history_limit: 50,
         }
     }
 }
@@ -57,12 +59,13 @@ impl Preferences {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         let content = format!(
-            "theme={}\nlocale={}\nclose_action={}\nremember_window_state={}\nfont_size={}\n",
+            "theme={}\nlocale={}\nclose_action={}\nremember_window_state={}\nfont_size={}\nhistory_limit={}\n",
             self.theme,
             self.locale,
             self.close_action.as_str(),
             self.remember_window_state,
             self.font_size,
+            self.history_limit,
         );
         fs::write(path, content).map_err(|error| error.to_string())
     }
@@ -101,6 +104,11 @@ fn parse(content: &str) -> Preferences {
             && (12.0..=22.0).contains(&size)
         {
             preferences.font_size = size;
+        } else if let Some(value) = line.strip_prefix("history_limit=")
+            && let Ok(limit) = value.trim().parse::<usize>()
+            && (10..=500).contains(&limit)
+        {
+            preferences.history_limit = limit;
         }
     }
     preferences
@@ -120,6 +128,7 @@ mod tests {
         assert_eq!(preferences.close_action, CloseAction::HideToTray);
         assert!(!preferences.remember_window_state);
         assert_eq!(preferences.font_size, 15.0);
+        assert_eq!(preferences.history_limit, 50);
     }
 
     #[test]
