@@ -10,12 +10,16 @@ use thiserror::Error;
 
 #[cfg(target_os = "linux")]
 mod linux;
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod unsupported;
 
 #[cfg(target_os = "linux")]
 pub use linux::{capture_region, copy_clipboard, dependencies};
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+pub use macos::{capture_region, copy_clipboard, dependencies};
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub use unsupported::{capture_region, copy_clipboard, dependencies};
 
 #[derive(Debug, Error)]

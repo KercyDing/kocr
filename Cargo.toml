@@ -26,12 +26,14 @@ kocr-ocr = { path = "kocr-ocr" }
 kocr-platform = { path = "kocr-platform" }
 
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
 dirs = "7"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
 futures-util = "0.3"
 global-hotkey = "0.9"
+rusqlite = { version = "0.32", features = ["bundled"] }
 rusto-rs = { version = "0.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.11"

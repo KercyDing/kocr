@@ -49,6 +49,8 @@ cat > "$app_dir/Contents/Info.plist" <<EOF
     <string>12.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>KOCR captures a screen region to recognize text.</string>
 </dict>
 </plist>
 EOF

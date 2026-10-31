@@ -9,6 +9,7 @@ use crate::{AppError, ocr};
 pub struct CaptureResult {
     pub text: Option<String>,
     pub path: Option<PathBuf>,
+    pub png: Vec<u8>,
 }
 
 pub fn run(
@@ -43,7 +44,11 @@ pub fn run(
         platform::copy_clipboard(&png, "image/png")?;
         None
     };
-    Ok(CaptureResult { text, path: output })
+    Ok(CaptureResult {
+        text,
+        path: output,
+        png,
+    })
 }
 
 fn validate_png(bytes: &[u8]) -> Result<(), AppError> {

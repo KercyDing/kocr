@@ -2,7 +2,7 @@
 
 Offline OCR for desktop.
 
-Recognize text from existing images with the CLI, or capture a screen region with the desktop app on Linux. Results are copied directly to the clipboard.
+Recognize text from existing images with the CLI, or capture a screen region with the desktop app on Linux and macOS. Results are copied directly to the clipboard.
 
 ## Installation
 

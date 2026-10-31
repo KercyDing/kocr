@@ -8,3 +8,4 @@ description = "Platform integration for kocr"
 [dependencies]
 dirs.workspace = true
 thiserror.workspace = true
+tempfile.workspace = true

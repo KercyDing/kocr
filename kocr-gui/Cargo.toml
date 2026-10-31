@@ -11,11 +11,13 @@ name = "kocr-gui"
 path = "src/main.rs"
 
 [dependencies]
+chrono.workspace = true
 eframe.workspace = true
 kocr-config.workspace = true
 kocr-core.workspace = true
 kocr-model.workspace = true
 kocr-shortcuts.workspace = true
+rusqlite.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }
 tray-icon = { version = "0.24", default-features = false }
 
