@@ -12,4 +12,5 @@ kocr-platform.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
+ureq.workspace = true
 zip.workspace = true

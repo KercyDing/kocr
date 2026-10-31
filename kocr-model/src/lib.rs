@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::catalog::{ModelIndex, ModelProfile, profiles};
 
-pub use install::{InstallResult, run as install};
+pub use install::{InstallResult, Progress, run as install};
 pub use list::{Entry as ModelEntry, run as list};
 pub use uninstall::run as uninstall;
 pub use r#use::run as use_model;

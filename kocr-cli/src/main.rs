@@ -262,14 +262,43 @@ fn run_list() -> Result<(), AppError> {
 }
 
 fn run_install(args: InstallArgs) -> Result<(), AppError> {
-    let installed =
-        models::install(&args.profile, args.path.as_deref()).map_err(AppError::Model)?;
+    let mut progress_shown = false;
+    let result = models::install(&args.profile, args.path.as_deref(), |progress| {
+        progress_shown = true;
+        print_download_progress(&progress);
+    });
+    if progress_shown {
+        eprintln!();
+    }
+    let installed = result.map_err(AppError::Model)?;
     if let Some(error) = &installed.config_error {
         eprintln!("\x1b[31mCould not update model configuration: {error}\x1b[0m");
     }
     println!("Installed {}", installed.name);
     println!("Path: {}", display_path(&installed.path));
     Ok(())
+}
+
+fn print_download_progress(progress: &models::Progress) {
+    match progress.total {
+        Some(total) if total > 0 => {
+            let percent = progress.downloaded.saturating_mul(100) / total;
+            eprint!("\rDownloading {percent}%");
+        }
+        _ => eprint!(
+            "\rDownloading {}",
+            format_download_size(progress.downloaded)
+        ),
+    }
+}
+
+fn format_download_size(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    if bytes >= MIB {
+        format!("{:.1} MiB", bytes as f64 / MIB as f64)
+    } else {
+        format!("{} KiB", bytes / 1024)
+    }
 }
 
 fn run_uninstall(args: ProfileArgs) -> Result<(), AppError> {
@@ -329,7 +358,6 @@ fn run_doctor() -> Result<(), AppError> {
     for &dependency in platform::dependencies() {
         checks.push(command_check(dependency));
     }
-    checks.push(command_check("curl"));
     checks.push(engine_check());
 
     for check in &checks {

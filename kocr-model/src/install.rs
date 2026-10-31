@@ -1,7 +1,8 @@
 use std::fs::{self, File};
-use std::io;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 use tempfile::TempDir;
 use zip::ZipArchive;
@@ -11,13 +12,30 @@ use super::{
     sync_config,
 };
 
+const USER_AGENT: &str = concat!("kocr/", env!("CARGO_PKG_VERSION"));
+const DOWNLOAD_ATTEMPTS: u8 = 3;
+const PROGRESS_STEP: u64 = 1024 * 1024;
+
+#[derive(Debug, Clone, Copy)]
+pub struct Progress {
+    pub downloaded: u64,
+    pub total: Option<u64>,
+}
+
 pub struct InstallResult {
     pub name: String,
     pub path: PathBuf,
     pub config_error: Option<String>,
 }
 
-pub fn run(selector: &str, path: Option<&Path>) -> Result<InstallResult, ModelError> {
+pub fn run<F>(
+    selector: &str,
+    path: Option<&Path>,
+    mut on_progress: F,
+) -> Result<InstallResult, ModelError>
+where
+    F: FnMut(Progress),
+{
     sync_config()?;
     let index = load_index()?;
     let (name, profile) = resolve_profile(&index, selector)?;
@@ -50,17 +68,7 @@ pub fn run(selector: &str, path: Option<&Path>) -> Result<InstallResult, ModelEr
         ModelError::Operation(format!("could not create temporary directory: {error}"))
     })?;
     let archive_path = temporary.path().join("model.zip");
-    let curl = kocr_platform::find_command("curl")
-        .ok_or_else(|| ModelError::Operation("curl not found in PATH".to_owned()))?;
-    let status = Command::new(curl)
-        .args(["-fL", "--retry", "3", "--progress-bar", "--output"])
-        .arg(&archive_path)
-        .arg(profile.url)
-        .status()
-        .map_err(|error| ModelError::Operation(format!("could not start curl: {error}")))?;
-    if !status.success() {
-        return Err(ModelError::Operation(format!("download failed: {status}")));
-    }
+    download(profile.url, &archive_path, &mut on_progress)?;
     let actual = crate::hash::file_sha256(&archive_path)
         .map_err(|error| ModelError::Operation(format!("could not read archive: {error}")))?;
     if actual != profile.sha256 {
@@ -92,6 +100,64 @@ pub fn run(selector: &str, path: Option<&Path>) -> Result<InstallResult, ModelEr
         path: destination,
         config_error,
     })
+}
+
+fn download<F>(url: &str, path: &Path, on_progress: &mut F) -> Result<(), ModelError>
+where
+    F: FnMut(Progress),
+{
+    let mut last_error = String::new();
+    for attempt in 1..=DOWNLOAD_ATTEMPTS {
+        match download_once(url, path, on_progress) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last_error = error;
+                if attempt < DOWNLOAD_ATTEMPTS {
+                    thread::sleep(Duration::from_secs(u64::from(attempt)));
+                }
+            }
+        }
+    }
+    Err(ModelError::Operation(format!(
+        "could not download model after {DOWNLOAD_ATTEMPTS} attempts: {last_error}"
+    )))
+}
+
+fn download_once<F>(url: &str, path: &Path, on_progress: &mut F) -> Result<(), String>
+where
+    F: FnMut(Progress),
+{
+    let mut response = ureq::get(url)
+        .header("User-Agent", USER_AGENT)
+        .call()
+        .map_err(|error| format!("could not download model: {error}"))?;
+    let total = response.body().content_length();
+    let mut archive =
+        File::create(path).map_err(|error| format!("could not create model archive: {error}"))?;
+    let mut reader = response.body_mut().as_reader();
+    let mut buffer = vec![0_u8; 64 * 1024];
+    let mut downloaded = 0_u64;
+    let mut reported = 0_u64;
+    loop {
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|error| format!("could not download model: {error}"))?;
+        if read == 0 {
+            break;
+        }
+        archive
+            .write_all(&buffer[..read])
+            .map_err(|error| format!("could not write model archive: {error}"))?;
+        downloaded += read as u64;
+        if downloaded - reported >= PROGRESS_STEP || Some(downloaded) == total {
+            on_progress(Progress { downloaded, total });
+            reported = downloaded;
+        }
+    }
+    if reported != downloaded {
+        on_progress(Progress { downloaded, total });
+    }
+    Ok(())
 }
 
 fn extract(archive_path: &Path, destination: &Path) -> Result<(), ModelError> {
