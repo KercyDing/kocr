@@ -10,7 +10,7 @@ Recognize text from existing images, or capture a screen region with Spectacle o
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kocr/main/script.sh)"
 ```
 
-The installer installs `kocr`, missing system packages, and an INT8 model. No ONNX Runtime required. Supports Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
+The installer installs `kocr` (CLI), `kocr-daemon` (shortcut daemon), `kocr-gui` (settings window), missing system packages, and an INT8 model. No ONNX Runtime required. Supports Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
 
 ## Usage
 
@@ -36,6 +36,8 @@ kocr install 1 -p <DIRECTORY>  # parent directory for the model
 kocr use 1                     # Set active model
 kocr uninstall 1               # Remove a model
 kocr config                    # Open configuration in your default editor
+kocr status                    # Show config path, daemon state, and shortcuts
+kocr-gui                       # Edit shortcuts and the active model
 ```
 
 `--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kocr/models`.
@@ -52,7 +54,7 @@ The installer registers a systemd user service with three default shortcuts:
 | `Alt+2`  | Capture, OCR, and copy text |
 | `Alt+3`  | Capture, OCR, merge into one line, and copy text |
 
-Change shortcuts with `kocr config`. The daemon reloads the configuration automatically on save.
+Change shortcuts with `kocr-gui` or `kocr config`. The daemon reloads the configuration automatically on save.
 
 ## Configuration
 

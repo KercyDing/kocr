@@ -11,7 +11,7 @@ use super::{
     sync_config,
 };
 
-pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
+pub fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
     sync_config()?;
     let index = load_index()?;
     let (name, profile) = resolve_profile(&index, selector)?;

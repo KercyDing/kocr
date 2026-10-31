@@ -111,7 +111,7 @@ def main() -> None:
         (
             crate
             for crate in crates
-            if crate.get("name") != "kocr"
+            if not str(crate.get("name", "")).startswith("kocr")
         ),
         key=lambda crate: (str(crate.get("name", "")), str(crate.get("version", ""))),
     )

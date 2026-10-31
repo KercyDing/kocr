@@ -1,6 +1,6 @@
 use super::{ModelError, load_index, model_path, resolve_profile, sync_config, write_config};
 
-pub(crate) fn run(selector: &str) -> Result<(), ModelError> {
+pub fn run(selector: &str) -> Result<(), ModelError> {
     sync_config()?;
     let index = load_index()?;
     let (name, _) = resolve_profile(&index, selector)?;

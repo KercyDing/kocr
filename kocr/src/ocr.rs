@@ -24,14 +24,14 @@ const CROP_PADDING_Y: f32 = 0.05;
 const TEXT_SCORE: f32 = 0.1;
 
 #[derive(Debug, Args)]
-pub(crate) struct ImageArgs {
+pub struct ImageArgs {
     /// Input image path
     #[arg(value_name = "PNG")]
-    pub(crate) image: PathBuf,
+    pub image: PathBuf,
 
     /// Merge recognized lines into a single line
     #[arg(long)]
-    pub(crate) oneline: bool,
+    pub oneline: bool,
 }
 
 #[derive(Debug, Error)]
@@ -84,7 +84,7 @@ pub fn recognize(image_path: PathBuf, oneline: bool) -> Result<String, OcrError>
     Ok(join_lines(&lines, oneline))
 }
 
-pub(crate) fn check() -> Result<String, OcrError> {
+pub fn check() -> Result<String, OcrError> {
     let (profile, model_dir, model) = selected_model()?;
     RustO::initialize(engine_config(&model))?;
     Ok(format!("rten, {profile} ({})", model_dir.display()))

@@ -1,0 +1,18 @@
+[package]
+name = "kocr-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Global shortcut daemon for kocr"
+autobins = false
+
+[[bin]]
+name = "kocr-daemon"
+path = "src/main.rs"
+
+[dependencies]
+futures-util.workspace = true
+kocr.workspace = true
+kocr-config.workspace = true
+thiserror.workspace = true
+zbus.workspace = true

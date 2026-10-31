@@ -168,6 +168,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev
+
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
         with:
@@ -186,7 +191,9 @@ jobs:
           set -euo pipefail
           package="kocr-${VERSION}-${TARGET}"
           mkdir -p "dist/${package}"
-          install -m 0755 "target/${TARGET}/release/kocr" "dist/${package}/kocr"
+          for binary in kocr kocr-daemon kocr-gui; do
+            install -m 0755 "target/${TARGET}/release/${binary}" "dist/${package}/${binary}"
+          done
           install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${package}/"
           tar -C dist -czf "dist/${package}.tar.gz" "$package"
           sha256sum "dist/${package}.tar.gz" > "dist/${package}.tar.gz.sha256"

@@ -5,7 +5,7 @@ use comfy_table::{Cell, Color, Table, presets::UTF8_BORDERS_ONLY};
 
 use super::{ModelError, load_index, model_path, selected_profile, sync_config};
 
-pub(crate) fn run() -> Result<(), ModelError> {
+pub fn run() -> Result<(), ModelError> {
     sync_config()?;
     let index = load_index()?;
     let active = selected_profile().ok();

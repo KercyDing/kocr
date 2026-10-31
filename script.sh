@@ -6,6 +6,8 @@ repo=KercyDing/kocr
 install_dir=${KOCR_INSTALL_DIR:-"$HOME/.local/bin"}
 unit_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/systemd/user
 binary_path=$install_dir/kocr
+daemon_path=$install_dir/kocr-daemon
+gui_path=$install_dir/kocr-gui
 unit_path=$unit_dir/kocr.service
 temporary_dir=
 
@@ -156,7 +158,7 @@ select_action() {
     esac
 }
 
-download_binary() {
+download_binaries() {
     local machine target latest_url tag version package archive checksum expected actual release_url
 
     require curl
@@ -194,12 +196,12 @@ download_binary() {
     [[ $expected =~ ^[0-9a-fA-F]{64}$ ]] || fail "release checksum is invalid"
     [[ $actual == "$expected" ]] || fail "release checksum does not match"
 
-    tar -xzf "$archive" -C "$temporary_dir" "$package/kocr"
-    printf '%s\n' "$temporary_dir/$package/kocr"
+    tar -xzf "$archive" -C "$temporary_dir" "$package"
+    printf '%s\n' "$temporary_dir/$package"
 }
 
 install_kocr() {
-    local model= source_binary unit_temporary
+    local model= source_dir unit_temporary
 
     require install
     require mktemp
@@ -213,16 +215,21 @@ install_kocr() {
 
     if [[ -n ${KOCR_BINARY:-} ]]; then
         [[ -x $KOCR_BINARY ]] || fail "binary is not executable: $KOCR_BINARY"
-        source_binary=$(realpath -- "$KOCR_BINARY")
+        source_dir=$(dirname -- "$(realpath -- "$KOCR_BINARY")")
     else
-        source_binary=$(download_binary)
+        source_dir=$(download_binaries)
     fi
+    for name in kocr kocr-daemon kocr-gui; do
+        [[ -x $source_dir/$name ]] || fail "binary is not executable: $source_dir/$name"
+    done
 
     [[ $binary_path != *$'\n'* && $binary_path != *'"'* ]] \
         || fail "install path contains unsupported characters"
     mkdir -p -- "$install_dir" "$unit_dir"
-    install -m 0755 "$source_binary" "$temporary_dir/kocr"
-    mv -f -- "$temporary_dir/kocr" "$binary_path"
+    for name in kocr kocr-daemon kocr-gui; do
+        install -m 0755 "$source_dir/$name" "$temporary_dir/$name"
+        mv -f -- "$temporary_dir/$name" "$install_dir/$name"
+    done
 
     install_dependencies
     if [[ ${KOCR_SKIP_MODEL:-0} != 1 ]]; then
@@ -243,7 +250,7 @@ After=graphical-session.target
 [Service]
 Type=dbus
 BusName=io.github.KercyDing.kocr
-ExecStart="$binary_path" daemon
+ExecStart="$daemon_path"
 Restart=on-failure
 RestartSec=2
 
@@ -293,7 +300,7 @@ uninstall_kocr() {
             >/dev/null 2>&1 || true
     fi
 
-    rm -f -- "$binary_path"
+    rm -f -- "$binary_path" "$daemon_path" "$gui_path"
     rm -f -- "${XDG_DATA_HOME:-"$HOME/.local/share"}/applications/kocr-capture.desktop"
     echo "Uninstalled kocr"
 }

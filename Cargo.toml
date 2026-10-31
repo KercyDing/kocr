@@ -1,25 +1,27 @@
-[package]
-name = "kocr"
+[workspace]
+members = ["kocr", "kocr-config", "kocr-daemon", "kocr-gui"]
+resolver = "3"
+
+[workspace.package]
 version = "0.3.3"
 edition = "2024"
-description = "An offline OCR tool"
 license = "Apache-2.0"
-autobins = false
+repository = "https://github.com/KercyDing/kocr"
 
-[[bin]]
-name = "kocr"
-path = "src/main.rs"
-
-[dependencies]
+[workspace.dependencies]
+anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
 futures-util = "0.3"
+kocr = { path = "kocr" }
+kocr-config = { path = "kocr-config" }
 rusto-rs = { version = "0.3.2", default-features = false }
-tempfile = "3"
-sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
-toml = "1"
+sha2 = "0.11"
+tempfile = "3"
 thiserror = "2"
+toml = "1"
+winio = "=0.13.0-beta.2"
 zbus = "6"
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 
