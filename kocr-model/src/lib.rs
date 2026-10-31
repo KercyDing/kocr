@@ -217,15 +217,6 @@ pub fn config_path() -> PathBuf {
     kocr_config::config_path()
 }
 
-pub fn prepare_config() -> Result<PathBuf, ModelError> {
-    sync_config()?;
-    let path = config_path();
-    if !path.is_file() {
-        save_config(&ModelConfig::default())?;
-    }
-    Ok(path)
-}
-
 pub(crate) fn validate_index(index: &ModelIndex) -> Result<(), ModelError> {
     let mut ids = BTreeSet::new();
     for (name, profile) in &index.profiles {

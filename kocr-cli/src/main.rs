@@ -1,6 +1,5 @@
-use std::env;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Args, CommandFactory, Parser, Subcommand};
@@ -54,9 +53,6 @@ enum CommandKind {
 
     /// Select the active OCR model
     Use(ProfileArgs),
-
-    /// Open the configuration file
-    Config,
 
     /// Recognize text from an image
     Image(ImageArgs),
@@ -124,7 +120,6 @@ fn run(cli: Cli) -> Result<(), AppError> {
         Some(CommandKind::Install(args)) => run_install(args),
         Some(CommandKind::Uninstall(args)) => run_uninstall(args),
         Some(CommandKind::Use(args)) => run_use(args),
-        Some(CommandKind::Config) => run_config(),
         Some(CommandKind::Image(args)) => run_image(args),
         Some(CommandKind::Help) => print_help(),
         Some(CommandKind::Version) => {
@@ -251,30 +246,6 @@ fn run_image(args: ImageArgs) -> Result<(), AppError> {
     Ok(())
 }
 
-fn run_config() -> Result<(), AppError> {
-    let path = models::prepare_config().map_err(AppError::Config)?;
-    let editor = env::var_os("VISUAL")
-        .filter(|value| !value.is_empty())
-        .or_else(|| env::var_os("EDITOR").filter(|value| !value.is_empty()))
-        .map(PathBuf::from);
-    let result = match editor {
-        Some(editor) => run_editor(&editor, &path),
-        None => platform::open_file(&path).map_err(|error| error.to_string()),
-    };
-    result.map_err(|error| AppError::Config(models::ModelError::Operation(error)))
-}
-
-fn run_editor(editor: &Path, path: &Path) -> Result<(), String> {
-    let status = Command::new(editor)
-        .arg(path)
-        .status()
-        .map_err(|error| format!("could not start editor {}: {error}", editor.display()))?;
-    if !status.success() {
-        return Err(format!("editor {} exited with {status}", editor.display()));
-    }
-    Ok(())
-}
-
 fn display_path(path: &Path) -> String {
     let Some(home) = platform::home_dir() else {
         return path.display().to_string();
@@ -326,12 +297,6 @@ mod tests {
 
     use super::{Cli, CommandKind};
     use clap::Parser;
-
-    #[test]
-    fn parses_config() {
-        let cli = Cli::try_parse_from(["kocr", "config"]).unwrap();
-        assert!(matches!(cli.command, Some(CommandKind::Config)));
-    }
 
     #[test]
     fn parses_install_path() {

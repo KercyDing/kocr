@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{Capture, NO_OPENER, PlatformError, find_command, home_dir};
+use super::{Capture, PlatformError, find_command, home_dir};
 
 pub fn capture_region(output: &Path) -> Result<Capture, PlatformError> {
     let spectacle = require_command("spectacle")?;
@@ -55,24 +55,6 @@ pub fn copy_clipboard(content: &[u8], mime: &str) -> Result<(), PlatformError> {
     if !status.success() {
         return Err(PlatformError::Output(format!(
             "wl-copy exited with {status}"
-        )));
-    }
-    Ok(())
-}
-
-pub fn open_file(path: &Path) -> Result<(), PlatformError> {
-    let opener =
-        find_command("xdg-open").ok_or_else(|| PlatformError::Operation(NO_OPENER.to_owned()))?;
-    let status = Command::new(&opener).arg(path).status().map_err(|error| {
-        PlatformError::Operation(format!(
-            "could not start editor {}: {error}",
-            opener.display()
-        ))
-    })?;
-    if !status.success() {
-        return Err(PlatformError::Operation(format!(
-            "editor {} exited with {status}",
-            opener.display()
         )));
     }
     Ok(())

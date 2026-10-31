@@ -17,18 +17,29 @@ require() {
 }
 
 release_target() {
-    case "$(uname -m)" in
-        x86_64) printf '%s\n' x86_64-unknown-linux-gnu ;;
-        aarch64 | arm64) printf '%s\n' aarch64-unknown-linux-gnu ;;
-        *) fail "unsupported architecture: $(uname -m)" ;;
+    case "$(uname -s)-$(uname -m)" in
+        Linux-x86_64) printf '%s\n' x86_64-unknown-linux-gnu ;;
+        Linux-aarch64 | Linux-arm64) printf '%s\n' aarch64-unknown-linux-gnu ;;
+        Darwin-x86_64) printf '%s\n' x86_64-apple-darwin ;;
+        Darwin-arm64) printf '%s\n' aarch64-apple-darwin ;;
+        *) fail "unsupported platform: $(uname -s) $(uname -m)" ;;
     esac
+}
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{ print $1 }'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{ print $1 }'
+    else
+        fail "required command not found: sha256sum or shasum"
+    fi
 }
 
 download_cli() {
     local target tag version package archive checksum release_url expected actual latest_url
 
     require curl
-    require sha256sum
     require tar
 
     target=$(release_target)
@@ -52,7 +63,7 @@ download_cli() {
     curl -fsSL "$release_url/$package.tar.gz.sha256" -o "$checksum"
 
     expected=$(awk 'NR == 1 { print $1 }' "$checksum")
-    actual=$(sha256sum "$archive" | awk '{ print $1 }')
+    actual=$(sha256_file "$archive")
     [[ $expected =~ ^[0-9a-fA-F]{64}$ ]] || fail "release checksum is invalid"
     [[ $actual == "$expected" ]] || fail "release checksum does not match"
 

@@ -305,9 +305,127 @@ jobs:
             dist/*.rpm
           if-no-files-found: error
 
+  build-macos-cli:
+    name: CLI ${{ matrix.label }}
+    needs: validate-tag
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - label: macOS Apple Silicon
+            runner: macos-15
+            target: aarch64-apple-darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-tag.outputs.tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+
+      - name: Build CLI
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --locked -p kocr-cli --target "$TARGET"
+
+      - name: Package CLI
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          package="kocr-${VERSION}-${TARGET}"
+          mkdir -p "dist/${package}"
+          install -m 0755 "target/${TARGET}/release/kocr" "dist/${package}/kocr"
+          install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${package}/"
+          tar -C dist -czf "dist/${package}.tar.gz" "$package"
+          (cd dist && shasum -a 256 "${package}.tar.gz" > "${package}.tar.gz.sha256")
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-cli-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+          if-no-files-found: error
+
+  build-windows-cli:
+    name: CLI ${{ matrix.label }}
+    needs: validate-tag
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - label: Windows ARM64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-tag.outputs.tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+
+      - name: Build CLI
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --locked -p kocr-cli --target "$env:TARGET"
+
+      - name: Package CLI
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $package = "kocr-$env:VERSION-$env:TARGET"
+          New-Item -ItemType Directory -Force -Path "dist/$package" | Out-Null
+          Copy-Item "target/$env:TARGET/release/kocr.exe" "dist/$package/kocr.exe"
+          Copy-Item LICENSE, LICENSE-PaddleOCR, NOTICE "dist/$package/"
+          Compress-Archive -Path "dist/$package/*" -DestinationPath "dist/$package.zip" -Force
+          $hash = (Get-FileHash "dist/$package.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $package.zip" | Set-Content "dist/$package.zip.sha256"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-cli-${{ matrix.target }}
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
+
   release:
     name: Publish release
-    needs: [validate-tag, build, build-gtk]
+    needs: [validate-tag, build, build-gtk, build-macos-cli, build-windows-cli]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -336,6 +454,8 @@ jobs:
             | CLI | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
             | GUI (Qt) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
             | GUI (GTK) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+            | CLI macOS | [Intel](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-x86_64-apple-darwin.tar.gz) | [Apple Silicon](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-aarch64-apple-darwin.tar.gz) |
+            | CLI Windows | [x86_64](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-x86_64-pc-windows-msvc.zip) | [ARM64](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-aarch64-pc-windows-msvc.zip) |
 
             Arch Linux：
 
@@ -350,6 +470,7 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/*.tar.gz
+            dist/*.zip
             dist/*.sha256
 
   publish-aur:

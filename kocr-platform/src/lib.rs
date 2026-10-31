@@ -15,16 +15,14 @@ mod unsupported;
 
 #[cfg(target_os = "linux")]
 pub use linux::{
-    capture_region, copy_clipboard, dependencies, open_file, service_disable, service_enable,
-    service_enabled, service_install, service_start, service_state, service_stop,
+    capture_region, copy_clipboard, dependencies, service_disable, service_enable, service_enabled,
+    service_install, service_start, service_state, service_stop,
 };
 #[cfg(not(target_os = "linux"))]
 pub use unsupported::{
-    capture_region, copy_clipboard, dependencies, open_file, service_disable, service_enable,
-    service_enabled, service_install, service_start, service_state, service_stop,
+    capture_region, copy_clipboard, dependencies, service_disable, service_enable, service_enabled,
+    service_install, service_start, service_state, service_stop,
 };
-
-const NO_OPENER: &str = "no text editor found; set VISUAL or EDITOR and retry";
 
 #[derive(Debug, Error)]
 pub enum PlatformError {
@@ -44,9 +42,35 @@ pub enum Capture {
 
 pub fn find_command(name: &str) -> Option<PathBuf> {
     let path = env::var_os("PATH")?;
-    env::split_paths(&path)
-        .map(|directory| directory.join(name))
-        .find(|candidate| candidate.is_file())
+    let names = executable_names(name);
+    env::split_paths(&path).find_map(|directory| {
+        names
+            .iter()
+            .map(|name| directory.join(name))
+            .find(|candidate| candidate.is_file())
+    })
+}
+
+fn executable_names(name: &str) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        if std::path::Path::new(name).extension().is_some() {
+            return vec![name.to_owned()];
+        }
+        let extensions = env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
+        let mut names = vec![name.to_owned()];
+        names.extend(
+            extensions
+                .split(';')
+                .filter(|extension| !extension.is_empty())
+                .map(|extension| format!("{name}{extension}")),
+        );
+        names
+    }
+    #[cfg(not(windows))]
+    {
+        vec![name.to_owned()]
+    }
 }
 
 pub fn home_dir() -> Option<PathBuf> {

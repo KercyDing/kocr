@@ -1,24 +1,65 @@
 !version 0.5
 !shell bash
 
-[help] Build on debug mode
-[pass] Debug build complete.
-[fail] Debug build failed.
-build():
-    cargo build
+# =============== CLI ===============
+[help] CLI development tasks
+group cli {
 
-[help] Build on release mode
-[pass] Release build complete.
-[fail] Release build failed.
-build-release():
-    cargo build --release
+    [help] Build the CLI
+    [pass] CLI build complete.
+    [fail] CLI build failed.
+    build():
+        cargo build -p kocr-cli
 
-[help] Run with args on debug mode
-[pass] Run complete.
-[fail] Run failed.
-run(args..):
-    cargo run -- {{args}}
+    [help] Run the CLI with arguments
+    [fail] CLI run failed.
+    run(args..):
+        cargo run -p kocr-cli -- {{args}}
 
+    [help] Build the CLI in release mode
+    [pass] CLI release build complete.
+    [fail] CLI release build failed.
+    build-release():
+        cargo build --release -p kocr-cli
+
+    [help] Run the CLI in release mode with arguments
+    [fail] CLI release run failed.
+    run-release(args..):
+        cargo run --release -p kocr-cli -- {{args}}
+}
+
+# =============== GUI ===============
+[help] GUI development tasks
+group gui {
+
+    [help] Build the GUI
+    [desc] Backend defaults to qt; pass gtk on GTK desktops.
+    [pass] GUI build complete.
+    [fail] GUI build failed.
+    build(backend = "qt"):
+        cargo build -p kocr-gui --no-default-features --features {{backend}}
+
+    [help] Run the GUI
+    [desc] Backend defaults to qt; pass gtk on GTK desktops.
+    [fail] GUI run failed.
+    run(backend = "qt"):
+        cargo run -p kocr-gui --no-default-features --features {{backend}}
+
+    [help] Build the GUI in release mode
+    [desc] Backend defaults to qt; pass gtk on GTK desktops.
+    [pass] GUI release build complete.
+    [fail] GUI release build failed.
+    build-release(backend = "qt"):
+        cargo build --release -p kocr-gui --no-default-features --features {{backend}}
+
+    [help] Run the GUI in release mode
+    [desc] Backend defaults to qt; pass gtk on GTK desktops.
+    [fail] GUI release run failed.
+    run-release(backend = "qt"):
+        cargo run --release -p kocr-gui --no-default-features --features {{backend}}
+}
+
+# =============== Common ===============
 [help] Run the local CI
 [pass] CI passed.
 [fail] CI failed.
@@ -29,8 +70,8 @@ ci() & check & test
 [fail] Check failed.
 check():
     cargo fmt --all
-    cargo check --all-targets
-    cargo clippy --all-targets -- -D warnings
+    cargo check --all-targets --workspace
+    cargo clippy --all-targets --workspace -- -D warnings
 
 [help] Run tests
 [pass] Tests passed.
@@ -41,41 +82,31 @@ test() ? @has("cargo-nextest"):
 test():
     cargo test --all-targets --workspace
 
-[help] Remove build and generated model artifacts
+[help] Remove build artifacts
 [pass] Clean complete.
 [fail] Clean failed.
 clean():
     cargo clean
 
-[help] Install the local kocr CLI
-[desc] Reuse cli.sh's install path with the local release binary.
-[pass] Installation complete.
-[fail] Installation failed.
-install() & build-release:
-    | KOCR_BINARY=target/release/kocr bash cli.sh install
-    | du -sh "$HOME/.local/bin/kocr"
+# =============== Version ===============
+[help] Versioning tasks
+group version {
 
-[help] Uninstall the local kocr CLI
-[desc] Reuse cli.sh's uninstall path.
-[pass] Uninstallation complete.
-[fail] Uninstallation failed.
-uninstall():
-    | bash cli.sh uninstall
+    [help] Show current version
+    [fail] Could not display version.
+    show() ? @has("uv"):
+        uv run scripts/version.py show
 
-[help] Show current version
-[fail] Could not display version.
-show() ? @has("uv"):
-    uv run scripts/version.py show
-
-[help] Update version and publish
-[pass] Publish complete.
-[fail] Publish failed.
-publish(version) ? @has("uv"):
-    test -z "$(git status --porcelain)"
-    uv run scripts/version.py change {{version}}
-    uv run scripts/notice.py
-    only ci
-    git add -- Cargo.toml Cargo.lock NOTICE
-    git commit -m "chore: update to {{version}}"
-    git tag {{version}}
-    git push --atomic origin HEAD {{version}}
+    [help] Update version and publish
+    [pass] Publish complete.
+    [fail] Publish failed.
+    publish(version) ? @has("uv"):
+        test -z "$(git status --porcelain)"
+        uv run scripts/version.py change {{version}}
+        uv run scripts/notice.py
+        only ci
+        git add -- Cargo.toml Cargo.lock NOTICE
+        git commit -m "chore: update to {{version}}"
+        git tag {{version}}
+        git push --atomic origin HEAD {{version}}
+}

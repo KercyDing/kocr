@@ -26,11 +26,20 @@ Arch Linux:
 paru -S kocr-bin
 ```
 
-Or use the installer script:
+macOS:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kocr/main/cli.sh)"
 ```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/KercyDing/kocr/main/cli.ps1 -OutFile cli.ps1
+.\cli.ps1
+```
+
+Use `.\cli.ps1 uninstall` to remove it.
 
 The CLI package installs `kocr` only. It does not install the daemon, GUI, or desktop packages. Install a model with `kocr install 1`. No ONNX Runtime required.
 
@@ -74,7 +83,6 @@ kocr install 1                 # Install by ID or name
 kocr install 1 -p <DIRECTORY>  # parent directory for the model
 kocr use 1                     # Set active model
 kocr uninstall 1               # Remove a model
-kocr config                    # Open configuration in your default editor
 kocr-gui                       # Manage models, shortcuts, and the daemon
 ```
 
@@ -92,11 +100,11 @@ Enable shortcuts in KOCR Settings. The daemon provides three default shortcuts:
 | `Alt+2`  | Capture, OCR, and copy text |
 | `Alt+3`  | Capture, OCR, merge into one line, and copy text |
 
-Change shortcuts with `kocr-gui` or `kocr config`. The daemon reloads the configuration automatically on save.
+Change shortcuts with `kocr-gui`. The daemon reloads the configuration automatically on save.
 
 ## Configuration
 
-`kocr config` opens `~/.config/kocr/config.toml` in the editor specified by `VISUAL`, `EDITOR`, or the desktop default.
+`kocr list` prints the configuration path. Edit it with your own editor; there is no `kocr config` command. The GUI writes the same file.
 
 Example:
 
