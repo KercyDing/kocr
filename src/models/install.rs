@@ -21,9 +21,11 @@ pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError>
         )));
     }
     let destination = match path {
-        Some(path) => std::path::absolute(path).map_err(|error| {
-            ModelError::Operation(format!("could not resolve model path: {error}"))
-        })?,
+        Some(path) => std::path::absolute(path)
+            .map_err(|error| {
+                ModelError::Operation(format!("could not resolve model path: {error}"))
+            })?
+            .join(name),
         None => default_model_path(name),
     };
     if destination.exists() {

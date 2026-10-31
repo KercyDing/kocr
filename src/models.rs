@@ -111,7 +111,7 @@ pub(crate) struct InstallArgs {
     #[arg(value_name = "ID_OR_MODEL")]
     pub(crate) profile: String,
 
-    /// Complete model installation directory
+    /// Parent directory for the model installation
     #[arg(short, long, value_name = "DIRECTORY")]
     pub(crate) path: Option<PathBuf>,
 }

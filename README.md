@@ -10,9 +10,7 @@ Recognize text from existing images or capture a screen region with Spectacle. R
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kdeocr/main/script.sh)"
 ```
 
-The installer downloads `kocr`, installs any missing runtime dependencies, and then installs the selected OCR model. OCR runs on the pure-Rust RTen engine, so ONNX Runtime is not required.
-
-Supported package-manager families are Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
+The installer installs `kocr`, missing system packages, and an INT8 model. No ONNX Runtime required. Supports Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
 
 ## Usage
 
@@ -32,15 +30,15 @@ kocr image test.png   # Recognize text and print to stdout
 ### OCR Models
 
 ```bash
-kocr list             # List available models
-kocr install 1        # Install by ID or name
-kocr install 1 -p ~/<path>/ppocrv6-small-r1
-kocr use 1            # Set active model
-kocr uninstall 1      # Remove a model
-kocr config           # Open configuration in your default editor
+kocr list                      # List available models
+kocr install 1                 # Install by ID or name
+kocr install 1 -p <DIRECTORY>  # parent directory for the model
+kocr use 1                     # Set active model
+kocr uninstall 1               # Remove a model
+kocr config                    # Open configuration in your default editor
 ```
 
-`--path` (`-p`) sets the complete model directory and stores its absolute path in `config.toml`.
+`--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kdeocr/models`.
 
 Models are INT8-quantized RTen packages, available in small, medium, and tiny tiers.
 
