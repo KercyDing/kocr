@@ -64,7 +64,7 @@ pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError>
         )));
     }
     let staging = tempfile::Builder::new()
-        .prefix(".kdeocr-extract-")
+        .prefix(".kocr-extract-")
         .tempdir_in(model_root)
         .map_err(|error| {
             ModelError::Operation(format!("could not create extraction directory: {error}"))

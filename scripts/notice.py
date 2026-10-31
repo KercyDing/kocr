@@ -10,7 +10,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 NOTICE = ROOT / "NOTICE"
 
@@ -36,7 +35,7 @@ def run_cargo_license() -> list[dict[str, object]]:
     )
     value = json.loads(output.stdout)
     if not isinstance(value, list):
-        raise ValueError("cargo-license returned an invalid JSON document")
+        raise TypeError("cargo-license returned an invalid JSON document")
     return value
 
 
@@ -88,7 +87,7 @@ def section(crate: dict[str, object], number: int) -> list[str]:
     name = crate["name"]
     version = crate["version"]
     if not isinstance(name, str) or not isinstance(version, str):
-        raise ValueError("cargo-license returned a dependency without name or version")
+        raise TypeError("cargo-license returned a dependency without name or version")
 
     lines = [f"{number}. {name}@{version}", ""]
     crate_authors = authors(crate)
@@ -112,7 +111,7 @@ def main() -> None:
         (
             crate
             for crate in crates
-            if crate.get("name") != "kdeocr"
+            if crate.get("name") != "kocr"
         ),
         key=lambda crate: (str(crate.get("name", "")), str(crate.get("version", ""))),
     )

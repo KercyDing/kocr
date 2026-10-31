@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-repo=KercyDing/kdeocr
+repo=KercyDing/kocr
 install_dir=${KOCR_INSTALL_DIR:-"$HOME/.local/bin"}
 unit_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/systemd/user
 binary_path=$install_dir/kocr

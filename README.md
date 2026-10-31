@@ -1,13 +1,13 @@
-# KDEOCR
+# KOCR
 
-Offline OCR for KDE Plasma 6 on Wayland.
+Offline OCR for desktop.
 
-Recognize text from existing images or capture a screen region with Spectacle. Results are copied directly to the Wayland clipboard.
+Recognize text from existing images, or capture a screen region with Spectacle on Linux. Results are copied directly to the clipboard.
 
 ## Installation
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kdeocr/main/script.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kocr/main/script.sh)"
 ```
 
 The installer installs `kocr`, missing system packages, and an INT8 model. No ONNX Runtime required. Supports Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
@@ -38,7 +38,7 @@ kocr uninstall 1               # Remove a model
 kocr config                    # Open configuration in your default editor
 ```
 
-`--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kdeocr/models`.
+`--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kocr/models`.
 
 Models are INT8-quantized RTen packages, available in small, medium, and tiny tiers.
 
@@ -56,7 +56,7 @@ Change shortcuts with `kocr config`. The daemon reloads the configuration automa
 
 ## Configuration
 
-`kocr config` opens `~/.config/kdeocr/config.toml` in the editor specified by `VISUAL`, `EDITOR`, or the desktop default.
+`kocr config` opens `~/.config/kocr/config.toml` in the editor specified by `VISUAL`, `EDITOR`, or the desktop default.
 
 Example:
 
@@ -67,10 +67,10 @@ ocr  = "Alt+2"
 oneline = "Alt+3"
 
 [models]
-select = "ppocrv6-small-r1"
+select = "ppocrv6-small-int8-r1"
 
-[models.ppocrv6-small-r1]
-path = "/home/user/.local/share/kdeocr/models/ppocrv6-small-r1"
+[models.ppocrv6-small-int8-r1]
+path = "/home/user/.local/share/kocr/models/ppocrv6-small-int8-r1"
 ```
 
 Supported modifiers: `Mod`, `Ctrl`, `Alt`, `Shift`.  

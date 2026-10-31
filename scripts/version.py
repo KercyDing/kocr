@@ -8,7 +8,6 @@ import re
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 CARGO_TOML = ROOT / "Cargo.toml"
 SEMVER = re.compile(
@@ -68,12 +67,12 @@ def replace_package_version(
 
 def read_version() -> str:
     cargo_toml = CARGO_TOML.read_text(encoding="utf-8")
-    return package_version(cargo_toml, "[package]", "[", "kdeocr")
+    return package_version(cargo_toml, "[package]", "[", "kocr")
 
 
 def write_version(version: str) -> None:
     cargo_toml = CARGO_TOML.read_text(encoding="utf-8")
-    updated_toml = replace_package_version(cargo_toml, "[package]", "[", "kdeocr", version)
+    updated_toml = replace_package_version(cargo_toml, "[package]", "[", "kocr", version)
     CARGO_TOML.write_text(updated_toml, encoding="utf-8")
 
 

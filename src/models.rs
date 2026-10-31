@@ -20,7 +20,10 @@ pub(crate) use list::run as list;
 pub(crate) use uninstall::run as uninstall;
 pub(crate) use r#use::run as use_model;
 
-const CONFIG_FILE: &str = "kdeocr/config.toml";
+const CONFIG_FILE: &str = "kocr/config.toml";
+const LEGACY_CONFIG_FILE: &str = "kdeocr/config.toml";
+const MODEL_DIR: &str = "kocr/models";
+const LEGACY_MODEL_DIR: &str = "kdeocr/models";
 const DEFAULT_COPY_SHORTCUT: &str = "Alt+1";
 const DEFAULT_OCR_SHORTCUT: &str = "Alt+2";
 const DEFAULT_ONELINE_SHORTCUT: &str = "Alt+3";
@@ -210,15 +213,10 @@ fn installed_profiles_from(index: &ModelIndex, config: &ModelConfig) -> Vec<Stri
 }
 
 pub(crate) fn config_path() -> PathBuf {
-    env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".config")
-        })
-        .join(CONFIG_FILE)
+    let base = config_home();
+    let path = base.join(CONFIG_FILE);
+    migrate_path(&base.join(LEGACY_CONFIG_FILE), &path, false);
+    path
 }
 
 pub(crate) fn read_config() -> Result<Option<String>, ModelError> {
@@ -381,15 +379,49 @@ pub(crate) fn validate_index(index: &ModelIndex) -> Result<(), ModelError> {
 }
 
 fn model_root() -> PathBuf {
+    let base = data_home();
+    let root = base.join(MODEL_DIR);
+    migrate_path(&base.join(LEGACY_MODEL_DIR), &root, true);
+    root
+}
+
+fn home_dir() -> PathBuf {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn config_home() -> PathBuf {
+    env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home_dir().join(".config"))
+}
+
+fn data_home() -> PathBuf {
     env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".local/share")
-        })
-        .join("kdeocr/models")
+        .unwrap_or_else(|| home_dir().join(".local/share"))
+}
+
+fn migrate_path(legacy: &Path, current: &Path, is_dir: bool) {
+    if current.exists() {
+        return;
+    }
+    let exists = if is_dir {
+        legacy.is_dir()
+    } else {
+        legacy.is_file()
+    };
+    if !exists {
+        return;
+    }
+    let Some(parent) = current.parent() else {
+        return;
+    };
+    if fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let _ = fs::rename(legacy, current);
 }
 
 pub(crate) fn default_model_path(name: &str) -> PathBuf {

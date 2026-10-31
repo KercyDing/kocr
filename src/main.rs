@@ -1,5 +1,5 @@
 #[cfg(not(target_os = "linux"))]
-compile_error!("kdeocr only supports Linux.");
+compile_error!("kocr only supports Linux.");
 
 mod config;
 mod hash;
@@ -36,7 +36,7 @@ const CLI_STYLES: Styles = Styles::styled()
     name = "kocr",
     version,
     propagate_version = true,
-    about = "Offline OCR tool for KDE Plasma",
+    about = "Offline OCR tool",
     color = clap::ColorChoice::Always,
     styles = CLI_STYLES,
     disable_help_subcommand = true

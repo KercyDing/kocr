@@ -129,7 +129,7 @@ jobs:
 
           version="${tag#v}"
           package_version="$(cargo metadata --no-deps --format-version 1 \
-            | jq -r '.packages[] | select(.name == "kdeocr") | .version')"
+            | jq -r '.packages[] | select(.name == "kocr") | .version')"
           if [[ "$version" != "$package_version" ]]; then
             echo "Tag version $version does not match Cargo version $package_version" >&2
             exit 1
