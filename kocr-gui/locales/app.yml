@@ -96,6 +96,9 @@ not_set:
 shortcut_modifier_required:
   en: Use at least one modifier key
   zh-CN: 至少需要一个修饰键
+recording_status:
+  en: Press a shortcut, Esc to cancel
+  zh-CN: 请按快捷键，Esc 取消
 shortcuts:
   en: Shortcuts
   zh-CN: 快捷键

@@ -70,6 +70,7 @@ enum Event {
     Progress(Progress),
     Installed(Result<String, String>),
     Captured(Result<CaptureOutput, String>),
+    ShortcutCapture(bool, bool),
 }
 
 struct KocrApp {
@@ -126,8 +127,12 @@ impl KocrApp {
         let shortcut_tx = tx.clone();
         let shortcut_ctx = ctx.clone();
         thread::spawn(move || {
-            let result = kocr_shortcuts::run(|recognize, oneline| {
-                kocr_core::capture::run(None, recognize, oneline).map(|_| ())
+            let capture_tx = shortcut_tx.clone();
+            let capture_ctx = shortcut_ctx.clone();
+            let result = kocr_shortcuts::run(move |recognize, oneline| {
+                let _ = capture_tx.send(Event::ShortcutCapture(recognize, oneline));
+                capture_ctx.request_repaint();
+                Ok::<(), String>(())
             });
             if let Err(error) = result {
                 let _ = shortcut_tx.send(Event::Shortcuts(error.to_string()));
@@ -200,6 +205,9 @@ impl KocrApp {
                 }
                 Event::Shortcuts(status) => {
                     self.shortcuts_status = status;
+                }
+                Event::ShortcutCapture(recognize, oneline) => {
+                    self.capture(recognize, oneline);
                 }
                 Event::Captured(result) => {
                     self.capturing = false;
@@ -473,7 +481,12 @@ impl KocrApp {
         egui::Panel::bottom("status-bar")
             .exact_size(24.0)
             .show(ui, |ui| {
-                ui.horizontal_centered(|ui| ui.label(&self.status));
+                let status = if self.shortcut_recording.is_some() {
+                    t!("recording_status").to_string()
+                } else {
+                    self.status.clone()
+                };
+                ui.horizontal_centered(|ui| ui.label(status));
             });
 
         egui::CentralPanel::default().show(ui, |ui| {
@@ -539,8 +552,8 @@ impl KocrApp {
         let mut copy = None;
         let mut delete_id = None;
         let mut clear = false;
-        const ROW_HEIGHT: f32 = 32.0;
-        const CONTENT_HEIGHT: f32 = 24.0;
+        const ROW_HEIGHT: f32 = 64.0;
+        const CONTENT_HEIGHT: f32 = 56.0;
         let total_rows = self.history.len();
 
         ui.horizontal(|ui| {
@@ -594,7 +607,7 @@ impl KocrApp {
                                         );
                                         ui.add_space(6.0);
 
-                                        let content_width = (ui.available_width() - 96.0).max(40.0);
+                                        let content_width = (ui.available_width() - 150.0).max(40.0);
                                         ui.allocate_ui_with_layout(
                                             egui::vec2(content_width, CONTENT_HEIGHT),
                                             egui::Layout::left_to_right(egui::Align::Center),
@@ -603,10 +616,22 @@ impl KocrApp {
                                                 match &record.content {
                                                     RecordContent::Text(text) => {
                                                         let full = text.clone();
-                                                        let text = text.replace('\n', " ");
+                                                        let mut job = egui::text::LayoutJob::default();
+                                                        job.wrap.max_width = content_width;
+                                                        job.wrap.max_rows = 2;
+                                                        job.wrap.break_anywhere = true;
+                                                        job.append(
+                                                            text,
+                                                            0.0,
+                                                            egui::TextFormat {
+                                                                font_id: egui::TextStyle::Body
+                                                                    .resolve(ui.style()),
+                                                                color: ui.visuals().text_color(),
+                                                                ..Default::default()
+                                                            },
+                                                        );
                                                         ui.add(
-                                                            egui::Label::new(text)
-                                                                .truncate()
+                                                            egui::Label::new(job)
                                                                 .show_tooltip_when_elided(false),
                                                         )
                                                         .on_hover_text_at_pointer(full);
@@ -645,19 +670,27 @@ impl KocrApp {
                                             },
                                         );
 
-                                        if ui.small_button(t!("copy").as_ref()).clicked() {
-                                            copy = Some(match &record.content {
-                                                RecordContent::Text(text) => {
-                                                    CopyAction::Text(text.clone())
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui
+                                                    .small_button(t!("delete").as_ref())
+                                                    .clicked()
+                                                {
+                                                    delete_id = Some(record.id);
                                                 }
-                                                RecordContent::Image(path) => {
-                                                    CopyAction::Image(path.clone())
+                                                if ui.small_button(t!("copy").as_ref()).clicked() {
+                                                    copy = Some(match &record.content {
+                                                        RecordContent::Text(text) => {
+                                                            CopyAction::Text(text.clone())
+                                                        }
+                                                        RecordContent::Image(path) => {
+                                                            CopyAction::Image(path.clone())
+                                                        }
+                                                    });
                                                 }
-                                            });
-                                        }
-                                        if ui.small_button(t!("delete").as_ref()).clicked() {
-                                            delete_id = Some(record.id);
-                                        }
+                                            },
+                                        );
                                     },
                                 );
                             });
@@ -870,6 +903,7 @@ impl KocrApp {
     }
 
     fn render_shortcuts(&mut self, ui: &mut egui::Ui) {
+        let mut button_rects = Vec::new();
         egui::Grid::new("shortcuts")
             .num_columns(2)
             .spacing([8.0, 8.0])
@@ -887,15 +921,25 @@ impl KocrApp {
                     } else {
                         format_shortcut(self.shortcut_value(field))
                     };
-                    if ui
-                        .add_sized([ui.available_width(), 24.0], egui::Button::new(value))
-                        .clicked()
-                    {
+                    let response =
+                        ui.add_sized([ui.available_width(), 24.0], egui::Button::new(value));
+                    button_rects.push(response.rect);
+                    if response.clicked() {
                         self.shortcut_recording = Some(field);
                     }
                     ui.end_row();
                 }
             });
+
+        if self.shortcut_recording.is_some()
+            && ui.ctx().input(|input| input.pointer.any_click())
+            && ui
+                .ctx()
+                .input(|input| input.pointer.interact_pos())
+                .is_some_and(|position| !button_rects.iter().any(|rect| rect.contains(position)))
+        {
+            self.shortcut_recording = None;
+        }
 
         ui.add_space(8.0);
         ui.separator();
@@ -1401,17 +1445,24 @@ fn load_window_icon() -> egui::IconData {
 
 fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.clear();
+    fonts.families.clear();
+    fonts.font_data.insert(
+        "noto_sans".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSans.ttf")).into(),
+    );
     fonts.font_data.insert(
         "kocr_cjk".to_owned(),
         egui::FontData::from_static(include_bytes!("../assets/fonts/kocr-cjk.otf")).into(),
     );
-    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts
-            .families
-            .entry(family)
-            .or_default()
-            .push("kocr_cjk".to_owned());
-    }
+    fonts.families.insert(
+        egui::FontFamily::Proportional,
+        vec!["noto_sans".to_owned(), "kocr_cjk".to_owned()],
+    );
+    fonts.families.insert(
+        egui::FontFamily::Monospace,
+        vec!["noto_sans".to_owned(), "kocr_cjk".to_owned()],
+    );
     ctx.set_fonts(fonts);
 }
 
