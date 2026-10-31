@@ -43,3 +43,28 @@ jobs:
 
       - name: Run tests
         run: cargo test --all-targets --workspace
+
+  check-gtk:
+    name: Rust (GTK)
+    runs-on: ubuntu-24.04
+    container: rust:trixie
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install GTK
+        run: |
+          apt-get update
+          apt-get install -y libgtk-4-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+
+      - name: Run Clippy (GTK GUI)
+        run: cargo clippy -p kocr-gui --all-targets --no-default-features --features gtk -- -D warnings

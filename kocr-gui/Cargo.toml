@@ -10,8 +10,21 @@ autobins = false
 name = "kocr-gui"
 path = "src/main.rs"
 
+[features]
+default = ["qt"]
+qt = ["winio/qt"]
+gtk = ["winio/gtk"]
+
 [dependencies]
 kocr-config.workspace = true
 
 anyhow.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
 winio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winio = { workspace = true, features = ["win32"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+winio = { workspace = true, features = ["app-kit"] }

@@ -8,6 +8,7 @@ unit_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/systemd/user
 binary_path=$install_dir/kocr
 daemon_path=$install_dir/kocr-daemon
 gui_path=$install_dir/kocr-gui
+gui_desktop_path=${XDG_DATA_HOME:-"$HOME/.local/share"}/applications/kocr-gui.desktop
 unit_path=$unit_dir/kocr.service
 temporary_dir=
 
@@ -120,6 +121,79 @@ install_dependencies() {
     install_command_dependencies
 }
 
+wayland_session() {
+    [[ ${XDG_SESSION_TYPE:-} == wayland ]] \
+        || [[ -z ${XDG_SESSION_TYPE:-} && -n ${WAYLAND_DISPLAY:-} ]]
+}
+
+install_gui_dependencies() {
+    local backend=${KOCR_GUI_BACKEND:-qt} family
+    local -a packages=()
+
+    [[ ${KOCR_SKIP_DEPENDENCIES:-0} == 1 ]] && return
+
+    family=$(distribution_family) \
+        || fail "unsupported Linux distribution; cannot install kocr-gui dependencies"
+    case $backend in
+        qt)
+            case $family in
+                arch)
+                    packages=(qt6-base)
+                    if wayland_session; then
+                        packages+=(qt6-wayland)
+                    fi
+                    ;;
+                debian)
+                    packages=(libqt6widgets6)
+                    if wayland_session; then
+                        packages+=(qt6-wayland)
+                    fi
+                    ;;
+                fedora)
+                    packages=(qt6-qtbase-gui)
+                    if wayland_session; then
+                        packages+=(qt6-qtwayland)
+                    fi
+                    ;;
+            esac
+            ;;
+        gtk)
+            case $family in
+                arch) packages=(gtk4) ;;
+                debian) packages=(libgtk-4-1) ;;
+                fedora) packages=(gtk4) ;;
+            esac
+            ;;
+        *) fail "unknown GUI backend: $backend" ;;
+    esac
+
+    install_packages "$family" "${packages[@]}"
+    hash -r
+
+    if command -v ldd >/dev/null 2>&1 \
+        && ldd "$gui_path" 2>/dev/null | grep -q 'not found'; then
+        ldd "$gui_path" 2>/dev/null | grep 'not found' >&2 || true
+        fail "kocr-gui is missing shared libraries"
+    fi
+}
+
+install_gui_desktop() {
+    local desktop_temporary
+
+    mkdir -p -- "${gui_desktop_path%/*}"
+    desktop_temporary=$(mktemp --tmpdir="${gui_desktop_path%/*}" .kocr-gui.desktop.XXXXXX)
+    cat > "$desktop_temporary" <<EOF
+[Desktop Entry]
+Type=Application
+Name=KOCR Settings
+Exec="$gui_path"
+Terminal=false
+Categories=Utility;
+EOF
+    chmod 0644 "$desktop_temporary"
+    mv -f -- "$desktop_temporary" "$gui_desktop_path"
+}
+
 select_model() {
     local choice=${KOCR_MODEL:-}
 
@@ -200,45 +274,8 @@ download_binaries() {
     printf '%s\n' "$temporary_dir/$package"
 }
 
-install_kocr() {
-    local model= source_dir unit_temporary
-
-    require install
-    require mktemp
-    require realpath
-    require systemctl
-    systemctl --user show-environment >/dev/null \
-        || fail "systemd user session is unavailable"
-
-    temporary_dir=$(mktemp -d)
-    trap 'rm -rf -- "$temporary_dir"' EXIT
-
-    if [[ -n ${KOCR_BINARY:-} ]]; then
-        [[ -x $KOCR_BINARY ]] || fail "binary is not executable: $KOCR_BINARY"
-        source_dir=$(dirname -- "$(realpath -- "$KOCR_BINARY")")
-    else
-        source_dir=$(download_binaries)
-    fi
-    for name in kocr kocr-daemon kocr-gui; do
-        [[ -x $source_dir/$name ]] || fail "binary is not executable: $source_dir/$name"
-    done
-
-    [[ $binary_path != *$'\n'* && $binary_path != *'"'* ]] \
-        || fail "install path contains unsupported characters"
-    mkdir -p -- "$install_dir" "$unit_dir"
-    for name in kocr kocr-daemon kocr-gui; do
-        install -m 0755 "$source_dir/$name" "$temporary_dir/$name"
-        mv -f -- "$temporary_dir/$name" "$install_dir/$name"
-    done
-
-    install_dependencies
-    if [[ ${KOCR_SKIP_MODEL:-0} != 1 ]]; then
-        model=$(select_model)
-        if ! "$binary_path" use "$model" >/dev/null 2>&1; then
-            "$binary_path" install "$model"
-        fi
-        "$binary_path" use "$model"
-    fi
+install_daemon() {
+    local unit_temporary
 
     unit_temporary=$(mktemp --tmpdir="$unit_dir" .kocr.service.XXXXXX)
     cat > "$unit_temporary" <<EOF
@@ -264,44 +301,112 @@ EOF
     systemctl --user daemon-reload
     systemctl --user enable kocr.service
     systemctl --user restart kocr.service
+}
+
+install_kocr() {
+    local gui=${KOCR_INSTALL_GUI:-0}
+    local model= source_dir
+    local -a binaries=(kocr)
+
+    if [[ $gui == 1 ]]; then
+        binaries+=(kocr-daemon kocr-gui)
+    fi
+
+    require install
+    require mktemp
+    require realpath
+    if [[ $gui == 1 ]]; then
+        require systemctl
+        systemctl --user show-environment >/dev/null \
+            || fail "systemd user session is unavailable"
+    fi
+
+    temporary_dir=$(mktemp -d)
+    trap 'rm -rf -- "$temporary_dir"' EXIT
+
+    if [[ -n ${KOCR_BINARY:-} ]]; then
+        [[ -x $KOCR_BINARY ]] || fail "binary is not executable: $KOCR_BINARY"
+        source_dir=$(dirname -- "$(realpath -- "$KOCR_BINARY")")
+    elif [[ -n ${KOCR_SOURCE_DIR:-} ]]; then
+        source_dir=$KOCR_SOURCE_DIR
+    else
+        source_dir=$(download_binaries)
+    fi
+    for name in "${binaries[@]}"; do
+        [[ -x $source_dir/$name ]] || fail "binary is not executable: $source_dir/$name"
+    done
+
+    [[ $binary_path != *$'\n'* && $binary_path != *'"'* ]] \
+        || fail "install path contains unsupported characters"
+    mkdir -p -- "$install_dir"
+    if [[ $gui == 1 ]]; then
+        mkdir -p -- "$unit_dir"
+    fi
+    for name in "${binaries[@]}"; do
+        install -m 0755 "$source_dir/$name" "$temporary_dir/$name"
+        mv -f -- "$temporary_dir/$name" "$install_dir/$name"
+    done
+
+    if [[ $gui == 1 ]]; then
+        install_dependencies
+        install_gui_dependencies
+        install_gui_desktop
+    fi
+    if [[ ${KOCR_SKIP_MODEL:-0} != 1 ]]; then
+        model=$(select_model)
+        if ! "$binary_path" use "$model" >/dev/null 2>&1; then
+            "$binary_path" install "$model"
+        fi
+        "$binary_path" use "$model"
+    fi
+
+    if [[ $gui == 1 ]]; then
+        install_daemon
+    fi
 
     echo "Installed kocr to $binary_path"
     if [[ -n $model ]]; then
         echo "Model: $model"
     fi
-    echo "Shortcuts: Alt+1 (copy), Alt+2 (OCR), Alt+3 (one-line OCR)"
+    if [[ $gui == 1 ]]; then
+        echo "Shortcuts: Alt+1 (copy), Alt+2 (OCR), Alt+3 (one-line OCR)"
+    fi
 }
 
 uninstall_kocr() {
-    if [[ -f $unit_path ]]; then
-        systemctl --user disable --now kocr.service
-        rm -f -- "$unit_path"
-        systemctl --user daemon-reload
+    if [[ ${KOCR_INSTALL_GUI:-0} == 1 ]]; then
+        if [[ -f $unit_path ]]; then
+            systemctl --user disable --now kocr.service
+            rm -f -- "$unit_path"
+            systemctl --user daemon-reload
+        fi
+
+        if command -v busctl >/dev/null 2>&1; then
+            busctl --user call \
+                org.kde.kglobalaccel \
+                /kglobalaccel \
+                org.kde.KGlobalAccel \
+                unregister \
+                ss \
+                kocr \
+                capture-ocr \
+                >/dev/null 2>&1 || true
+            busctl --user call \
+                org.kde.kglobalaccel \
+                /kglobalaccel \
+                org.kde.KGlobalAccel \
+                unregister \
+                ss \
+                kocr \
+                capture-ocr-oneline \
+                >/dev/null 2>&1 || true
+        fi
+
+        rm -f -- "$daemon_path" "$gui_path" "$gui_desktop_path"
+        rm -f -- "${XDG_DATA_HOME:-"$HOME/.local/share"}/applications/kocr-capture.desktop"
     fi
 
-    if command -v busctl >/dev/null 2>&1; then
-        busctl --user call \
-            org.kde.kglobalaccel \
-            /kglobalaccel \
-            org.kde.KGlobalAccel \
-            unregister \
-            ss \
-            kocr \
-            capture-ocr \
-            >/dev/null 2>&1 || true
-        busctl --user call \
-            org.kde.kglobalaccel \
-            /kglobalaccel \
-            org.kde.KGlobalAccel \
-            unregister \
-            ss \
-            kocr \
-            capture-ocr-oneline \
-            >/dev/null 2>&1 || true
-    fi
-
-    rm -f -- "$binary_path" "$daemon_path" "$gui_path"
-    rm -f -- "${XDG_DATA_HOME:-"$HOME/.local/share"}/applications/kocr-capture.desktop"
+    rm -f -- "$binary_path"
     echo "Uninstalled kocr"
 }
 

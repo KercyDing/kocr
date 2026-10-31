@@ -189,11 +189,88 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          package="kocr-${VERSION}-${TARGET}"
+          cli_package="kocr-${VERSION}-${TARGET}"
+          mkdir -p "dist/${cli_package}"
+          install -m 0755 "target/${TARGET}/release/kocr" "dist/${cli_package}/kocr"
+          install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${cli_package}/"
+          tar -C dist -czf "dist/${cli_package}.tar.gz" "$cli_package"
+          sha256sum "dist/${cli_package}.tar.gz" > "dist/${cli_package}.tar.gz.sha256"
+
+          gui_package="kocr-gui-qt-setup-${VERSION}-${TARGET}"
+          mkdir -p "dist/${gui_package}"
+          for binary in kocr kocr-daemon kocr-gui; do
+            install -m 0755 "target/${TARGET}/release/${binary}" "dist/${gui_package}/${binary}"
+          done
+          install -m 0755 script.sh "dist/${gui_package}/script.sh"
+          install -m 0755 gui-setup.sh "dist/${gui_package}/setup.sh"
+          printf 'qt\n' > "dist/${gui_package}/gui-backend"
+          install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${gui_package}/"
+          tar -C dist -czf "dist/${gui_package}.tar.gz" "$gui_package"
+          sha256sum "dist/${gui_package}.tar.gz" > "dist/${gui_package}.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+          if-no-files-found: error
+
+  build-gtk:
+    name: Build GTK ${{ matrix.label }}
+    needs: validate-tag
+    runs-on: ${{ matrix.runner }}
+    container: rust:trixie
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - label: Linux ARM64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-tag.outputs.tag }}
+
+      - name: Install GTK
+        run: |
+          apt-get update
+          apt-get install -y libgtk-4-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          key: gtk-${{ matrix.target }}
+
+      - name: Build GTK release
+        run: |
+          cargo build --release --locked -p kocr-cli -p kocr-daemon
+          cargo build --release --locked -p kocr-gui --no-default-features --features gtk
+
+      - name: Package GTK setup
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          package="kocr-gui-gtk-setup-${VERSION}-${TARGET}"
           mkdir -p "dist/${package}"
           for binary in kocr kocr-daemon kocr-gui; do
-            install -m 0755 "target/${TARGET}/release/${binary}" "dist/${package}/${binary}"
+            install -m 0755 "target/release/${binary}" "dist/${package}/${binary}"
           done
+          install -m 0755 script.sh "dist/${package}/script.sh"
+          install -m 0755 gui-setup.sh "dist/${package}/setup.sh"
+          printf 'gtk\n' > "dist/${package}/gui-backend"
           install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${package}/"
           tar -C dist -czf "dist/${package}.tar.gz" "$package"
           sha256sum "dist/${package}.tar.gz" > "dist/${package}.tar.gz.sha256"
@@ -201,15 +278,15 @@ jobs:
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.target }}
+          name: release-gtk-${{ matrix.target }}
           path: |
-            dist/kocr-${{ needs.validate-tag.outputs.version }}-${{ matrix.target }}.tar.gz
-            dist/kocr-${{ needs.validate-tag.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
           if-no-files-found: error
 
   release:
     name: Publish release
-    needs: [validate-tag, build]
+    needs: [validate-tag, build, build-gtk]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:

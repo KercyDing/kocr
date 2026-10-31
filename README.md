@@ -2,24 +2,33 @@
 
 Offline OCR for desktop.
 
-Recognize text from existing images, or capture a screen region with Spectacle on Linux. Results are copied directly to the clipboard.
+Recognize text from existing images with the CLI, or capture a screen region with the desktop app on Linux. Results are copied directly to the clipboard.
 
 ## Installation
+
+### CLI
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/KercyDing/kocr/main/script.sh)"
 ```
 
-The installer installs `kocr` (CLI), `kocr-daemon` (shortcut daemon), `kocr-gui` (settings window), missing system packages, and an INT8 model. No ONNX Runtime required. Supports Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
+The installer installs `kocr` (CLI) and an INT8 model. It does not install the daemon, GUI, or desktop packages. No ONNX Runtime required. Supports Arch/CachyOS, Debian/Ubuntu, and Fedora/RHEL.
 
-## Usage
+### GUI
 
-### Screen Capture
+Download `kocr-gui-qt-setup-<version>-<target>.tar.gz` or `kocr-gui-gtk-setup-<version>-<target>.tar.gz` from [Releases](https://github.com/KercyDing/kocr/releases), extract it, and run:
 
 ```bash
-kocr capture          # Capture region, copy PNG to clipboard
-kocr capture -o       # Capture region, run OCR, copy text to clipboard
+tar -xzf kocr-gui-qt-setup-*.tar.gz
+cd kocr-gui-qt-setup-*/
+./setup.sh
 ```
+
+Use the GTK package instead on GTK-based desktops. The GUI setup installs the CLI, daemon, `kocr-gui` settings window, the matching Qt or GTK runtime, and an INT8 model, and adds a KOCR Settings menu entry.
+
+The GTK package requires GTK 4.16 or newer, so it targets recent distributions such as Debian 13, Ubuntu 25.04, Fedora 42, and Arch. Use the Qt package on older systems.
+
+## Usage
 
 ### Existing Image
 
@@ -30,14 +39,13 @@ kocr image test.png   # Recognize text and print to stdout
 ### OCR Models
 
 ```bash
-kocr list                      # List available models
+kocr list                      # Show config path and list models
 kocr install 1                 # Install by ID or name
 kocr install 1 -p <DIRECTORY>  # parent directory for the model
 kocr use 1                     # Set active model
 kocr uninstall 1               # Remove a model
 kocr config                    # Open configuration in your default editor
-kocr status                    # Show config path, daemon state, and shortcuts
-kocr-gui                       # Edit shortcuts and the active model
+kocr-gui                       # Edit shortcuts and the active model (GUI setup)
 ```
 
 `--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kocr/models`.
@@ -46,7 +54,7 @@ Models are INT8-quantized RTen packages, available in small, medium, and tiny ti
 
 ## Keyboard Shortcuts
 
-The installer registers a systemd user service with three default shortcuts:
+The desktop installer registers a systemd user service with three default shortcuts:
 
 | Shortcut | Action |
 |----------|--------|

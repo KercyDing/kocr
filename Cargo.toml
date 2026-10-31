@@ -37,7 +37,7 @@ tempfile = "3"
 thiserror = "2"
 toml = "1"
 ureq = "3"
-winio = "=0.13.0-beta.2"
+winio = { version = "=0.13.0-beta.2", default-features = false }
 zbus = "6"
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 

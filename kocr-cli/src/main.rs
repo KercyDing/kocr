@@ -5,10 +5,10 @@ use std::process::{Command, ExitCode};
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use comfy_table::{Cell, Color, Table, presets::UTF8_BORDERS_ONLY};
+use kocr_core::AppError;
 use kocr_core::models;
 use kocr_core::ocr;
 use kocr_core::platform;
-use kocr_core::{AppError, capture};
 
 const EXIT_OK: u8 = 0;
 const EXIT_CANCELLED: u8 = 2;
@@ -40,9 +40,6 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum CommandKind {
-    /// Capture a screen region
-    Capture(CaptureArgs),
-
     /// Check required dependencies
     Doctor,
 
@@ -64,30 +61,12 @@ enum CommandKind {
     /// Recognize text from an image
     Image(ImageArgs),
 
-    /// Show configuration and daemon state
-    Status,
-
     /// Show command help
     #[command(name = "help", about = "Show command help")]
     Help,
 
     /// Show version
     Version,
-}
-
-#[derive(Debug, Args)]
-struct CaptureArgs {
-    /// Output path (optional)
-    #[arg(value_name = "PNG")]
-    output: Option<PathBuf>,
-
-    /// Recognize the capture and copy text
-    #[arg(short = 'o', long = "ocr")]
-    ocr: bool,
-
-    /// Merge recognized lines into a single line
-    #[arg(long, requires = "ocr")]
-    oneline: bool,
 }
 
 #[derive(Debug, Args)]
@@ -140,7 +119,6 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), AppError> {
     match cli.command {
-        Some(CommandKind::Capture(args)) => run_capture(args),
         Some(CommandKind::Doctor) => run_doctor(),
         Some(CommandKind::List) => run_list(),
         Some(CommandKind::Install(args)) => run_install(args),
@@ -148,7 +126,6 @@ fn run(cli: Cli) -> Result<(), AppError> {
         Some(CommandKind::Use(args)) => run_use(args),
         Some(CommandKind::Config) => run_config(),
         Some(CommandKind::Image(args)) => run_image(args),
-        Some(CommandKind::Status) => run_status(),
         Some(CommandKind::Help) => print_help(),
         Some(CommandKind::Version) => {
             println!("kocr {}", env!("CARGO_PKG_VERSION"));
@@ -177,55 +154,10 @@ fn error_code(error: &AppError) -> u8 {
     }
 }
 
-fn run_status() -> Result<(), AppError> {
-    let config_path = models::config_path();
-    let config = models::load_config().map_err(AppError::Config)?;
-    let installed = models::installed_model_names().map_err(AppError::Model)?;
-    let shortcuts = config.shortcut.clone();
-
-    println!("config     {}", config_path.display());
-    println!("daemon     {}", platform::service_state("kocr.service"));
-    println!(
-        "model      {}",
-        config.models.select.as_deref().unwrap_or("none")
-    );
-    println!(
-        "installed  {}",
-        if installed.is_empty() {
-            "none".to_owned()
-        } else {
-            installed.join(", ")
-        }
-    );
-    println!(
-        "shortcuts  copy={} ocr={} oneline={}",
-        shortcut_state(shortcuts.copy.as_deref()),
-        shortcut_state(shortcuts.ocr.as_deref()),
-        shortcut_state(shortcuts.oneline.as_deref()),
-    );
-    Ok(())
-}
-
-fn shortcut_state(shortcut: Option<&str>) -> &str {
-    match shortcut {
-        Some(shortcut) if !shortcut.trim().is_empty() => shortcut,
-        _ => "disabled",
-    }
-}
-
-fn run_capture(args: CaptureArgs) -> Result<(), AppError> {
-    let result = capture::run(args.output, args.ocr, args.oneline)?;
-    if let Some(text) = result.text {
-        println!("{text}");
-    }
-    if let Some(path) = result.path {
-        println!("{}", path.display());
-    }
-    Ok(())
-}
-
 fn run_list() -> Result<(), AppError> {
     let entries = models::list().map_err(AppError::Model)?;
+    println!("config     {}", models::config_path().display());
+    println!();
     let id_width = entries
         .iter()
         .map(|entry| entry.id.to_string().len())
@@ -354,19 +286,12 @@ fn display_path(path: &Path) -> String {
 }
 
 fn run_doctor() -> Result<(), AppError> {
-    let mut checks = Vec::new();
-    for &dependency in platform::dependencies() {
-        checks.push(command_check(dependency));
-    }
-    checks.push(engine_check());
-
-    for check in &checks {
-        let state = if check.ok { "ok" } else { "missing" };
-        println!("[{state}] {:<12} {}", check.name, check.detail);
-    }
-    if checks.iter().any(|check| !check.ok) {
+    let check = engine_check();
+    let state = if check.ok { "ok" } else { "missing" };
+    println!("[{state}] {:<12} {}", check.name, check.detail);
+    if !check.ok {
         return Err(AppError::MissingDependency(
-            "Environment check failed; install the missing dependencies and retry".to_owned(),
+            "Environment check failed; install a model with kocr install and retry".to_owned(),
         ));
     }
     println!("Environment check passed.");
@@ -378,21 +303,6 @@ struct Check {
     name: &'static str,
     ok: bool,
     detail: String,
-}
-
-fn command_check(name: &'static str) -> Check {
-    match platform::find_command(name) {
-        Some(path) => Check {
-            name,
-            ok: true,
-            detail: path.display().to_string(),
-        },
-        None => Check {
-            name,
-            ok: false,
-            detail: "not found in PATH".to_owned(),
-        },
-    }
 }
 
 fn engine_check() -> Check {
@@ -424,22 +334,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_status() {
-        let cli = Cli::try_parse_from(["kocr", "status"]).unwrap();
-        assert!(matches!(cli.command, Some(CommandKind::Status)));
-    }
-
-    #[test]
-    fn parses_capture_ocr() {
-        let cli = Cli::try_parse_from(["kocr", "capture", "-o", "--oneline"]).unwrap();
-        let Some(CommandKind::Capture(args)) = cli.command else {
-            panic!("expected capture command");
-        };
-        assert!(args.ocr);
-        assert!(args.oneline);
-    }
-
-    #[test]
     fn parses_install_path() {
         let cli = Cli::try_parse_from(["kocr", "install", "1", "-p", "/models/ppocrv6-small-r1"])
             .unwrap();
@@ -456,10 +350,5 @@ mod tests {
             panic!("expected image command");
         };
         assert!(args.oneline);
-    }
-
-    #[test]
-    fn oneline_requires_ocr() {
-        assert!(Cli::try_parse_from(["kocr", "capture", "--oneline"]).is_err());
     }
 }
