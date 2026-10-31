@@ -11,8 +11,11 @@ name = "kocr-daemon"
 path = "src/main.rs"
 
 [dependencies]
-futures-util.workspace = true
-kocr.workspace = true
 kocr-config.workspace = true
+kocr-core.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+futures-util.workspace = true
+global-hotkey.workspace = true
 zbus.workspace = true

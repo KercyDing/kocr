@@ -1,15 +1,12 @@
-#[cfg(not(target_os = "linux"))]
-compile_error!("kocr only supports Linux.");
-
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Args, CommandFactory, Parser, Subcommand};
-use kocr::models;
-use kocr::ocr;
-use kocr::{AppError, capture};
+use kocr_core::models;
+use kocr_core::ocr;
+use kocr_core::{AppError, capture};
 
 const EXIT_OK: u8 = 0;
 const EXIT_CANCELLED: u8 = 2;

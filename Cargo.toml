@@ -1,5 +1,5 @@
 [workspace]
-members = ["kocr", "kocr-config", "kocr-daemon", "kocr-gui"]
+members = ["kocr", "kocr-config", "kocr-core", "kocr-daemon", "kocr-gui"]
 resolver = "3"
 
 [workspace.package]
@@ -9,12 +9,14 @@ license = "Apache-2.0"
 repository = "https://github.com/KercyDing/kocr"
 
 [workspace.dependencies]
+kocr-config = { path = "kocr-config" }
+kocr-core = { path = "kocr-core" }
+
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
 futures-util = "0.3"
-kocr = { path = "kocr" }
-kocr-config = { path = "kocr-config" }
+global-hotkey = "0.9"
 rusto-rs = { version = "0.3.2", default-features = false }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.11"

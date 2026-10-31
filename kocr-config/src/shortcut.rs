@@ -1,15 +1,9 @@
 //! Shortcut syntax used by the configuration file.
 //!
-//! Codes follow KDE's Qt key encoding because the Linux daemon feeds them to
-//! KGlobalAccel. The syntax itself is platform neutral; other backends can map
-//! a parsed shortcut to their own representation.
+//! Parsing produces a platform-neutral [`Shortcut`]. Backends map it to their
+//! native representation, so the syntax does not depend on any toolkit.
 
 use thiserror::Error;
-
-const QT_SHIFT: i32 = 0x0200_0000;
-const QT_CONTROL: i32 = 0x0400_0000;
-const QT_ALT: i32 = 0x0800_0000;
-const QT_META: i32 = 0x1000_0000;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ShortcutError {
@@ -19,9 +13,111 @@ pub enum ShortcutError {
     UnsupportedKey(String),
 }
 
-pub fn parse_shortcut(shortcut: &str) -> Result<i32, ShortcutError> {
+/// A parsed keyboard shortcut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Shortcut {
+    pub modifiers: Modifiers,
+    pub key: Key,
+}
+
+/// Modifier keys supported by the configuration syntax.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Modifiers(u8);
+
+impl Modifiers {
+    pub const SUPER: Self = Self(1 << 0);
+    pub const CONTROL: Self = Self(1 << 1);
+    pub const ALT: Self = Self(1 << 2);
+    pub const SHIFT: Self = Self(1 << 3);
+
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    fn insert(&mut self, modifier: Modifier) -> bool {
+        let bit = modifier.bits();
+        let duplicate = self.contains(bit);
+        self.0 |= bit.0;
+        !duplicate
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Modifier {
+    Super,
+    Control,
+    Alt,
+    Shift,
+}
+
+impl Modifier {
+    fn bits(self) -> Modifiers {
+        match self {
+            Self::Super => Modifiers::SUPER,
+            Self::Control => Modifiers::CONTROL,
+            Self::Alt => Modifiers::ALT,
+            Self::Shift => Modifiers::SHIFT,
+        }
+    }
+}
+
+/// A key accepted by the configuration syntax.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Key {
+    Character(char),
+    Function(u8),
+    Escape,
+    Tab,
+    Backspace,
+    Return,
+    Enter,
+    Insert,
+    Delete,
+    Pause,
+    Print,
+    Home,
+    End,
+    Left,
+    Up,
+    Right,
+    Down,
+    PageUp,
+    PageDown,
+    Space,
+    Apostrophe,
+    Comma,
+    Minus,
+    Period,
+    Slash,
+    Semicolon,
+    Equal,
+    BracketLeft,
+    Backslash,
+    BracketRight,
+    Grave,
+    AudioLowerVolume,
+    AudioMute,
+    AudioRaiseVolume,
+    AudioPlay,
+    AudioStop,
+    AudioPrev,
+    AudioNext,
+    AudioPause,
+    BrightnessUp,
+    BrightnessDown,
+}
+
+pub fn parse_shortcut(shortcut: &str) -> Result<Shortcut, ShortcutError> {
     let mut parts = shortcut.split('+').peekable();
-    let mut modifiers = 0;
+    let mut modifiers = Modifiers::empty();
     let mut key = None;
     while let Some(part) = parts.next() {
         let part = part.trim();
@@ -29,81 +125,80 @@ pub fn parse_shortcut(shortcut: &str) -> Result<i32, ShortcutError> {
             return Err(ShortcutError::Invalid(shortcut.to_owned()));
         }
         let modifier = match part {
-            "Mod" | "Super" | "Meta" => Some(QT_META),
-            "Ctrl" | "Control" => Some(QT_CONTROL),
-            "Alt" => Some(QT_ALT),
-            "Shift" => Some(QT_SHIFT),
+            "Mod" | "Super" | "Meta" => Some(Modifier::Super),
+            "Ctrl" | "Control" => Some(Modifier::Control),
+            "Alt" => Some(Modifier::Alt),
+            "Shift" => Some(Modifier::Shift),
             _ => None,
         };
         if let Some(modifier) = modifier {
-            if key.is_some() || modifiers & modifier != 0 {
+            if key.is_some() || !modifiers.insert(modifier) {
                 return Err(ShortcutError::Invalid(shortcut.to_owned()));
             }
-            modifiers |= modifier;
             continue;
         }
         if parts.peek().is_some() || key.replace(parse_key(part)?).is_some() {
             return Err(ShortcutError::Invalid(shortcut.to_owned()));
         }
     }
-    key.map(|key| modifiers | key)
+    key.map(|key| Shortcut { modifiers, key })
         .ok_or_else(|| ShortcutError::Invalid(shortcut.to_owned()))
 }
 
-fn parse_key(name: &str) -> Result<i32, ShortcutError> {
+fn parse_key(name: &str) -> Result<Key, ShortcutError> {
     if name.len() == 1 {
         let character = name.chars().next().expect("one-byte key has one character");
         if character.is_ascii_alphanumeric() {
-            return Ok(character.to_ascii_uppercase() as i32);
+            return Ok(Key::Character(character.to_ascii_uppercase()));
         }
     }
     if let Some(number) = name
         .strip_prefix('F')
-        .and_then(|value| value.parse::<i32>().ok())
+        .and_then(|value| value.parse::<u8>().ok())
         && (1..=35).contains(&number)
     {
-        return Ok(0x0100_0030 + number - 1);
+        return Ok(Key::Function(number));
     }
     let key = match name {
-        "Escape" => 0x0100_0000,
-        "Tab" => 0x0100_0001,
-        "BackSpace" | "Backspace" => 0x0100_0003,
-        "Return" => 0x0100_0004,
-        "Enter" => 0x0100_0005,
-        "Insert" => 0x0100_0006,
-        "Delete" => 0x0100_0007,
-        "Pause" => 0x0100_0008,
-        "Print" => 0x0100_0009,
-        "Home" => 0x0100_0010,
-        "End" => 0x0100_0011,
-        "Left" => 0x0100_0012,
-        "Up" => 0x0100_0013,
-        "Right" => 0x0100_0014,
-        "Down" => 0x0100_0015,
-        "Page_Up" | "PageUp" => 0x0100_0016,
-        "Page_Down" | "PageDown" => 0x0100_0017,
-        "Space" => 0x20,
-        "Apostrophe" => '\'' as i32,
-        "Comma" => ',' as i32,
-        "Minus" => '-' as i32,
-        "Period" => '.' as i32,
-        "Slash" => '/' as i32,
-        "Semicolon" => ';' as i32,
-        "Equal" => '=' as i32,
-        "BracketLeft" => '[' as i32,
-        "Backslash" => '\\' as i32,
-        "BracketRight" => ']' as i32,
-        "Grave" => '`' as i32,
-        "XF86AudioLowerVolume" => 0x0100_0070,
-        "XF86AudioMute" => 0x0100_0071,
-        "XF86AudioRaiseVolume" => 0x0100_0072,
-        "XF86AudioPlay" => 0x0100_0080,
-        "XF86AudioStop" => 0x0100_0081,
-        "XF86AudioPrev" => 0x0100_0082,
-        "XF86AudioNext" => 0x0100_0083,
-        "XF86AudioPause" => 0x0100_0085,
-        "XF86MonBrightnessUp" => 0x0100_00b2,
-        "XF86MonBrightnessDown" => 0x0100_00b3,
+        "Escape" => Key::Escape,
+        "Tab" => Key::Tab,
+        "BackSpace" | "Backspace" => Key::Backspace,
+        "Return" => Key::Return,
+        "Enter" => Key::Enter,
+        "Insert" => Key::Insert,
+        "Delete" => Key::Delete,
+        "Pause" => Key::Pause,
+        "Print" => Key::Print,
+        "Home" => Key::Home,
+        "End" => Key::End,
+        "Left" => Key::Left,
+        "Up" => Key::Up,
+        "Right" => Key::Right,
+        "Down" => Key::Down,
+        "Page_Up" | "PageUp" => Key::PageUp,
+        "Page_Down" | "PageDown" => Key::PageDown,
+        "Space" => Key::Space,
+        "Apostrophe" => Key::Apostrophe,
+        "Comma" => Key::Comma,
+        "Minus" => Key::Minus,
+        "Period" => Key::Period,
+        "Slash" => Key::Slash,
+        "Semicolon" => Key::Semicolon,
+        "Equal" => Key::Equal,
+        "BracketLeft" => Key::BracketLeft,
+        "Backslash" => Key::Backslash,
+        "BracketRight" => Key::BracketRight,
+        "Grave" => Key::Grave,
+        "XF86AudioLowerVolume" => Key::AudioLowerVolume,
+        "XF86AudioMute" => Key::AudioMute,
+        "XF86AudioRaiseVolume" => Key::AudioRaiseVolume,
+        "XF86AudioPlay" => Key::AudioPlay,
+        "XF86AudioStop" => Key::AudioStop,
+        "XF86AudioPrev" => Key::AudioPrev,
+        "XF86AudioNext" => Key::AudioNext,
+        "XF86AudioPause" => Key::AudioPause,
+        "XF86MonBrightnessUp" => Key::BrightnessUp,
+        "XF86MonBrightnessDown" => Key::BrightnessDown,
         _ => return Err(ShortcutError::UnsupportedKey(name.to_owned())),
     };
     Ok(key)
@@ -111,15 +206,21 @@ fn parse_key(name: &str) -> Result<i32, ShortcutError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{QT_ALT, QT_META, QT_SHIFT, ShortcutError, parse_shortcut};
+    use super::{Key, Modifiers, Shortcut, ShortcutError, parse_shortcut};
 
     #[test]
     fn parses_shortcuts() {
-        assert_eq!(parse_shortcut("Alt+1").unwrap(), QT_ALT | '1' as i32);
         assert_eq!(
-            parse_shortcut("Mod+Shift+Slash").unwrap(),
-            QT_META | QT_SHIFT | '/' as i32
+            parse_shortcut("Alt+1").unwrap(),
+            Shortcut {
+                modifiers: Modifiers::ALT,
+                key: Key::Character('1'),
+            }
         );
+        let shortcut = parse_shortcut("Mod+Shift+Slash").unwrap();
+        assert!(shortcut.modifiers.contains(Modifiers::SUPER));
+        assert!(shortcut.modifiers.contains(Modifiers::SHIFT));
+        assert_eq!(shortcut.key, Key::Slash);
     }
 
     #[test]

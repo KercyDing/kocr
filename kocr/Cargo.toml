@@ -6,22 +6,11 @@ license.workspace = true
 description = "An offline OCR tool"
 autobins = false
 
-[lib]
-name = "kocr"
-path = "src/lib.rs"
-
 [[bin]]
 name = "kocr"
 path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-comfy-table.workspace = true
 kocr-config.workspace = true
-rusto-rs.workspace = true
-serde.workspace = true
-sha2.workspace = true
-tempfile.workspace = true
-thiserror.workspace = true
-toml.workspace = true
-zip.workspace = true
+kocr-core.workspace = true

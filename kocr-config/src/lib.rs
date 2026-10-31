@@ -10,7 +10,7 @@ use thiserror::Error;
 
 pub mod shortcut;
 
-pub use shortcut::{ShortcutError, parse_shortcut};
+pub use shortcut::{Key, Modifiers, Shortcut, ShortcutError, parse_shortcut};
 
 const CONFIG_FILE: &str = "kocr/config.toml";
 const LEGACY_CONFIG_FILE: &str = "kdeocr/config.toml";

@@ -1,15 +1,17 @@
-use std::fs;
-use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 use std::thread;
-use std::time::Duration;
 
 use futures_util::StreamExt;
-use thiserror::Error;
+use kocr_config::{Key, Modifiers, Shortcut};
 use zbus::fdo::RequestNameFlags;
 use zbus::{Connection, OwnedObjectPath, Proxy};
+
+use super::{
+    Configured, KeyboardError, POLL_INTERVAL, Trigger, notify_no_model, on_trigger_options,
+    operation, read_config_content,
+};
 
 const BUS_NAME: &str = "io.github.KercyDing.kocr";
 const SERVICE: &str = "org.kde.kglobalaccel";
@@ -18,35 +20,16 @@ const COMPONENT: &str = "kocr";
 const COPY_ACTION: &str = "copy";
 const OCR_ACTION: &str = "capture-ocr";
 const ONELINE_ACTION: &str = "capture-ocr-oneline";
-const POLL_INTERVAL: Duration = Duration::from_millis(500);
 const SET_PRESENT_NO_AUTOLOAD: u32 = 2 | 4;
 
-#[derive(Debug, Error)]
-pub(crate) enum KeyboardError {
-    #[error("{0}")]
-    Operation(String),
-}
+const QT_SHIFT: i32 = 0x0200_0000;
+const QT_CONTROL: i32 = 0x0400_0000;
+const QT_ALT: i32 = 0x0800_0000;
+const QT_META: i32 = 0x1000_0000;
 
 enum Event {
     Trigger(Trigger),
     Reregister,
-}
-
-#[derive(Clone, Copy)]
-enum Trigger {
-    Copy,
-    Ocr,
-    Oneline,
-}
-
-impl Trigger {
-    fn capture_options(self) -> (bool, bool) {
-        match self {
-            Self::Copy => (false, false),
-            Self::Ocr => (true, false),
-            Self::Oneline => (true, true),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -62,7 +45,24 @@ struct Bindings {
     oneline: Option<Binding>,
 }
 
-pub(crate) fn run<F, E>(mut on_trigger: F) -> Result<(), KeyboardError>
+impl Bindings {
+    fn from_configured(configured: Configured) -> Self {
+        Self {
+            copy: configured.copy.map(binding),
+            ocr: configured.ocr.map(binding),
+            oneline: configured.oneline.map(binding),
+        }
+    }
+}
+
+fn binding((name, shortcut): (String, Shortcut)) -> Binding {
+    Binding {
+        name,
+        key: qt_key(shortcut),
+    }
+}
+
+pub(super) fn run<F, E>(mut on_trigger: F) -> Result<(), KeyboardError>
 where
     F: FnMut(bool, bool) -> Result<(), E>,
     E: std::fmt::Display,
@@ -74,9 +74,9 @@ where
     zbus::block_on(connection.request_name_with_flags(BUS_NAME, RequestNameFlags::DO_NOT_QUEUE))
         .map_err(|error| operation("another daemon is already running", error))?;
 
-    let mut bindings = load_bindings()?;
+    let mut bindings = Bindings::from_configured(Configured::load()?);
     register(&connection, &bindings)?;
-    if kocr::models::selected_profile().is_err() {
+    if kocr_core::models::selected_profile().is_err() {
         notify_no_model();
     }
 
@@ -85,11 +85,11 @@ where
     spawn_listener(connection.clone(), events_tx, Arc::clone(&trigger_pending));
 
     let mut config_content = read_config_content();
-    eprintln!("Shortcut daemon started");
+    eprintln!("Shortcut daemon started (Wayland)");
     loop {
         match events_rx.recv_timeout(POLL_INTERVAL) {
             Ok(Event::Trigger(trigger)) => {
-                if kocr::models::selected_profile().is_err() {
+                if kocr_core::models::selected_profile().is_err() {
                     notify_no_model();
                 } else if let Err(error) = on_trigger_options(&mut on_trigger, trigger) {
                     eprintln!("\x1b[31mShortcut capture failed: {error}\x1b[0m");
@@ -112,14 +112,6 @@ where
     }
 }
 
-fn on_trigger_options<F, E>(on_trigger: &mut F, trigger: Trigger) -> Result<(), E>
-where
-    F: FnMut(bool, bool) -> Result<(), E>,
-{
-    let (recognize, oneline) = trigger.capture_options();
-    on_trigger(recognize, oneline)
-}
-
 fn reload_config(
     connection: &Connection,
     previous_content: &mut Option<String>,
@@ -131,8 +123,8 @@ fn reload_config(
     }
     *previous_content = content;
 
-    let bindings = match load_bindings() {
-        Ok(bindings) => bindings,
+    let bindings = match Configured::load() {
+        Ok(configured) => Bindings::from_configured(configured),
         Err(error) => {
             eprintln!("\x1b[31mShortcut reload failed: {error}\x1b[0m");
             return;
@@ -282,62 +274,83 @@ fn action_id(action: &str, description: &str) -> Vec<String> {
         .to_vec()
 }
 
-fn load_bindings() -> Result<Bindings, KeyboardError> {
-    let shortcuts = kocr::models::shortcuts().map_err(|error| {
-        KeyboardError::Operation(format!("could not load shortcut configuration: {error}"))
-    })?;
-    let copy = parse_binding(shortcuts.copy)?;
-    let ocr = parse_binding(shortcuts.ocr)?;
-    let oneline = parse_binding(shortcuts.oneline)?;
-    Ok(Bindings { copy, ocr, oneline })
-}
-
-fn parse_binding(shortcut: Option<String>) -> Result<Option<Binding>, KeyboardError> {
-    shortcut
-        .map(|name| {
-            let key = kocr_config::parse_shortcut(&name)
-                .map_err(|error| KeyboardError::Operation(error.to_string()))?;
-            Ok(Binding { name, key })
-        })
-        .transpose()
-}
-
-fn read_config_content() -> Option<String> {
-    fs::read_to_string(kocr_config::config_path()).ok()
-}
-
-fn notify_no_model() {
-    const TITLE: &str = "KOCR";
-    const BODY: &str = "No OCR model available. Install one with kocr install 1.";
-
-    eprintln!("\x1b[31m{BODY}\x1b[0m");
-    match Command::new("notify-send")
-        .args(["--app-name", TITLE, TITLE, BODY])
-        .status()
-    {
-        Ok(status) if status.success() => {}
-        Ok(status) => eprintln!("\x1b[31mCould not show notification: {status}\x1b[0m"),
-        Err(error) => eprintln!("\x1b[31mCould not show notification: {error}\x1b[0m"),
+fn qt_key(shortcut: Shortcut) -> i32 {
+    let mut modifiers = 0;
+    if shortcut.modifiers.contains(Modifiers::SUPER) {
+        modifiers |= QT_META;
     }
+    if shortcut.modifiers.contains(Modifiers::CONTROL) {
+        modifiers |= QT_CONTROL;
+    }
+    if shortcut.modifiers.contains(Modifiers::ALT) {
+        modifiers |= QT_ALT;
+    }
+    if shortcut.modifiers.contains(Modifiers::SHIFT) {
+        modifiers |= QT_SHIFT;
+    }
+    modifiers | qt_key_code(shortcut.key)
 }
 
-fn operation(context: &str, error: impl std::fmt::Display) -> KeyboardError {
-    KeyboardError::Operation(format!("{context}: {error}"))
+fn qt_key_code(key: Key) -> i32 {
+    match key {
+        Key::Character(character) => character as i32,
+        Key::Function(number) => 0x0100_0030 + i32::from(number) - 1,
+        Key::Escape => 0x0100_0000,
+        Key::Tab => 0x0100_0001,
+        Key::Backspace => 0x0100_0003,
+        Key::Return => 0x0100_0004,
+        Key::Enter => 0x0100_0005,
+        Key::Insert => 0x0100_0006,
+        Key::Delete => 0x0100_0007,
+        Key::Pause => 0x0100_0008,
+        Key::Print => 0x0100_0009,
+        Key::Home => 0x0100_0010,
+        Key::End => 0x0100_0011,
+        Key::Left => 0x0100_0012,
+        Key::Up => 0x0100_0013,
+        Key::Right => 0x0100_0014,
+        Key::Down => 0x0100_0015,
+        Key::PageUp => 0x0100_0016,
+        Key::PageDown => 0x0100_0017,
+        Key::Space => 0x20,
+        Key::Apostrophe => '\'' as i32,
+        Key::Comma => ',' as i32,
+        Key::Minus => '-' as i32,
+        Key::Period => '.' as i32,
+        Key::Slash => '/' as i32,
+        Key::Semicolon => ';' as i32,
+        Key::Equal => '=' as i32,
+        Key::BracketLeft => '[' as i32,
+        Key::Backslash => '\\' as i32,
+        Key::BracketRight => ']' as i32,
+        Key::Grave => '`' as i32,
+        Key::AudioLowerVolume => 0x0100_0070,
+        Key::AudioMute => 0x0100_0071,
+        Key::AudioRaiseVolume => 0x0100_0072,
+        Key::AudioPlay => 0x0100_0080,
+        Key::AudioStop => 0x0100_0081,
+        Key::AudioPrev => 0x0100_0082,
+        Key::AudioNext => 0x0100_0083,
+        Key::AudioPause => 0x0100_0085,
+        Key::BrightnessUp => 0x0100_00b2,
+        Key::BrightnessDown => 0x0100_00b3,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Trigger, parse_binding};
+    use super::{QT_ALT, QT_META, QT_SHIFT, qt_key};
+    use kocr_config::parse_shortcut;
 
     #[test]
-    fn accepts_disabled_binding() {
-        assert!(parse_binding(None).unwrap().is_none());
-    }
-
-    #[test]
-    fn maps_capture_options() {
-        assert_eq!(Trigger::Copy.capture_options(), (false, false));
-        assert_eq!(Trigger::Ocr.capture_options(), (true, false));
-        assert_eq!(Trigger::Oneline.capture_options(), (true, true));
+    fn encodes_qt_shortcuts() {
+        assert_eq!(
+            qt_key(parse_shortcut("Alt+1").unwrap()),
+            QT_ALT | '1' as i32
+        );
+        assert_eq!(
+            qt_key(parse_shortcut("Mod+Shift+Slash").unwrap()),
+            QT_META | QT_SHIFT | '/' as i32
+        );
     }
 }
