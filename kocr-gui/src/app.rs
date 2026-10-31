@@ -80,6 +80,7 @@ pub(crate) struct KocrApp {
     pub(crate) history_store: Option<History>,
     pub(crate) history: Vec<CaptureRecord>,
     pub(crate) texture_cache: HashMap<i64, egui::TextureHandle>,
+    pub(crate) preview: Option<(i64, egui::TextureHandle)>,
     pub(crate) status: String,
     pub(crate) copy: String,
     pub(crate) ocr: String,
@@ -163,6 +164,7 @@ impl KocrApp {
             history_store,
             history,
             texture_cache: HashMap::new(),
+            preview: None,
             status,
             copy,
             ocr,
@@ -296,6 +298,9 @@ impl KocrApp {
                 removed.push(record.id);
             }
         }
+        if !removed.is_empty() {
+            self.preview = None;
+        }
         for id in removed {
             self.texture_cache.remove(&id);
         }
@@ -332,6 +337,13 @@ impl KocrApp {
             }
         }
         self.texture_cache.remove(&id);
+        if self
+            .preview
+            .as_ref()
+            .is_some_and(|(preview_id, _)| *preview_id == id)
+        {
+            self.preview = None;
+        }
         self.history.retain(|record| record.id != id);
         self.status = t!("status_record_deleted").to_string();
     }
@@ -347,6 +359,7 @@ impl KocrApp {
             }
         }
         self.texture_cache.clear();
+        self.preview = None;
         self.history.clear();
         self.status = t!("status_history_cleared").to_string();
     }

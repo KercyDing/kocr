@@ -2,27 +2,38 @@
 
 use eframe::egui;
 
+const THUMBNAIL_MAX: u32 = 320;
+const PREVIEW_MAX: u32 = 1024;
+
 pub(crate) fn texture_from_path(
     ctx: &egui::Context,
     path: &std::path::Path,
     id: i64,
 ) -> Result<egui::TextureHandle, String> {
-    let png = std::fs::read(path).map_err(|error| error.to_string())?;
-    texture_from_png(ctx, &png, format!("capture-{id}"))
+    texture_from_path_with_max(ctx, path, format!("capture-{id}"), THUMBNAIL_MAX)
 }
 
-pub(crate) fn texture_from_png(
+pub(crate) fn preview_from_path(
     ctx: &egui::Context,
-    png: &[u8],
-    name: String,
+    path: &std::path::Path,
+    id: i64,
 ) -> Result<egui::TextureHandle, String> {
-    let image = image::load_from_memory(png)
+    texture_from_path_with_max(ctx, path, format!("preview-{id}"), PREVIEW_MAX)
+}
+
+fn texture_from_path_with_max(
+    ctx: &egui::Context,
+    path: &std::path::Path,
+    name: String,
+    max_size: u32,
+) -> Result<egui::TextureHandle, String> {
+    let png = std::fs::read(path).map_err(|error| error.to_string())?;
+    let image = image::load_from_memory(&png)
         .map_err(|error| error.to_string())?
         .to_rgba8();
     let (width, height) = image.dimensions();
-    const DISPLAY_TEXTURE_MAX: u32 = 320;
-    let scale = (DISPLAY_TEXTURE_MAX as f64 / width as f64)
-        .min(DISPLAY_TEXTURE_MAX as f64 / height as f64)
+    let scale = (max_size as f64 / width as f64)
+        .min(max_size as f64 / height as f64)
         .min(1.0);
     let display = if scale < 1.0 {
         image::imageops::resize(

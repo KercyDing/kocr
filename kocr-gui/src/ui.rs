@@ -6,7 +6,7 @@ use crate::app::{CopyAction, KocrApp, Page, RecordContent, ShortcutField};
 use crate::models::{progress_fraction, progress_text};
 use crate::preferences::CloseAction;
 use crate::shortcuts::format_shortcut;
-use crate::texture::texture_from_path;
+use crate::texture::{preview_from_path, texture_from_path};
 
 impl KocrApp {
     pub(crate) fn render(&mut self, ui: &mut egui::Ui) {
@@ -118,6 +118,7 @@ impl KocrApp {
 
         let history = &self.history;
         let texture_cache = &mut self.texture_cache;
+        let preview = &mut self.preview;
 
         if total_rows == 0 {
             ui.weak(t!("recent_empty").as_ref());
@@ -231,11 +232,94 @@ impl KocrApp {
                                                                                 / size.x,
                                                                         )
                                                                         .min(1.0);
-                                                                    ui.add(
+                                                                    let response = ui.add(
                                                                         egui::Image::new(texture)
                                                                             .fit_to_exact_size(
                                                                                 size * scale,
                                                                             ),
+                                                                    );
+                                                                    response.on_hover_ui(
+                                                                        |ui| {
+                                                                            if preview.as_ref().is_none_or(
+                                                                                |(preview_id, _)| {
+                                                                                    *preview_id
+                                                                                        != record.id
+                                                                                },
+                                                                            ) && let Ok(texture) =
+                                                                                preview_from_path(
+                                                                                    ui.ctx(),
+                                                                                    path,
+                                                                                    record.id,
+                                                                                )
+                                                                            {
+                                                                                *preview = Some((
+                                                                                    record.id,
+                                                                                    texture,
+                                                                                ));
+                                                                            }
+                                                                            let texture = preview
+                                                                                .as_ref()
+                                                                                .filter(
+                                                                                    |(preview_id, _)| {
+                                                                                        *preview_id
+                                                                                            == record.id
+                                                                                    },
+                                                                                )
+                                                                                .map_or(
+                                                                                    texture,
+                                                                                    |(_, texture)| {
+                                                                                        texture
+                                                                                    },
+                                                                                );
+                                                                            const PREVIEW_WIDTH: f32 =
+                                                                                320.0;
+                                                                            const PREVIEW_HEIGHT: f32 =
+                                                                                200.0;
+                                                                            let size = texture
+                                                                                .size_vec2();
+                                                                            let scale = (PREVIEW_WIDTH
+                                                                                / size.x)
+                                                                                .min(
+                                                                                    PREVIEW_HEIGHT
+                                                                                        / size.y,
+                                                                                )
+                                                                                .min(1.0);
+                                                                            ui.allocate_ui(
+                                                                                egui::vec2(
+                                                                                    PREVIEW_WIDTH,
+                                                                                    PREVIEW_HEIGHT,
+                                                                                ),
+                                                                                |ui| {
+                                                                                    ui.set_min_size(
+                                                                                        egui::vec2(
+                                                                                            PREVIEW_WIDTH,
+                                                                                            PREVIEW_HEIGHT,
+                                                                                        ),
+                                                                                    );
+                                                                                    ui.vertical_centered(
+                                                                                        |ui| {
+                                                                                            ui.add_space(
+                                                                                                ((PREVIEW_HEIGHT
+                                                                                                    - size.y
+                                                                                                        * scale)
+                                                                                                    / 2.0)
+                                                                                                    .max(
+                                                                                                        0.0,
+                                                                                                    ),
+                                                                                            );
+                                                                                            ui.add(
+                                                                                                egui::Image::new(
+                                                                                                    texture,
+                                                                                                )
+                                                                                                .fit_to_exact_size(
+                                                                                                    size * scale,
+                                                                                                ),
+                                                                                            );
+                                                                                        },
+                                                                                    );
+                                                                                },
+                                                                            );
+                                                                        },
                                                                     );
                                                                 } else {
                                                                     ui.weak(t!("image_unavailable").as_ref());
