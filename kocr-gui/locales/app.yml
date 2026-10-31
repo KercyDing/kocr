@@ -175,6 +175,15 @@ status_history_limit:
 status_history_cleaned:
   en: "Old history cleaned, keeping %{limit}"
   zh-CN: "已清理旧历史，保留 %{limit} 条"
+status_capture_cancelled:
+  en: Capture cancelled
+  zh-CN: 已取消截图
+status_record_deleted:
+  en: Record deleted
+  zh-CN: 已删除记录
+status_history_cleared:
+  en: History cleared
+  zh-CN: 已清空历史
 status_close_action:
   en: "Close window: %{action}"
   zh-CN: "关闭窗口时：%{action}"

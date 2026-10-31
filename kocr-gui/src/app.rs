@@ -325,11 +325,15 @@ impl KocrApp {
                         history::remove_files([path]);
                     }
                 }
-                Err(error) => self.status = error,
+                Err(error) => {
+                    self.status = error;
+                    return;
+                }
             }
         }
         self.texture_cache.remove(&id);
         self.history.retain(|record| record.id != id);
+        self.status = t!("status_record_deleted").to_string();
     }
 
     pub(crate) fn clear_history(&mut self) {
@@ -344,6 +348,7 @@ impl KocrApp {
         }
         self.texture_cache.clear();
         self.history.clear();
+        self.status = t!("status_history_cleared").to_string();
     }
 
     pub(crate) fn refresh_models(&mut self) -> Result<(), String> {
@@ -417,7 +422,10 @@ impl KocrApp {
                     text: result.text,
                     png: result.png,
                 })
-                .map_err(|error| error.to_string());
+                .map_err(|error| match error {
+                    kocr_core::AppError::Cancelled => t!("status_capture_cancelled").to_string(),
+                    error => error.to_string(),
+                });
             let _ = tx.send(Event::Captured(result));
             ctx.request_repaint();
         });
