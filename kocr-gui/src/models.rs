@@ -33,17 +33,18 @@ pub(crate) fn progress_text(progress: &Progress) -> String {
     match progress.total {
         Some(total) if total > 0 => {
             let percent = progress.downloaded.saturating_mul(100) / total;
-            format!("Installing {percent}%")
+            t!("installing_percent", percent = percent).to_string()
         }
-        _ => format!(
-            "Installing {:.1} MiB",
-            progress.downloaded as f64 / (1024.0 * 1024.0)
-        ),
+        _ => t!(
+            "installing_size",
+            size = format!("{:.1}", progress.downloaded as f64 / (1024.0 * 1024.0))
+        )
+        .to_string(),
     }
 }
 #[cfg(test)]
 mod tests {
-    use super::progress_fraction;
+    use super::{progress_fraction, progress_text};
     use kocr_model::Progress;
 
     #[test]
@@ -53,5 +54,15 @@ mod tests {
             total: Some(200),
         };
         assert_eq!(progress_fraction(&progress), 0.25);
+    }
+
+    #[test]
+    fn formats_install_progress() {
+        rust_i18n::set_locale("zh-CN");
+        let progress = Progress {
+            downloaded: 50,
+            total: Some(200),
+        };
+        assert_eq!(progress_text(&progress), "正在安装 25%");
     }
 }

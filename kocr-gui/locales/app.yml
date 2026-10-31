@@ -62,6 +62,12 @@ uninstall:
 installing:
   en: "Installing %{name}..."
   zh-CN: "正在安装 %{name}…"
+installing_percent:
+  en: "Installing %{percent}%"
+  zh-CN: "正在安装 %{percent}%"
+installing_size:
+  en: "Installing %{size} MiB"
+  zh-CN: "正在安装 %{size} MiB"
 installed:
   en: "Installed %{name}"
   zh-CN: "已安装 %{name}"
