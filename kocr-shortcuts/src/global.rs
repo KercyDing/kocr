@@ -78,7 +78,12 @@ where
     }
 
     let mut config_content = read_config_content();
+    #[cfg(target_os = "linux")]
     eprintln!("KOCR shortcuts started (X11)");
+    #[cfg(target_os = "macos")]
+    eprintln!("KOCR shortcuts started (macOS)");
+    #[cfg(windows)]
+    eprintln!("KOCR shortcuts started (Windows)");
     loop {
         if let Ok(event) = GlobalHotKeyEvent::receiver().recv_timeout(POLL_INTERVAL)
             && event.state() == HotKeyState::Pressed

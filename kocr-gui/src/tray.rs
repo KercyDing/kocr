@@ -1,5 +1,5 @@
-use crate::t;
 use eframe::egui;
+use rust_i18n::t;
 use std::sync::mpsc::{Receiver, SyncSender};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 #[cfg(target_os = "windows")]

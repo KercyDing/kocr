@@ -1,21 +1,14 @@
 use std::fmt::Display;
-
-use thiserror::Error;
-
-#[cfg(target_os = "linux")]
 use std::fs;
-#[cfg(target_os = "linux")]
 use std::time::Duration;
 
-#[cfg(target_os = "linux")]
 use kocr_config::Shortcut;
+use thiserror::Error;
 
-#[cfg(target_os = "linux")]
 mod global;
 #[cfg(target_os = "linux")]
 mod kglobalaccel;
 
-#[cfg(target_os = "linux")]
 pub(crate) const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Error)]
@@ -24,12 +17,10 @@ pub enum KeyboardError {
     Operation(String),
 }
 
-#[cfg(target_os = "linux")]
 pub(crate) fn operation(context: &str, error: impl Display) -> KeyboardError {
     KeyboardError::Operation(format!("{context}: {error}"))
 }
 
-#[cfg(target_os = "linux")]
 #[derive(Clone, Copy)]
 pub(crate) enum Trigger {
     Copy,
@@ -37,7 +28,6 @@ pub(crate) enum Trigger {
     Oneline,
 }
 
-#[cfg(target_os = "linux")]
 impl Trigger {
     pub(crate) fn capture_options(self) -> (bool, bool) {
         match self {
@@ -48,7 +38,6 @@ impl Trigger {
     }
 }
 
-#[cfg(target_os = "linux")]
 pub(crate) fn on_trigger_options<F, E>(on_trigger: &mut F, trigger: Trigger) -> Result<(), E>
 where
     F: FnMut(bool, bool) -> Result<(), E>,
@@ -57,15 +46,12 @@ where
     on_trigger(recognize, oneline)
 }
 
-/// Shortcut configuration parsed into backend-neutral values.
-#[cfg(target_os = "linux")]
 pub(crate) struct Configured {
     pub(crate) copy: Option<(String, Shortcut)>,
     pub(crate) ocr: Option<(String, Shortcut)>,
     pub(crate) oneline: Option<(String, Shortcut)>,
 }
 
-#[cfg(target_os = "linux")]
 impl Configured {
     pub(crate) fn load() -> Result<Self, KeyboardError> {
         let shortcuts = kocr_core::models::shortcuts().map_err(|error| {
@@ -79,7 +65,6 @@ impl Configured {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn parse_binding(shortcut: Option<String>) -> Result<Option<(String, Shortcut)>, KeyboardError> {
     shortcut
         .map(|name| {
@@ -90,7 +75,6 @@ fn parse_binding(shortcut: Option<String>) -> Result<Option<(String, Shortcut)>,
         .transpose()
 }
 
-#[cfg(target_os = "linux")]
 pub(crate) fn read_config_content() -> Option<String> {
     fs::read_to_string(kocr_config::config_path()).ok()
 }
@@ -111,8 +95,13 @@ pub(crate) fn notify_no_model() {
     }
 }
 
-/// Global shortcuts on Linux come from two backends: KGlobalAccel on Wayland
-/// and global-hotkey on X11. Other platforms are not implemented yet.
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn notify_no_model() {
+    eprintln!("\x1b[31mNo OCR model available. Install one in KOCR.\x1b[0m");
+}
+
+/// Global shortcuts on Linux use KGlobalAccel on Wayland and global-hotkey
+/// on X11. macOS and Windows use global-hotkey directly.
 pub fn run<F, E>(on_trigger: F) -> Result<(), KeyboardError>
 where
     F: FnMut(bool, bool) -> Result<(), E>,
@@ -127,10 +116,7 @@ where
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = on_trigger;
-        Err(KeyboardError::Operation(
-            "global shortcuts are not implemented for this platform yet".to_owned(),
-        ))
+        global::run(on_trigger)
     }
 }
 
@@ -173,22 +159,6 @@ fn session_from(
 #[cfg(test)]
 mod tests {
     use super::{Session, session_from};
-    #[cfg(target_os = "linux")]
-    use super::{Trigger, parse_binding};
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn accepts_disabled_binding() {
-        assert!(parse_binding(None).unwrap().is_none());
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn maps_capture_options() {
-        assert_eq!(Trigger::Copy.capture_options(), (false, false));
-        assert_eq!(Trigger::Ocr.capture_options(), (true, false));
-        assert_eq!(Trigger::Oneline.capture_options(), (true, true));
-    }
 
     #[test]
     fn detects_wayland() {

@@ -1,0 +1,151 @@
+_version: 2
+
+tab_capture:
+  en: Capture
+  zh-CN: 截图
+tab_models:
+  en: Models
+  zh-CN: 模型
+tab_shortcuts:
+  en: Shortcuts
+  zh-CN: 快捷键
+tab_settings:
+  en: Settings
+  zh-CN: 设置
+
+capture_png:
+  en: Capture and copy
+  zh-CN: 截屏并复制
+capture_text:
+  en: Capture and extract
+  zh-CN: 截屏并提取
+capture_oneline:
+  en: Capture and extract as one line
+  zh-CN: 截屏并提取为单行
+recent:
+  en: Recent
+  zh-CN: 最近结果
+recent_empty:
+  en: No captures yet.
+  zh-CN: 暂无截图记录。
+clear_history:
+  en: Clear all
+  zh-CN: 清空全部
+clear_history_confirm:
+  en: Confirm clear
+  zh-CN: 确认清空
+status_capturing:
+  en: Capturing...
+  zh-CN: 正在截图…
+status_text_copied:
+  en: Recognized text copied
+  zh-CN: 已复制识别文本
+status_png_copied:
+  en: Capture copied as PNG
+  zh-CN: 已复制 PNG 截图
+status_image_copied:
+  en: Image copied
+  zh-CN: 已复制图片
+image_unavailable:
+  en: Image unavailable
+  zh-CN: 图片不可用
+
+model:
+  en: Model
+  zh-CN: 模型
+install:
+  en: Install
+  zh-CN: 安装
+uninstall:
+  en: Uninstall
+  zh-CN: 卸载
+installing:
+  en: "Installing %{name}..."
+  zh-CN: "正在安装 %{name}…"
+installed:
+  en: "Installed %{name}"
+  zh-CN: "已安装 %{name}"
+uninstalled:
+  en: "Uninstalled %{name}"
+  zh-CN: "已卸载 %{name}"
+selected_model:
+  en: "Selected model: %{name}"
+  zh-CN: "选中模型：%{name}"
+no_model_selected:
+  en: No model selected
+  zh-CN: 未选择模型
+
+copy:
+  en: Copy
+  zh-CN: 复制
+delete:
+  en: Delete
+  zh-CN: 删除
+ocr:
+  en: OCR
+  zh-CN: OCR
+one_line:
+  en: One line
+  zh-CN: 单行
+press_shortcut:
+  en: Press shortcut...
+  zh-CN: 请按快捷键…
+not_set:
+  en: Not set
+  zh-CN: 未设置
+shortcut_modifier_required:
+  en: Use at least one modifier key
+  zh-CN: 至少需要一个修饰键
+shortcuts:
+  en: Shortcuts
+  zh-CN: 快捷键
+shortcuts_running:
+  en: running
+  zh-CN: 运行中
+
+language:
+  en: Language
+  zh-CN: 语言
+appearance:
+  en: Appearance
+  zh-CN: 外观
+theme:
+  en: Theme
+  zh-CN: 主题
+theme_system:
+  en: System
+  zh-CN: 系统
+theme_light:
+  en: Light
+  zh-CN: 浅色
+theme_dark:
+  en: Dark
+  zh-CN: 深色
+font_size:
+  en: Font size
+  zh-CN: 字体大小
+history_limit:
+  en: History limit
+  zh-CN: 历史条数
+close_action:
+  en: When closing
+  zh-CN: 关闭窗口时
+close_exit:
+  en: Exit
+  zh-CN: 退出应用
+close_hide:
+  en: Hide to tray
+  zh-CN: 隐藏到托盘
+remember_window_state:
+  en: Remember window size and position
+  zh-CN: 记住窗口大小和位置
+
+tray_show:
+  en: Show KOCR
+  zh-CN: 显示 KOCR
+tray_quit:
+  en: Quit
+  zh-CN: 退出
+tray_failed:
+  en: "[-] System tray failed: %{err}"
+  zh-CN: "[-] 系统托盘初始化失败：%{err}"

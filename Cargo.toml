@@ -34,6 +34,7 @@ eframe = { version = "0.36", default-features = false, features = ["default_font
 futures-util = "0.3"
 global-hotkey = "0.9"
 rusqlite = { version = "0.41", features = ["bundled"] }
+rust-i18n = "3.1.2"
 rusto-rs = { version = "0.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.11"

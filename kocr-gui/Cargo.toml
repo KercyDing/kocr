@@ -17,6 +17,7 @@ kocr-config.workspace = true
 kocr-core.workspace = true
 kocr-model.workspace = true
 kocr-shortcuts.workspace = true
+rust-i18n.workspace = true
 rusqlite.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }
 tray-icon = { version = "0.24", default-features = false }

@@ -11,7 +11,9 @@ kocr-config.workspace = true
 kocr-core.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
+global-hotkey.workspace = true
+
 [target.'cfg(target_os = "linux")'.dependencies]
 futures-util.workspace = true
-global-hotkey.workspace = true
 zbus.workspace = true

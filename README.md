@@ -127,7 +127,7 @@ select = "ppocrv6-small-int8-r1"
 path = "/home/user/.local/share/kocr/models/ppocrv6-small-int8-r1"
 ```
 
-Supported modifiers: `Mod`, `Ctrl`, `Alt`, `Shift`.  
+Supported modifiers: `Mod`, `Super`, `Ctrl`, `Alt`, `Shift`. The UI records shortcuts directly and displays macOS `Opt` / `Cmd` names.  
 Key examples: `A-Z`, `0-9`, `F1-F35`, `Escape`, `Space`, `Slash`.  
 Set a shortcut to an empty string to disable it.
 
