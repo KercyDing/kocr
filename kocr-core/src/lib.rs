@@ -7,5 +7,6 @@ pub mod capture;
 pub mod error;
 pub mod models;
 pub mod ocr;
+pub mod platform;
 
 pub use error::AppError;

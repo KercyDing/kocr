@@ -8,6 +8,7 @@ description = "OCR, model, and capture logic for kocr"
 [dependencies]
 clap.workspace = true
 comfy-table.workspace = true
+dirs.workspace = true
 kocr-config.workspace = true
 rusto-rs.workspace = true
 serde.workspace = true

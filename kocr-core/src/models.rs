@@ -14,6 +14,7 @@ use kocr_config::{Config as ModelConfig, InstalledModel, ModelsConfig, ShortcutC
 use thiserror::Error;
 
 use crate::config::{ModelIndex, ModelProfile, profiles};
+use crate::platform;
 
 pub use install::run as install;
 pub use list::run as list;
@@ -21,7 +22,6 @@ pub use uninstall::run as uninstall;
 pub use r#use::run as use_model;
 
 const MODEL_DIR: &str = "kocr/models";
-const LEGACY_MODEL_DIR: &str = "kdeocr/models";
 
 impl From<kocr_config::ConfigError> for ModelError {
     fn from(error: kocr_config::ConfigError) -> Self {
@@ -243,11 +243,10 @@ pub fn edit_config() -> Result<(), ModelError> {
     let editor = env::var_os("VISUAL")
         .filter(|value| !value.is_empty())
         .or_else(|| env::var_os("EDITOR").filter(|value| !value.is_empty()))
-        .map(PathBuf::from)
-        .or_else(|| find_command("xdg-open"))
-        .ok_or_else(|| {
-            ModelError::Operation("no text editor found; set VISUAL or EDITOR and retry".to_owned())
-        })?;
+        .map(PathBuf::from);
+    let Some(editor) = editor else {
+        return platform::open_file(&path).map_err(ModelError::Operation);
+    };
     let status = Command::new(&editor).arg(&path).status().map_err(|error| {
         ModelError::Operation(format!(
             "could not start editor {}: {error}",
@@ -282,43 +281,7 @@ pub(crate) fn validate_index(index: &ModelIndex) -> Result<(), ModelError> {
 }
 
 fn model_root() -> PathBuf {
-    let base = data_home();
-    let root = base.join(MODEL_DIR);
-    migrate_path(&base.join(LEGACY_MODEL_DIR), &root, true);
-    root
-}
-
-fn home_dir() -> PathBuf {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-}
-
-fn data_home() -> PathBuf {
-    env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home_dir().join(".local/share"))
-}
-
-fn migrate_path(legacy: &Path, current: &Path, is_dir: bool) {
-    if current.exists() {
-        return;
-    }
-    let exists = if is_dir {
-        legacy.is_dir()
-    } else {
-        legacy.is_file()
-    };
-    if !exists {
-        return;
-    }
-    let Some(parent) = current.parent() else {
-        return;
-    };
-    if fs::create_dir_all(parent).is_err() {
-        return;
-    }
-    let _ = fs::rename(legacy, current);
+    platform::data_home().join(MODEL_DIR)
 }
 
 pub(crate) fn default_model_path(name: &str) -> PathBuf {
@@ -335,13 +298,6 @@ fn configured_path(config: &ModelConfig, name: &str) -> Option<PathBuf> {
 
 fn has_manifest(path: &Path) -> bool {
     path.is_absolute() && path.join("manifest.toml").is_file()
-}
-
-fn find_command(name: &str) -> Option<PathBuf> {
-    let path = env::var_os("PATH")?;
-    env::split_paths(&path)
-        .map(|directory| directory.join(name))
-        .find(|candidate| candidate.is_file())
 }
 
 fn non_empty(value: Option<String>) -> Option<String> {

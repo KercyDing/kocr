@@ -1,7 +1,6 @@
 //! Configuration file shared by the kocr daemon and the settings UI.
 
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -13,7 +12,6 @@ pub mod shortcut;
 pub use shortcut::{Key, Modifiers, Shortcut, ShortcutError, parse_shortcut};
 
 const CONFIG_FILE: &str = "kocr/config.toml";
-const LEGACY_CONFIG_FILE: &str = "kdeocr/config.toml";
 const DEFAULT_COPY_SHORTCUT: &str = "Alt+1";
 const DEFAULT_OCR_SHORTCUT: &str = "Alt+2";
 const DEFAULT_ONELINE_SHORTCUT: &str = "Alt+3";
@@ -140,35 +138,11 @@ impl Config {
 }
 
 pub fn config_path() -> PathBuf {
-    let base = config_home();
-    let path = base.join(CONFIG_FILE);
-    migrate(&base.join(LEGACY_CONFIG_FILE), &path);
-    path
+    config_home().join(CONFIG_FILE)
 }
 
 fn config_home() -> PathBuf {
-    env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home_dir().join(".config"))
-}
-
-fn home_dir() -> PathBuf {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-}
-
-fn migrate(legacy: &Path, current: &Path) {
-    if current.exists() || !legacy.is_file() {
-        return;
-    }
-    let Some(parent) = current.parent() else {
-        return;
-    };
-    if fs::create_dir_all(parent).is_err() {
-        return;
-    }
-    let _ = fs::rename(legacy, current);
+    dirs::config_dir().unwrap_or_else(|| PathBuf::from(".").join(".config"))
 }
 
 #[cfg(test)]

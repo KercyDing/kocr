@@ -1,11 +1,12 @@
 use std::env;
 use std::path::PathBuf;
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use kocr_core::models;
 use kocr_core::ocr;
+use kocr_core::platform;
 use kocr_core::{AppError, capture};
 
 const EXIT_OK: u8 = 0;
@@ -157,7 +158,7 @@ fn run_status() -> Result<(), AppError> {
     let shortcuts = config.shortcut.clone();
 
     println!("config     {}", config_path.display());
-    println!("daemon     {}", daemon_state());
+    println!("daemon     {}", platform::daemon_state());
     println!(
         "model      {}",
         config.models.select.as_deref().unwrap_or("none")
@@ -186,31 +187,13 @@ fn shortcut_state(shortcut: Option<&str>) -> &str {
     }
 }
 
-fn daemon_state() -> String {
-    match Command::new("systemctl")
-        .args(["--user", "is-active", "kocr.service"])
-        .output()
-    {
-        Ok(output) => {
-            let state = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            if state.is_empty() {
-                "unknown".to_owned()
-            } else {
-                state
-            }
-        }
-        Err(_) => "unknown".to_owned(),
-    }
-}
-
 fn run_doctor() -> Result<(), AppError> {
-    let checks = [
-        command_check("spectacle"),
-        command_check("wl-copy"),
-        command_check("notify-send"),
-        command_check("curl"),
-        engine_check(),
-    ];
+    let mut checks = Vec::new();
+    for &dependency in platform::dependencies() {
+        checks.push(command_check(dependency));
+    }
+    checks.push(command_check("curl"));
+    checks.push(engine_check());
 
     for check in &checks {
         let state = if check.ok { "ok" } else { "missing" };
@@ -233,7 +216,7 @@ struct Check {
 }
 
 fn command_check(name: &'static str) -> Check {
-    match capture::find_command(name) {
+    match platform::find_command(name) {
         Some(path) => Check {
             name,
             ok: true,

@@ -15,6 +15,7 @@ kocr-core = { path = "kocr-core" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"
+dirs = "7"
 futures-util = "0.3"
 global-hotkey = "0.9"
 rusto-rs = { version = "0.3.2", default-features = false }

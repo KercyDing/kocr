@@ -1,9 +1,9 @@
-use std::env;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use comfy_table::{Cell, Color, Table, presets::UTF8_BORDERS_ONLY};
 
 use super::{ModelError, load_index, model_path, selected_profile, sync_config};
+use crate::platform;
 
 pub fn run() -> Result<(), ModelError> {
     sync_config()?;
@@ -44,7 +44,7 @@ pub fn run() -> Result<(), ModelError> {
 }
 
 fn display_path(path: &Path) -> String {
-    let Some(home) = env::var_os("HOME").map(PathBuf::from) else {
+    let Some(home) = platform::home_dir() else {
         return path.display().to_string();
     };
     match path.strip_prefix(home) {

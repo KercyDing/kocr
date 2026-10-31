@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
@@ -10,6 +10,7 @@ use super::{
     ModelError, default_model_path, load_index, model_path, record_install, resolve_profile,
     sync_config,
 };
+use crate::platform;
 
 pub fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
     sync_config()?;
@@ -44,7 +45,7 @@ pub fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
         ModelError::Operation(format!("could not create temporary directory: {error}"))
     })?;
     let archive_path = temporary.path().join("model.zip");
-    let curl = find_command("curl")
+    let curl = platform::find_command("curl")
         .ok_or_else(|| ModelError::Operation("curl not found in PATH".to_owned()))?;
     let status = Command::new(curl)
         .args(["-fL", "--retry", "3", "--progress-bar", "--output"])
@@ -178,15 +179,8 @@ fn write_manifest(package: &Path, name: &str) -> Result<(), ModelError> {
         .map_err(|error| ModelError::Operation(format!("could not write model manifest: {error}")))
 }
 
-fn find_command(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|directory| directory.join(name))
-        .find(|candidate| candidate.is_file())
-}
-
 fn display_path(path: &Path) -> String {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+    let Some(home) = platform::home_dir() else {
         return path.display().to_string();
     };
     match path.strip_prefix(home) {
