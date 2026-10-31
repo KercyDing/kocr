@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Show or update the package version in Cargo.toml."""
+"""Show or update the workspace version in Cargo.toml."""
 
 from __future__ import annotations
 
@@ -17,63 +17,39 @@ SEMVER = re.compile(
 )
 
 
-def package_version(source: str, section_start: str, section_end: str, name: str) -> str:
-    sections = re.findall(
-        rf"(?ms)^{re.escape(section_start)}\n(.*?)(?=^{re.escape(section_end)}|\Z)", source
-    )
-    matches = []
-    for section in sections:
-        name_match = re.search(r'^name\s*=\s*"([^"]+)"\s*$', section, re.MULTILINE)
-        version_match = re.search(r'^version\s*=\s*"([^"]+)"\s*$', section, re.MULTILINE)
-        if name_match and name_match.group(1) == name and version_match:
-            matches.append(version_match.group(1))
-    if len(matches) != 1:
-        raise ValueError(f"expected one {name} package version")
-    return matches[0]
-
-
-def replace_package_version(
-    source: str, section_start: str, section_end: str, name: str, version: str
-) -> str:
-    pattern = re.compile(
-        rf"(?ms)^(?P<header>{re.escape(section_start)})\n"
-        rf"(?P<section>.*?)(?=^{re.escape(section_end)}|\Z)"
-    )
-    updated = 0
-
-    def replace_section(match: re.Match[str]) -> str:
-        nonlocal updated
-        section = match.group("section")
-        name_match = re.search(r'^name\s*=\s*"([^"]+)"\s*$', section, re.MULTILINE)
-        if not name_match or name_match.group(1) != name:
-            return match.group(0)
-        section, count = re.subn(
-            r'^version\s*=\s*"[^"]+"\s*$',
-            f'version = "{version}"',
-            section,
-            count=1,
-            flags=re.MULTILINE,
-        )
-        if count != 1:
-            raise ValueError(f"{name} package is missing a version")
-        updated += 1
-        return f"{match.group('header')}\n{section}"
-
-    result = pattern.sub(replace_section, source)
-    if updated != 1:
-        raise ValueError(f"expected one {name} package version")
-    return result
+WORKSPACE_SECTION = re.compile(r"(?ms)^\[workspace\.package\]\n(.*?)(?=^\[|\Z)")
 
 
 def read_version() -> str:
-    cargo_toml = CARGO_TOML.read_text(encoding="utf-8")
-    return package_version(cargo_toml, "[package]", "[", "kocr")
+    source = CARGO_TOML.read_text(encoding="utf-8")
+    section = WORKSPACE_SECTION.search(source)
+    if section is None:
+        raise ValueError("missing [workspace.package] section")
+    version = re.search(r'^version\s*=\s*"([^"]+)"', section.group(1), re.MULTILINE)
+    if version is None:
+        raise ValueError("missing [workspace.package] version")
+    return version.group(1)
 
 
 def write_version(version: str) -> None:
-    cargo_toml = CARGO_TOML.read_text(encoding="utf-8")
-    updated_toml = replace_package_version(cargo_toml, "[package]", "[", "kocr", version)
-    CARGO_TOML.write_text(updated_toml, encoding="utf-8")
+    source = CARGO_TOML.read_text(encoding="utf-8")
+
+    def replace(match: re.Match[str]) -> str:
+        section, updated = re.subn(
+            r'^version\s*=\s*"[^"]*"',
+            f'version = "{version}"',
+            match.group(1),
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if updated != 1:
+            raise ValueError("expected one [workspace.package] version")
+        return f"[workspace.package]\n{section}"
+
+    updated, count = WORKSPACE_SECTION.subn(replace, source)
+    if count != 1:
+        raise ValueError("expected one [workspace.package] section")
+    CARGO_TOML.write_text(updated, encoding="utf-8")
 
 
 def main() -> None:

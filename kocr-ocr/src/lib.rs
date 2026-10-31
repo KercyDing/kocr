@@ -2,7 +2,6 @@ mod model;
 
 use std::path::{Path, PathBuf};
 
-use clap::Args;
 use rusto::{
     DetectTextResult, ImageSource, InitializeConfig, OcrRunOptions, OptimizationOptions,
     OutputGranularity, RustO, TextRecognizer,
@@ -23,17 +22,6 @@ const CROP_PADDING_X: f32 = 0.06;
 const CROP_PADDING_Y: f32 = 0.05;
 const TEXT_SCORE: f32 = 0.1;
 
-#[derive(Debug, Args)]
-pub(crate) struct ImageArgs {
-    /// Input image path
-    #[arg(value_name = "PNG")]
-    pub(crate) image: PathBuf,
-
-    /// Merge recognized lines into a single line
-    #[arg(long)]
-    pub(crate) oneline: bool,
-}
-
 #[derive(Debug, Error)]
 pub enum OcrError {
     #[error("model is not installed: {0}")]
@@ -53,12 +41,6 @@ pub enum OcrError {
 
     #[error("OCR engine error: {0}")]
     Engine(#[from] rusto::EngineError),
-}
-
-pub fn run(image_path: PathBuf, oneline: bool) -> Result<(), OcrError> {
-    let text = recognize(image_path, oneline)?;
-    println!("{text}");
-    Ok(())
 }
 
 pub fn recognize(image_path: PathBuf, oneline: bool) -> Result<String, OcrError> {
@@ -84,17 +66,17 @@ pub fn recognize(image_path: PathBuf, oneline: bool) -> Result<String, OcrError>
     Ok(join_lines(&lines, oneline))
 }
 
-pub(crate) fn check() -> Result<String, OcrError> {
+pub fn check() -> Result<String, OcrError> {
     let (profile, model_dir, model) = selected_model()?;
     RustO::initialize(engine_config(&model))?;
     Ok(format!("rten, {profile} ({})", model_dir.display()))
 }
 
 fn selected_model() -> Result<(String, PathBuf, Model), OcrError> {
-    crate::models::sync_config().map_err(|error| OcrError::ModelSelection(error.to_string()))?;
-    let profile = crate::models::selected_profile()
+    kocr_model::sync_config().map_err(|error| OcrError::ModelSelection(error.to_string()))?;
+    let profile = kocr_model::selected_profile()
         .map_err(|error| OcrError::ModelSelection(error.to_string()))?;
-    let model_dir = crate::models::model_path(&profile)
+    let model_dir = kocr_model::model_path(&profile)
         .map_err(|error| OcrError::ModelSelection(error.to_string()))?;
     if !model_dir.is_dir() {
         return Err(OcrError::ModelNotInstalled(model_dir));

@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: check-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -15,9 +16,38 @@ permissions:
 
 jobs:
   check:
-    name: Rust
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    name: Check ${{ matrix.name }}
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            name: Linux Qt
+            key: linux-qt
+            deps: true
+            fmt: true
+          - platform: macos-15
+            name: macOS ARM64
+            key: macos-arm64
+            deps: false
+            fmt: false
+          - platform: macos-15-intel
+            name: macOS x64
+            key: macos-x64
+            deps: false
+            fmt: false
+          - platform: windows-latest
+            name: Windows x64
+            key: windows-x64
+            deps: false
+            fmt: false
+          - platform: windows-11-arm
+            name: Windows ARM64
+            key: windows-arm64
+            deps: false
+            fmt: false
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -27,14 +57,61 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install GUI dependencies
+        if: matrix.deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev
+
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
+        with:
+          key: check-${{ matrix.key }}
 
       - name: Check formatting
+        if: matrix.fmt
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run tests
-        run: cargo test --all-targets --workspace
+        run: cargo test --workspace --all-targets
+
+  check-gtk:
+    name: Check ${{ matrix.name }}
+    runs-on: ${{ matrix.platform }}
+    container: rust:trixie
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-24.04
+            name: Linux x64 GTK
+          - platform: ubuntu-24.04-arm
+            name: Linux ARM64 GTK
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install GTK
+        run: |
+          apt-get update
+          apt-get install -y libgtk-4-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          key: check-gtk-${{ matrix.platform }}
+
+      - name: Run Clippy (GTK GUI)
+        run: cargo clippy -p kocr-gui --all-targets --no-default-features --features gtk -- -D warnings
+
+      - name: Run tests (GTK GUI)
+        run: cargo test -p kocr-gui --all-targets --no-default-features --features gtk

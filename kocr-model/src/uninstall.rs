@@ -5,7 +5,7 @@ use super::{
     selected_profile, sync_config, write_config,
 };
 
-pub(crate) fn run(selector: &str) -> Result<(), ModelError> {
+pub fn run(selector: &str) -> Result<String, ModelError> {
     sync_config()?;
     let index = load_index()?;
     let (name, profile) = resolve_profile(&index, selector)?;
@@ -40,6 +40,5 @@ pub(crate) fn run(selector: &str) -> Result<(), ModelError> {
             write_config(next)?;
         }
     }
-    println!("Uninstalled {name}");
-    Ok(())
+    Ok(name.to_owned())
 }

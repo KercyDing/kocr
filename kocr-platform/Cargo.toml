@@ -1,0 +1,10 @@
+[package]
+name = "kocr-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform integration for kocr"
+
+[dependencies]
+dirs.workspace = true
+thiserror.workspace = true

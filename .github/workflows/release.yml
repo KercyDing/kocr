@@ -28,11 +28,19 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
       tag: ${{ steps.tag.outputs.tag }}
+      linux_qt: ${{ steps.matrix.outputs.linux_qt }}
+      linux_gtk: ${{ steps.matrix.outputs.linux_gtk }}
+      macos_cli: ${{ steps.matrix.outputs.macos_cli }}
+      windows_cli: ${{ steps.matrix.outputs.windows_cli }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Load build matrix
+        id: matrix
+        run: python3 scripts/ci/matrix.py >> "$GITHUB_OUTPUT"
 
       - name: Resolve release tag
         id: tag
@@ -129,7 +137,7 @@ jobs:
 
           version="${tag#v}"
           package_version="$(cargo metadata --no-deps --format-version 1 \
-            | jq -r '.packages[] | select(.name == "kocr") | .version')"
+            | jq -r '.packages[] | select(.name == "kocr-cli") | .version')"
           if [[ "$version" != "$package_version" ]]; then
             echo "Tag version $version does not match Cargo version $package_version" >&2
             exit 1
@@ -143,66 +151,222 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build ${{ matrix.label }}
+    name: Build ${{ matrix.name }}
     needs: validate-tag
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.platform }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - label: Linux x86_64
-            runner: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-          - label: Linux ARM64
-            runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
+      matrix: ${{ fromJSON(needs.validate-tag.outputs.linux_qt) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate-tag.outputs.tag }}
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          targets: ${{ matrix.target }}
+          target: ${{ matrix.target }}
+          cache-key: qt-${{ matrix.asset_key }}
 
-      - name: Cache Rust build
-        uses: swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-
-      - name: Build release binary
-        env:
-          TARGET: ${{ matrix.target }}
-        run: cargo build --release --locked --target "$TARGET"
-
-      - name: Package release
-        env:
-          VERSION: ${{ needs.validate-tag.outputs.version }}
-          TARGET: ${{ matrix.target }}
+      - name: Install GUI dependencies
         run: |
-          set -euo pipefail
-          package="kocr-${VERSION}-${TARGET}"
-          mkdir -p "dist/${package}"
-          install -m 0755 "target/${TARGET}/release/kocr" "dist/${package}/kocr"
-          install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${package}/"
-          tar -C dist -czf "dist/${package}.tar.gz" "$package"
-          sha256sum "dist/${package}.tar.gz" > "dist/${package}.tar.gz.sha256"
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev rpm
+
+      - name: Build release
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --locked --target "$TARGET" -p kocr-cli -p kocr-gui -p kocr-daemon
+
+      - name: Package CLI
+        uses: ./.github/actions/package-linux
+        with:
+          package: kocr-cli
+          version: ${{ needs.validate-tag.outputs.version }}
+          target: ${{ matrix.target }}
+          backend: cli
+          bin-dir: target/${{ matrix.target }}/release
+          suffix: ${{ matrix.suffix }}
+          deb-arch: ${{ matrix.deb_arch }}
+          rpm-arch: ${{ matrix.rpm_arch }}
+
+      - name: Package Qt
+        uses: ./.github/actions/package-linux
+        with:
+          package: kocr-gui-qt
+          version: ${{ needs.validate-tag.outputs.version }}
+          target: ${{ matrix.target }}
+          backend: qt
+          bin-dir: target/${{ matrix.target }}/release
+          suffix: ${{ matrix.suffix }}
+          deb-arch: ${{ matrix.deb_arch }}
+          rpm-arch: ${{ matrix.rpm_arch }}
+
+      - name: Package CLI tar
+        uses: ./.github/actions/package-cli-tar
+        with:
+          version: ${{ needs.validate-tag.outputs.version }}
+          target: ${{ matrix.target }}
+          bin-dir: target/${{ matrix.target }}/release
 
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.target }}
+          name: release-${{ matrix.asset_key }}
           path: |
-            dist/kocr-${{ needs.validate-tag.outputs.version }}-${{ matrix.target }}.tar.gz
-            dist/kocr-${{ needs.validate-tag.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+          if-no-files-found: error
+
+  build-gtk:
+    name: Build ${{ matrix.name }}
+    needs: validate-tag
+    runs-on: ${{ matrix.platform }}
+    container: rust:trixie
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate-tag.outputs.linux_gtk) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-tag.outputs.tag }}
+
+      - name: Install GTK
+        run: |
+          apt-get update
+          apt-get install -y libgtk-4-dev pkg-config rpm
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+          cache-key: gtk-${{ matrix.asset_key }}
+
+      - name: Build GTK release
+        run: |
+          cargo build --release --locked -p kocr-daemon
+          cargo build --release --locked -p kocr-gui --no-default-features --features gtk
+
+      - name: Package GTK
+        uses: ./.github/actions/package-linux
+        with:
+          package: kocr-gui-gtk
+          version: ${{ needs.validate-tag.outputs.version }}
+          target: ${{ matrix.target }}
+          backend: gtk
+          bin-dir: target/release
+          suffix: ${{ matrix.suffix }}
+          deb-arch: ${{ matrix.deb_arch }}
+          rpm-arch: ${{ matrix.rpm_arch }}
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset_key }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: error
+
+  build-macos-cli:
+    name: Build ${{ matrix.name }}
+    needs: validate-tag
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate-tag.outputs.macos_cli) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-tag.outputs.tag }}
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+          cache-key: cli-${{ matrix.asset_key }}
+
+      - name: Build CLI
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --locked -p kocr-cli --target "$TARGET"
+
+      - name: Package CLI tar
+        uses: ./.github/actions/package-cli-tar
+        with:
+          version: ${{ needs.validate-tag.outputs.version }}
+          target: ${{ matrix.target }}
+          bin-dir: target/${{ matrix.target }}/release
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset_key }}
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+          if-no-files-found: error
+
+  build-windows-cli:
+    name: Build ${{ matrix.name }}
+    needs: validate-tag
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate-tag.outputs.windows_cli) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-tag.outputs.tag }}
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+          cache-key: cli-${{ matrix.asset_key }}
+
+      - name: Build CLI
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --locked -p kocr-cli --target "$env:TARGET"
+
+      - name: Package CLI
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $package = "kocr-$env:VERSION-$env:TARGET"
+          New-Item -ItemType Directory -Force -Path "dist/$package" | Out-Null
+          Copy-Item "target/$env:TARGET/release/kocr.exe" "dist/$package/kocr.exe"
+          Copy-Item LICENSE, LICENSE-PaddleOCR, NOTICE "dist/$package/"
+          Compress-Archive -Path "dist/$package/*" -DestinationPath "dist/$package.zip" -Force
+          $hash = (Get-FileHash "dist/$package.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $package.zip" | Set-Content "dist/$package.zip.sha256"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset_key }}
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
           if-no-files-found: error
 
   release:
     name: Publish release
-    needs: [validate-tag, build]
+    needs: [validate-tag, build, build-gtk, build-macos-cli, build-windows-cli]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -223,6 +387,37 @@ jobs:
           draft: false
           prerelease: ${{ needs.validate-tag.outputs.prerelease }}
           generate_release_notes: true
+          body: |
+            ## Installation
+
+            | Package | x86_64 | ARM64 |
+            | --- | --- | --- |
+            | CLI | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-cli-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+            | GUI (Qt) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-qt-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+            | GUI (GTK) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-amd64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-amd64.rpm) | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-arm64.deb) / [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-gui-gtk-${{ needs.validate-tag.outputs.version }}-linux-arm64.rpm) |
+            | CLI macOS | [Intel](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-x86_64-apple-darwin.tar.gz) | [Apple Silicon](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-aarch64-apple-darwin.tar.gz) |
+            | CLI Windows | [x86_64](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-x86_64-pc-windows-msvc.zip) | [ARM64](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate-tag.outputs.tag }}/kocr-${{ needs.validate-tag.outputs.version }}-aarch64-pc-windows-msvc.zip) |
+
+            Arch Linux:
+
+            ```sh
+            paru -S kocr-bin        # CLI
+            paru -S kocr-qt-bin     # GUI, Qt
+            paru -S kocr-gtk-bin    # GUI, GTK
+            ```
+
+            GUI packages do not include the CLI. Open KOCR Settings to install a model and enable shortcuts.
           files: |
+            dist/*.deb
+            dist/*.rpm
             dist/*.tar.gz
-            dist/*.tar.gz.sha256
+            dist/*.zip
+            dist/*.sha256
+
+  publish-aur:
+    name: Publish AUR
+    needs: [validate-tag, release]
+    uses: ./.github/workflows/aur.yml
+    with:
+      tag: ${{ needs.validate-tag.outputs.tag }}
+    secrets: inherit

@@ -1,0 +1,53 @@
+name: Package Linux
+description: Build deb and rpm packages with the shared Linux packaging script.
+
+inputs:
+  package:
+    description: "Package name, for example kocr-cli or kocr-gui-qt"
+    required: true
+  version:
+    description: Package version
+    required: true
+  target:
+    description: Rust target triple
+    required: true
+  backend:
+    description: "Packaging backend: cli, qt, or gtk"
+    required: true
+  bin-dir:
+    description: Directory containing the release binaries
+    required: true
+  suffix:
+    description: Release asset architecture suffix
+    required: true
+  deb-arch:
+    description: Debian architecture
+    required: true
+  rpm-arch:
+    description: RPM architecture
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build deb and rpm
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+        VERSION: ${{ inputs.version }}
+        TARGET: ${{ inputs.target }}
+        BACKEND: ${{ inputs.backend }}
+        BIN_DIR: ${{ inputs.bin-dir }}
+        SUFFIX: ${{ inputs.suffix }}
+        DEB_ARCH: ${{ inputs.deb-arch }}
+        RPM_ARCH: ${{ inputs.rpm-arch }}
+      run: |
+        set -euo pipefail
+        mkdir -p dist
+        packaging/linux/package.sh deb "$PACKAGE" "$VERSION" "$TARGET" "$BACKEND" "$BIN_DIR" dist
+        packaging/linux/package.sh rpm "$PACKAGE" "$VERSION" "$TARGET" "$BACKEND" "$BIN_DIR" dist
+
+        mv "dist/${PACKAGE}_${VERSION}_${DEB_ARCH}.deb" \
+          "dist/${PACKAGE}-${VERSION}-linux-${SUFFIX}.deb"
+        mv "dist/${PACKAGE}-${VERSION}-1.${RPM_ARCH}.rpm" \
+          "dist/${PACKAGE}-${VERSION}-linux-${SUFFIX}.rpm"

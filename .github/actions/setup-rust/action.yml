@@ -1,0 +1,23 @@
+name: Setup Rust
+description: Install the Rust target and restore the cargo cache.
+
+inputs:
+  target:
+    description: Rust target triple
+    required: true
+  cache-key:
+    description: Cache key suffix
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ inputs.target }}
+
+    - name: Cache Rust build
+      uses: swatinem/rust-cache@v2
+      with:
+        key: ${{ inputs.cache-key }}

@@ -1,0 +1,95 @@
+name: Publish AUR
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.3.3)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.3.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.pkgbase }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkgbase: kocr-bin
+            asset_prefix: kocr-cli
+            kind: cli
+          - pkgbase: kocr-qt-bin
+            asset_prefix: kocr-gui-qt
+            kind: qt
+          - pkgbase: kocr-gtk-bin
+            asset_prefix: kocr-gui-gtk
+            kind: gtk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name || github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+          ASSET_PREFIX: ${{ matrix.asset_prefix }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${TAG}" || "${TAG}" != v* ]]; then
+            echo "Tag must start with 'v' (got: ${TAG})" >&2
+            exit 1
+          fi
+          version="${TAG#v}"
+          asset="${ASSET_PREFIX}-${version}-linux-amd64.deb"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "asset=${asset}" >> "$GITHUB_OUTPUT"
+          echo "url=https://github.com/${REPO}/releases/download/${TAG}/${asset}" >> "$GITHUB_OUTPUT"
+
+      - name: Download package
+        id: download
+        shell: bash
+        env:
+          ASSET: ${{ steps.meta.outputs.asset }}
+          URL: ${{ steps.meta.outputs.url }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          curl -fL --retry 5 --retry-all-errors -o "dist/${ASSET}" "${URL}"
+          sha=$(sha256sum "dist/${ASSET}" | awk '{print $1}')
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup AUR SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -i ~/.ssh/aur -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
+
+      - name: Update AUR package
+        shell: bash
+        env:
+          PKGBASE: ${{ matrix.pkgbase }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          ASSET: ${{ steps.meta.outputs.asset }}
+          URL: ${{ steps.meta.outputs.url }}
+          SHA: ${{ steps.download.outputs.sha }}
+          KIND: ${{ matrix.kind }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          packaging/aur/update.sh "${PKGBASE}" "${VERSION}" "${ASSET}" "${URL}" "${SHA}" "${KIND}" "${REPO}"

@@ -1,0 +1,32 @@
+[package]
+name = "kocr-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Settings window for kocr"
+autobins = false
+
+[[bin]]
+name = "kocr-gui"
+path = "src/main.rs"
+
+[features]
+default = ["qt"]
+qt = ["winio/qt"]
+gtk = ["winio/gtk"]
+
+[dependencies]
+kocr-config.workspace = true
+kocr-model.workspace = true
+kocr-platform.workspace = true
+
+anyhow.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+winio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winio = { workspace = true, features = ["win32"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+winio = { workspace = true, features = ["app-kit"] }
