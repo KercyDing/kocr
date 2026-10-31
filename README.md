@@ -41,31 +41,37 @@ irm https://raw.githubusercontent.com/KercyDing/kocr/main/cli.ps1 -OutFile cli.p
 
 Use `.\cli.ps1 uninstall` to remove it.
 
-The CLI package installs `kocr` only. It does not install the daemon, GUI, or desktop packages. Install a model with `kocr install 1`. No ONNX Runtime required.
+The CLI package installs `kocr` only. It does not install the GUI or desktop packages. Install a model with `kocr install 1`. No ONNX Runtime required.
 
 ### GUI
 
 Debian/Ubuntu:
 
 ```bash
-sudo apt install ./kocr-gui-qt-<version>-linux-<arch>.deb
+sudo apt install ./kocr-gui-<version>-linux-<arch>.deb
 ```
 
 Fedora/RHEL:
 
 ```bash
-sudo dnf install ./kocr-gui-qt-<version>-linux-<arch>.rpm
+sudo dnf install ./kocr-gui-<version>-linux-<arch>.rpm
 ```
 
 Arch Linux:
 
 ```bash
-paru -S kocr-qt-bin
+paru -S kocr-gui-bin
 ```
 
-Use `kocr-gui-gtk` / `kocr-gtk-bin` instead on GTK-based desktops. The GUI package installs `kocr-gui`, `kocr-daemon`, and a KOCR Settings menu entry, without the CLI. Open KOCR Settings to install a model and enable shortcuts.
+The GUI package installs `kocr-gui` and a KOCR menu entry, without the CLI. Open KOCR to capture, install a model, and manage shortcuts.
 
-The GTK package requires GTK 4.16 or newer, so it targets recent distributions such as Debian 13, Ubuntu 25.04, Fedora 42, and Arch. Use the Qt package on older systems.
+macOS:
+
+Download `kocr-gui-<version>-<arch>-apple-darwin.zip`, unzip it, and open `kocr.app`.
+
+Windows:
+
+Download `kocr-gui-<version>-<arch>-pc-windows-msvc.zip` and run `kocr-gui.exe`. The app runs from the system tray.
 
 ## Usage
 
@@ -83,7 +89,7 @@ kocr install 1                 # Install by ID or name
 kocr install 1 -p <DIRECTORY>  # parent directory for the model
 kocr use 1                     # Set active model
 kocr uninstall 1               # Remove a model
-kocr-gui                       # Manage models, shortcuts, and the daemon
+kocr-gui                       # Capture, models, and shortcuts
 ```
 
 `--path` (`-p`) sets the parent directory; kocr appends the model name and stores the absolute path in `config.toml`. The default is `$XDG_DATA_HOME/kocr/models`.
@@ -92,7 +98,7 @@ Models are INT8-quantized RTen packages, available in small, medium, and tiny ti
 
 ## Keyboard Shortcuts
 
-Enable shortcuts in KOCR Settings. The daemon provides three default shortcuts:
+Open KOCR and use the Shortcuts page. The app provides three default shortcuts:
 
 | Shortcut | Action |
 |----------|--------|
@@ -100,7 +106,7 @@ Enable shortcuts in KOCR Settings. The daemon provides three default shortcuts:
 | `Alt+2`  | Capture, OCR, and copy text |
 | `Alt+3`  | Capture, OCR, merge into one line, and copy text |
 
-Change shortcuts with `kocr-gui`. The daemon reloads the configuration automatically on save.
+Change shortcuts in the KOCR Shortcuts page. Shortcut changes take effect after saving.
 
 ## Configuration
 

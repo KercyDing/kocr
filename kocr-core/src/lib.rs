@@ -1,4 +1,4 @@
-//! Capture and OCR orchestration shared by the CLI and the shortcut daemon.
+//! Capture and OCR orchestration shared by the CLI and desktop app.
 
 pub mod capture;
 pub mod error;

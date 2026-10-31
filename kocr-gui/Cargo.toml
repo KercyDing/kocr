@@ -3,30 +3,23 @@ name = "kocr-gui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Settings window for kocr"
+description = "Desktop app for kocr"
 autobins = false
 
 [[bin]]
 name = "kocr-gui"
 path = "src/main.rs"
 
-[features]
-default = ["qt"]
-qt = ["winio/qt"]
-gtk = ["winio/gtk"]
-
 [dependencies]
+eframe.workspace = true
 kocr-config.workspace = true
+kocr-core.workspace = true
 kocr-model.workspace = true
-kocr-platform.workspace = true
-
-anyhow.workspace = true
+kocr-shortcuts.workspace = true
+image = { version = "0.25", default-features = false, features = ["png"] }
+tray-icon = { version = "0.24", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-winio.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-winio = { workspace = true, features = ["win32"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-winio = { workspace = true, features = ["app-kit"] }
+gtk = "0.18"
+tray-icon = { version = "0.24", default-features = false, features = ["gtk"] }
+winit = { version = "0.30", default-features = false, features = ["x11"] }

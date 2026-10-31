@@ -1,4 +1,4 @@
-//! Configuration file shared by the kocr daemon and the settings UI.
+//! Configuration file shared by the kocr frontends.
 
 use std::collections::BTreeMap;
 use std::fs;

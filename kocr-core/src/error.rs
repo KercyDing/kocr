@@ -29,9 +29,7 @@ impl From<PlatformError> for AppError {
     fn from(error: PlatformError) -> Self {
         match error {
             PlatformError::MissingDependency(message) => Self::MissingDependency(message),
-            PlatformError::Output(message) | PlatformError::Operation(message) => {
-                Self::Output(message)
-            }
+            PlatformError::Output(message) => Self::Output(message),
         }
     }
 }

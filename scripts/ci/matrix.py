@@ -1,12 +1,29 @@
 #!/usr/bin/env python3
 
-"""Emit per-kind GitHub Actions matrices for release builds."""
+"""Emit per-OS GitHub Actions matrices from declarative build dimensions."""
 
 from __future__ import annotations
 
 import json
 import sys
 from dataclasses import asdict, dataclass
+from itertools import product
+
+
+@dataclass(frozen=True)
+class Arch:
+    name: str
+    suffix: str
+    deb_arch: str | None = None
+    rpm_arch: str | None = None
+
+
+@dataclass(frozen=True)
+class Os:
+    name: str
+    label: str
+    runners: dict[str, str]
+    targets: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -17,86 +34,71 @@ class Platform:
     target: str
     suffix: str
     asset_key: str
+    components: tuple[str, ...]
     deb_arch: str | None = None
     rpm_arch: str | None = None
 
 
-KINDS = ("linux-qt", "linux-gtk", "macos-cli", "windows-cli")
+COMPONENTS = ("cli", "gui")
 
-PLATFORMS = (
-    Platform(
-        platform="ubuntu-22.04",
-        name="Linux x86_64 Qt",
-        kind="linux-qt",
-        target="x86_64-unknown-linux-gnu",
-        suffix="amd64",
-        asset_key="linux-x64-qt",
-        deb_arch="amd64",
-        rpm_arch="x86_64",
+ARCHES = (
+    Arch("x64", "amd64", "amd64", "x86_64"),
+    Arch("arm64", "arm64", "arm64", "aarch64"),
+)
+
+OPERATING_SYSTEMS = (
+    Os(
+        "linux",
+        "Linux",
+        {"x64": "ubuntu-22.04", "arm64": "ubuntu-24.04-arm"},
+        {
+            "x64": "x86_64-unknown-linux-gnu",
+            "arm64": "aarch64-unknown-linux-gnu",
+        },
     ),
-    Platform(
-        platform="ubuntu-24.04-arm",
-        name="Linux ARM64 Qt",
-        kind="linux-qt",
-        target="aarch64-unknown-linux-gnu",
-        suffix="arm64",
-        asset_key="linux-arm64-qt",
-        deb_arch="arm64",
-        rpm_arch="aarch64",
+    Os(
+        "macos",
+        "macOS",
+        {"x64": "macos-15-intel", "arm64": "macos-15"},
+        {
+            "x64": "x86_64-apple-darwin",
+            "arm64": "aarch64-apple-darwin",
+        },
     ),
-    Platform(
-        platform="ubuntu-24.04",
-        name="Linux x86_64 GTK",
-        kind="linux-gtk",
-        target="x86_64-unknown-linux-gnu",
-        suffix="amd64",
-        asset_key="linux-x64-gtk",
-        deb_arch="amd64",
-        rpm_arch="x86_64",
-    ),
-    Platform(
-        platform="ubuntu-24.04-arm",
-        name="Linux ARM64 GTK",
-        kind="linux-gtk",
-        target="aarch64-unknown-linux-gnu",
-        suffix="arm64",
-        asset_key="linux-arm64-gtk",
-        deb_arch="arm64",
-        rpm_arch="aarch64",
-    ),
-    Platform(
-        platform="macos-15",
-        name="macOS ARM64 CLI",
-        kind="macos-cli",
-        target="aarch64-apple-darwin",
-        suffix="arm64",
-        asset_key="macos-arm64-cli",
-    ),
-    Platform(
-        platform="macos-15-intel",
-        name="macOS x64 CLI",
-        kind="macos-cli",
-        target="x86_64-apple-darwin",
-        suffix="x64",
-        asset_key="macos-x64-cli",
-    ),
-    Platform(
-        platform="windows-latest",
-        name="Windows x64 CLI",
-        kind="windows-cli",
-        target="x86_64-pc-windows-msvc",
-        suffix="x64",
-        asset_key="windows-x64-cli",
-    ),
-    Platform(
-        platform="windows-11-arm",
-        name="Windows ARM64 CLI",
-        kind="windows-cli",
-        target="aarch64-pc-windows-msvc",
-        suffix="arm64",
-        asset_key="windows-arm64-cli",
+    Os(
+        "windows",
+        "Windows",
+        {"x64": "windows-latest", "arm64": "windows-11-arm"},
+        {
+            "x64": "x86_64-pc-windows-msvc",
+            "arm64": "aarch64-pc-windows-msvc",
+        },
     ),
 )
+
+KINDS = tuple(os.name for os in OPERATING_SYSTEMS)
+
+
+def build_platforms() -> tuple[Platform, ...]:
+    platforms = []
+    for (os, arch) in product(OPERATING_SYSTEMS, ARCHES):
+        platforms.append(
+            Platform(
+                platform=os.runners[arch.name],
+                name=f"{os.label} {arch.name}",
+                kind=os.name,
+                target=os.targets[arch.name],
+                suffix=arch.suffix,
+                asset_key=f"{os.name}-{arch.name}",
+                components=COMPONENTS,
+                deb_arch=arch.deb_arch if os.name == "linux" else None,
+                rpm_arch=arch.rpm_arch if os.name == "linux" else None,
+            )
+        )
+    return tuple(platforms)
+
+
+PLATFORMS = build_platforms()
 
 
 def fail(message: str) -> None:
@@ -112,7 +114,12 @@ def validate() -> None:
         if entry.asset_key in asset_keys:
             fail(f"duplicate asset_key: {entry.asset_key}")
         asset_keys.add(entry.asset_key)
-        if entry.kind in {"linux-qt", "linux-gtk"} and (
+        if not entry.components:
+            fail(f"no components for {entry.asset_key}")
+        unknown = set(entry.components) - set(COMPONENTS)
+        if unknown:
+            fail(f"unsupported components for {entry.asset_key}: {sorted(unknown)}")
+        if entry.kind == "linux" and (
             entry.deb_arch is None or entry.rpm_arch is None
         ):
             fail(f"missing package architectures for {entry.asset_key}")
@@ -128,7 +135,7 @@ def main() -> None:
         matrix = {
             "include": [
                 {
-                    key: value
+                    key: (list(value) if isinstance(value, tuple) else value)
                     for key, value in asdict(entry).items()
                     if value is not None
                 }

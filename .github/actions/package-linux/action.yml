@@ -3,7 +3,7 @@ description: Build deb and rpm packages with the shared Linux packaging script.
 
 inputs:
   package:
-    description: "Package name, for example kocr-cli or kocr-gui-qt"
+    description: "Package name, for example kocr-cli or kocr-gui"
     required: true
   version:
     description: Package version
