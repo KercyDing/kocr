@@ -1,17 +1,15 @@
 use std::fs::{self, File};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ruzstd::decoding::StreamingDecoder;
-use tar::Archive;
 use tempfile::TempDir;
+use zip::ZipArchive;
 
 use super::{
     ModelError, default_model_path, load_index, model_path, record_install, resolve_profile,
     sync_config,
 };
-
-const MAX_MODEL_WINDOW_SIZE: u64 = 256 * 1024 * 1024;
 
 pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError> {
     sync_config()?;
@@ -43,13 +41,13 @@ pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError>
     let temporary = TempDir::new().map_err(|error| {
         ModelError::Operation(format!("could not create temporary directory: {error}"))
     })?;
-    let archive_path = temporary.path().join("model.tar.zst");
+    let archive_path = temporary.path().join("model.zip");
     let curl = find_command("curl")
         .ok_or_else(|| ModelError::Operation("curl not found in PATH".to_owned()))?;
     let status = Command::new(curl)
         .args(["-fL", "--retry", "3", "--progress-bar", "--output"])
         .arg(&archive_path)
-        .arg(&profile.url)
+        .arg(profile.url)
         .status()
         .map_err(|error| ModelError::Operation(format!("could not start curl: {error}")))?;
     if !status.success() {
@@ -63,55 +61,119 @@ pub(crate) fn run(selector: &str, path: Option<&Path>) -> Result<(), ModelError>
             profile.sha256
         )));
     }
-    let extracted = tempfile::Builder::new()
+    let staging = tempfile::Builder::new()
         .prefix(".kdeocr-extract-")
         .tempdir_in(model_root)
         .map_err(|error| {
             ModelError::Operation(format!("could not create extraction directory: {error}"))
         })?;
-    let file = File::open(&archive_path)
-        .map_err(|error| ModelError::Operation(format!("could not open archive: {error}")))?;
-    let decoder = StreamingDecoder::new_with_max_window_size(file, MAX_MODEL_WINDOW_SIZE)
-        .map_err(|error| ModelError::Operation(format!("could not decode archive: {error}")))?;
-    Archive::new(decoder)
-        .unpack(extracted.path())
-        .map_err(|error| ModelError::Operation(format!("could not extract archive: {error}")))?;
-    let package = single_directory(extracted.path())?;
-    if !package.join("manifest.toml").is_file() {
-        return Err(ModelError::Operation(
-            "archive does not contain a model manifest".to_owned(),
-        ));
-    }
-    fs::rename(package, &destination).map_err(|error| {
+    let package = staging.path().join("model");
+    fs::create_dir(&package).map_err(|error| {
+        ModelError::Operation(format!("could not create extraction directory: {error}"))
+    })?;
+    extract(&archive_path, &package)?;
+    write_manifest(&package, name)?;
+    fs::rename(&package, &destination).map_err(|error| {
         ModelError::Operation(format!("could not install model profile: {error}"))
     })?;
     if let Err(error) = record_install(name, &destination) {
-        fs::remove_dir_all(&destination).map_err(|cleanup| {
-            ModelError::Operation(format!(
-                "could not save model configuration: {error}; cleanup failed: {cleanup}"
-            ))
-        })?;
-        return Err(error);
+        eprintln!("\x1b[31mCould not update model configuration: {error}\x1b[0m");
     }
     println!("Installed {name}");
     println!("Path: {}", display_path(&destination));
     Ok(())
 }
 
-fn single_directory(root: &Path) -> Result<PathBuf, ModelError> {
-    let mut entries = fs::read_dir(root)
-        .map_err(|error| ModelError::Operation(format!("could not inspect archive: {error}")))?;
-    let first = entries
-        .next()
-        .ok_or_else(|| ModelError::Operation("archive is empty".to_owned()))?
-        .map_err(|error| ModelError::Operation(format!("could not inspect archive: {error}")))?
-        .path();
-    if !first.is_dir() || entries.next().is_some() {
+fn extract(archive_path: &Path, destination: &Path) -> Result<(), ModelError> {
+    let file = File::open(archive_path)
+        .map_err(|error| ModelError::Operation(format!("could not open archive: {error}")))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|error| ModelError::Operation(format!("could not read archive: {error}")))?;
+    let mut det = false;
+    let mut rec = false;
+    let mut dict = false;
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|error| ModelError::Operation(format!("could not read archive: {error}")))?;
+        if entry.is_dir() {
+            continue;
+        }
+        let Some(path) = entry.enclosed_name() else {
+            return Err(ModelError::Operation(
+                "archive contains an unsafe path".to_owned(),
+            ));
+        };
+        if path.components().count() != 1 {
+            return Err(ModelError::Operation(format!(
+                "unexpected model path: {}",
+                path.display()
+            )));
+        }
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            return Err(ModelError::Operation(
+                "archive contains an invalid file name".to_owned(),
+            ));
+        };
+        let seen = match file_name {
+            "det.rten" => &mut det,
+            "rec.rten" => &mut rec,
+            "dict.txt" => &mut dict,
+            _ => {
+                return Err(ModelError::Operation(format!(
+                    "unexpected model file: {file_name}"
+                )));
+            }
+        };
+        if *seen {
+            return Err(ModelError::Operation(format!(
+                "duplicate model file: {file_name}"
+            )));
+        }
+        *seen = true;
+        let mut output = File::create(destination.join(file_name)).map_err(|error| {
+            ModelError::Operation(format!("could not extract model file: {error}"))
+        })?;
+        io::copy(&mut entry, &mut output).map_err(|error| {
+            ModelError::Operation(format!("could not extract model file: {error}"))
+        })?;
+    }
+    if !(det && rec && dict) {
         return Err(ModelError::Operation(
-            "archive must contain one top-level directory".to_owned(),
+            "model archive is incomplete".to_owned(),
         ));
     }
-    Ok(first)
+    Ok(())
+}
+
+fn write_manifest(package: &Path, name: &str) -> Result<(), ModelError> {
+    let charset_path = package.join("dict.txt");
+    let charset = fs::read(&charset_path)
+        .map_err(|error| ModelError::Operation(format!("could not read charset: {error}")))?;
+    let text = std::str::from_utf8(&charset)
+        .map_err(|error| ModelError::Operation(format!("charset is not UTF-8: {error}")))?;
+    let mut count = 0;
+    for line in text.lines() {
+        if line.chars().count() != 1 {
+            return Err(ModelError::Operation(format!(
+                "charset entry is not one character: {line:?}"
+            )));
+        }
+        count += 1;
+    }
+    if count == 0 {
+        return Err(ModelError::Operation("charset is empty".to_owned()));
+    }
+    let det_sha256 = crate::hash::file_sha256(&package.join("det.rten"))
+        .map_err(|error| ModelError::Operation(format!("could not read detector: {error}")))?;
+    let rec_sha256 = crate::hash::file_sha256(&package.join("rec.rten"))
+        .map_err(|error| ModelError::Operation(format!("could not read recognizer: {error}")))?;
+    let manifest = format!(
+        "format = 1\nprofile = \"{name}\"\ncharset = \"dict.txt\"\ncharset_sha256 = \"{}\"\ncharset_count = {count}\n\n[det]\nmodel = \"det.rten\"\nsha256 = \"{det_sha256}\"\n\n[rec]\nmodel = \"rec.rten\"\nsha256 = \"{rec_sha256}\"\n",
+        crate::hash::hex_sha256(&charset)
+    );
+    fs::write(package.join("manifest.toml"), manifest)
+        .map_err(|error| ModelError::Operation(format!("could not write model manifest: {error}")))
 }
 
 fn find_command(name: &str) -> Option<PathBuf> {

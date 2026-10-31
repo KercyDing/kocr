@@ -46,8 +46,6 @@ test():
 [fail] Clean failed.
 clean():
     cargo clean
-    find PaddleOCR -maxdepth 1 -type d -name 'kdeocr-ppocrv6-*-r*' -exec rm -r -- {} +
-    find PaddleOCR -maxdepth 1 -type f -name 'kdeocr-ppocrv6-*-r*.tar.zst' -delete
 
 [help] Install the local kocr CLI
 [desc] Reuse script.sh's install path with the local release binary.
@@ -81,9 +79,3 @@ publish(version) ? @has("uv"):
     git commit -m "chore: update to {{version}}"
     git tag {{version}}
     git push --atomic origin HEAD {{version}}
-
-[help] Bundle PaddleOCR models
-[desc] Avaiabel models:
-[desc] tiny, small, medium
-bundle(model) ? @has("uv"):
-    uv run PaddleOCR/bundle.py --name ppocrv6-{{model}}-r1

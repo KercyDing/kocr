@@ -13,6 +13,8 @@ use clap::Args;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::config::{ModelIndex, ModelProfile, profiles};
+
 pub(crate) use install::run as install;
 pub(crate) use list::run as list;
 pub(crate) use uninstall::run as uninstall;
@@ -96,19 +98,6 @@ struct InstalledModel {
     path: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct ModelIndex {
-    pub(crate) format: u32,
-    pub(crate) profiles: BTreeMap<String, ModelProfile>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct ModelProfile {
-    pub(crate) id: u32,
-    pub(crate) url: String,
-    pub(crate) sha256: String,
-}
-
 #[derive(Debug, Args)]
 pub(crate) struct ProfileArgs {
     /// Model ID or name
@@ -137,14 +126,9 @@ pub enum ModelError {
 }
 
 pub(crate) fn load_index() -> Result<ModelIndex, ModelError> {
-    let index: ModelIndex = toml::from_str(include_str!("../index.toml"))
-        .map_err(|error| ModelError::Index(format!("could not parse index.toml: {error}")))?;
-    if index.format != 1 {
-        return Err(ModelError::Index(format!(
-            "unsupported model index format {}",
-            index.format
-        )));
-    }
+    let index = ModelIndex {
+        profiles: profiles(),
+    };
     validate_index(&index)?;
     Ok(index)
 }
@@ -449,14 +433,14 @@ mod tests {
     fn resolves_id() {
         let index = load_index().unwrap();
         let (name, _) = resolve_profile(&index, "1").unwrap();
-        assert_eq!(name, "ppocrv6-small-r1");
+        assert_eq!(name, "ppocrv6-small-int8-r1");
     }
 
     #[test]
     fn resolves_name() {
         let index = load_index().unwrap();
-        let (name, _) = resolve_profile(&index, "ppocrv6-small-r1").unwrap();
-        assert_eq!(name, "ppocrv6-small-r1");
+        let (name, _) = resolve_profile(&index, "ppocrv6-small-int8-r1").unwrap();
+        assert_eq!(name, "ppocrv6-small-int8-r1");
     }
 
     #[test]
@@ -528,9 +512,9 @@ mod tests {
         fs::write(path.join("manifest.toml"), "").unwrap();
         let config = ModelConfig {
             models: ModelsConfig {
-                select: Some("ppocrv6-small-r1".to_owned()),
+                select: Some("ppocrv6-small-int8-r1".to_owned()),
                 installed: BTreeMap::from([(
-                    "ppocrv6-small-r1".to_owned(),
+                    "ppocrv6-small-int8-r1".to_owned(),
                     InstalledModel {
                         path: path.display().to_string(),
                     },
@@ -541,7 +525,7 @@ mod tests {
 
         assert_eq!(
             installed_profiles_from(&index, &config),
-            vec!["ppocrv6-small-r1"]
+            vec!["ppocrv6-small-int8-r1"]
         );
     }
 }

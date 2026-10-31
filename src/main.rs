@@ -1,6 +1,7 @@
 #[cfg(not(target_os = "linux"))]
 compile_error!("kdeocr only supports Linux.");
 
+mod config;
 mod hash;
 mod keyboard;
 mod models;

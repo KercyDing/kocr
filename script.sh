@@ -123,18 +123,18 @@ select_model() {
 
     if [[ -z $choice ]]; then
         echo "Select OCR model:" >&2
-        echo "  1) ppocrv6-small-r1   24.8 MiB  Recommended" >&2
-        echo "  2) ppocrv6-medium-r1  94.9 MiB" >&2
-        echo "  3) ppocrv6-tiny-r1     5.4 MiB" >&2
+        echo "  1) ppocrv6-small-int8-r1   12.9 MiB  Recommended" >&2
+        echo "  2) ppocrv6-medium-int8-r1  56.0 MiB" >&2
+        echo "  3) ppocrv6-tiny-int8-r1     2.8 MiB" >&2
         if [[ -t 0 ]]; then
             read -r -p "Model [1]: " choice
         fi
     fi
 
     case ${choice:-1} in
-        1 | small | ppocrv6-small-r1) printf '%s\n' ppocrv6-small-r1 ;;
-        2 | medium | ppocrv6-medium-r1) printf '%s\n' ppocrv6-medium-r1 ;;
-        3 | tiny | ppocrv6-tiny-r1) printf '%s\n' ppocrv6-tiny-r1 ;;
+        1 | small | small-int8 | ppocrv6-small-int8-r1) printf '%s\n' ppocrv6-small-int8-r1 ;;
+        2 | medium | medium-int8 | ppocrv6-medium-int8-r1) printf '%s\n' ppocrv6-medium-int8-r1 ;;
+        3 | tiny | tiny-int8 | ppocrv6-tiny-int8-r1) printf '%s\n' ppocrv6-tiny-int8-r1 ;;
         *) fail "unknown model: $choice" ;;
     esac
 }

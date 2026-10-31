@@ -42,6 +42,8 @@ kocr config           # Open configuration in your default editor
 
 `--path` (`-p`) sets the complete model directory and stores its absolute path in `config.toml`.
 
+Models are INT8-quantized RTen packages, available in small, medium, and tiny tiers.
+
 ## Keyboard Shortcuts
 
 The installer registers a systemd user service with three default shortcuts:
