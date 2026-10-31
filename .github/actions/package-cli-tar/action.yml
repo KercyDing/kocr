@@ -1,0 +1,35 @@
+name: Package CLI tar
+description: Package the CLI binary with licenses and a checksum.
+
+inputs:
+  version:
+    description: Package version
+    required: true
+  target:
+    description: Rust target triple
+    required: true
+  bin-dir:
+    description: Directory containing the release binary
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build tar archive
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        TARGET: ${{ inputs.target }}
+        BIN_DIR: ${{ inputs.bin-dir }}
+      run: |
+        set -euo pipefail
+        package="kocr-${VERSION}-${TARGET}"
+        mkdir -p "dist/${package}"
+        install -m 0755 "$BIN_DIR/kocr" "dist/${package}/kocr"
+        install -m 0644 LICENSE LICENSE-PaddleOCR NOTICE "dist/${package}/"
+        tar -C dist -czf "dist/${package}.tar.gz" "$package"
+        if command -v sha256sum >/dev/null 2>&1; then
+          sha256sum "dist/${package}.tar.gz" > "dist/${package}.tar.gz.sha256"
+        else
+          (cd dist && shasum -a 256 "${package}.tar.gz" > "${package}.tar.gz.sha256")
+        fi
