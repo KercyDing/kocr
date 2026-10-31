@@ -81,7 +81,7 @@ copy_licenses() {
     install -m 0644 "$repo_dir/LICENSE" "$root/$destination/LICENSE"
     install -m 0644 "$repo_dir/NOTICE" "$root/$destination/NOTICE"
     install -m 0644 "$repo_dir/LICENSE-PaddleOCR" "$root/$destination/LICENSE-PaddleOCR"
-    install -m 0644 "$repo_dir/LICENSE-SourceHanSans" "$root/$destination/LICENSE-SourceHanSans"
+    install -m 0644 "$repo_dir/kocr-gui/assets/fonts/SOURCE-HAN-SANS-LICENSE.txt" "$root/$destination/LICENSE-SourceHanSans"
 }
 
 build_deb() {
@@ -162,7 +162,7 @@ build_rpm() {
         echo "install -D -m 0644 \"$repo_dir/LICENSE\" %{buildroot}/usr/share/licenses/$package/LICENSE"
         echo "install -D -m 0644 \"$repo_dir/NOTICE\" %{buildroot}/usr/share/licenses/$package/NOTICE"
         echo "install -D -m 0644 \"$repo_dir/LICENSE-PaddleOCR\" %{buildroot}/usr/share/licenses/$package/LICENSE-PaddleOCR"
-        echo "install -D -m 0644 \"$repo_dir/LICENSE-SourceHanSans\" %{buildroot}/usr/share/licenses/$package/LICENSE-SourceHanSans"
+        echo "install -D -m 0644 \"$repo_dir/kocr-gui/assets/fonts/SOURCE-HAN-SANS-LICENSE.txt\" %{buildroot}/usr/share/licenses/$package/LICENSE-SourceHanSans"
         echo
         echo "%files"
         if [[ $backend == cli ]]; then

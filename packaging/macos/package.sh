@@ -19,7 +19,8 @@ app_dir="${out_dir}/${app_name}"
 rm -rf "$app_dir"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 install -m 0755 "$bin_dir/kocr-gui" "$app_dir/Contents/MacOS/kocr-gui"
-install -m 0644 LICENSE NOTICE LICENSE-PaddleOCR LICENSE-SourceHanSans "$app_dir/Contents/Resources/"
+install -m 0644 LICENSE NOTICE LICENSE-PaddleOCR "$app_dir/Contents/Resources/"
+install -m 0644 kocr-gui/assets/fonts/SOURCE-HAN-SANS-LICENSE.txt "$app_dir/Contents/Resources/LICENSE-SourceHanSans"
 install -m 0644 kocr-gui/assets/icon.icns "$app_dir/Contents/Resources/icon.icns"
 
 cat > "$app_dir/Contents/Info.plist" <<EOF
@@ -58,6 +59,13 @@ EOF
 xattr -cr "$app_dir"
 
 mkdir -p "$out_dir"
-archive="kocr-gui-${version}-${target}.zip"
-COPYFILE_DISABLE=1 ditto -c -k --keepParent "$app_dir" "${out_dir}/${archive}"
+dmg_dir="${out_dir}/dmg"
+rm -rf "$dmg_dir"
+mkdir -p "$dmg_dir"
+ditto "$app_dir" "${dmg_dir}/${app_name}"
+ln -s /Applications "${dmg_dir}/Applications"
+
+archive="kocr-gui-${version}-${target}.dmg"
+hdiutil create -quiet -volname "KOCR ${version}" -srcfolder "$dmg_dir" -ov -format UDZO "${out_dir}/${archive}"
+rm -rf "$dmg_dir"
 shasum -a 256 "${out_dir}/${archive}" > "${out_dir}/${archive}.sha256"
