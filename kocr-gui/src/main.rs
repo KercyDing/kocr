@@ -87,6 +87,8 @@ struct KocrApp {
     progress: Option<Progress>,
     capturing: bool,
     confirm_clear: bool,
+    history_limit_draft: usize,
+    confirm_history_apply: bool,
     history_store: Option<History>,
     history: Vec<CaptureRecord>,
     texture_cache: HashMap<i64, egui::TextureHandle>,
@@ -148,6 +150,7 @@ impl KocrApp {
             status = error;
         }
         let font_size_draft = preferences.font_size;
+        let history_limit_draft = preferences.history_limit;
         let (history_store, history, history_error) = load_history(preferences.history_limit);
         if let Some(error) = history_error {
             status = error;
@@ -167,6 +170,8 @@ impl KocrApp {
             progress: None,
             capturing: false,
             confirm_clear: false,
+            history_limit_draft,
+            confirm_history_apply: false,
             history_store,
             history,
             texture_cache: HashMap::new(),
@@ -279,10 +284,20 @@ impl KocrApp {
     }
 
     fn trim_history(&mut self) {
-        self.apply_history_limit(self.preferences.history_limit);
+        self.enforce_history_limit(self.preferences.history_limit);
     }
 
-    fn apply_history_limit(&mut self, limit: usize) {
+    fn enforce_history_limit(&mut self, limit: usize) -> bool {
+        if let Some(store) = &self.history_store {
+            match store.prune(limit) {
+                Ok(paths) => history::remove_files(paths),
+                Err(error) => {
+                    self.status = error;
+                    return false;
+                }
+            }
+        }
+
         let mut removed = Vec::new();
         while self.history.len() > limit {
             if let Some(record) = self.history.pop() {
@@ -292,11 +307,21 @@ impl KocrApp {
         for id in removed {
             self.texture_cache.remove(&id);
         }
-        if let Some(store) = &self.history_store {
-            match store.prune(limit) {
-                Ok(paths) => history::remove_files(paths),
-                Err(error) => self.status = error,
-            }
+        true
+    }
+
+    fn apply_history_retention(&mut self, limit: usize) {
+        let current = self.history.len();
+        if !self.enforce_history_limit(limit) {
+            return;
+        }
+        self.preferences.history_limit = limit;
+        if self.save_preferences() {
+            self.status = if current > limit {
+                t!("status_history_cleaned", limit = limit).to_string()
+            } else {
+                t!("status_history_limit", limit = limit).to_string()
+            };
         }
     }
 
@@ -479,7 +504,7 @@ impl KocrApp {
 
     fn render(&mut self, ui: &mut egui::Ui) {
         egui::Panel::bottom("status-bar")
-            .exact_size(24.0)
+            .exact_size(28.0)
             .show(ui, |ui| {
                 let status = if self.shortcut_recording.is_some() {
                     t!("recording_status").to_string()
@@ -558,6 +583,11 @@ impl KocrApp {
 
         ui.horizontal(|ui| {
             ui.label(t!("recent").as_ref());
+            ui.label(
+                egui::RichText::new(self.history.len().to_string())
+                    .small()
+                    .color(ui.visuals().weak_text_color()),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let clear_label = if self.confirm_clear {
                     t!("clear_history_confirm").into_owned()
@@ -598,97 +628,115 @@ impl KocrApp {
                                 ui.set_min_height(CONTENT_HEIGHT);
                                 ui.allocate_ui_with_layout(
                                     egui::vec2(ui.available_width(), CONTENT_HEIGHT),
-                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        ui.label(
-                                            egui::RichText::new(&record.time)
-                                                .small()
-                                                .color(ui.visuals().weak_text_color()),
-                                        );
-                                        ui.add_space(6.0);
-
-                                        let content_width = (ui.available_width() - 150.0).max(40.0);
-                                        ui.allocate_ui_with_layout(
-                                            egui::vec2(content_width, CONTENT_HEIGHT),
-                                            egui::Layout::left_to_right(egui::Align::Center),
-                                            |ui| {
-                                                ui.set_width(content_width);
-                                                match &record.content {
-                                                    RecordContent::Text(text) => {
-                                                        let full = text.clone();
-                                                        let mut job = egui::text::LayoutJob::default();
-                                                        job.wrap.max_width = content_width;
-                                                        job.wrap.max_rows = 2;
-                                                        job.wrap.break_anywhere = true;
-                                                        job.append(
-                                                            text,
-                                                            0.0,
-                                                            egui::TextFormat {
-                                                                font_id: egui::TextStyle::Body
-                                                                    .resolve(ui.style()),
-                                                                color: ui.visuals().text_color(),
-                                                                ..Default::default()
-                                                            },
-                                                        );
-                                                        ui.add(
-                                                            egui::Label::new(job)
-                                                                .show_tooltip_when_elided(false),
-                                                        )
-                                                        .on_hover_text_at_pointer(full);
-                                                    }
-                                                    RecordContent::Image(path) => {
-                                                        if let std::collections::hash_map::Entry::Vacant(entry) =
-                                                            texture_cache.entry(record.id)
-                                                            && let Ok(texture) = texture_from_path(
-                                                                ui.ctx(),
-                                                                path,
-                                                                record.id,
-                                                            )
-                                                        {
-                                                            entry.insert(texture);
-                                                        }
-                                                        if let Some(texture) =
-                                                            texture_cache.get(&record.id)
-                                                        {
-                                                            let size = texture.size_vec2();
-                                                            let scale = (CONTENT_HEIGHT / size.y)
-                                                                .min(content_width / size.x)
-                                                                .min(1.0);
-                                                            ui.add(
-                                                                egui::Image::new(texture)
-                                                                    .fit_to_exact_size(
-                                                                        size * scale,
-                                                                    ),
-                                                            );
-                                                        } else {
-                                                            ui.weak(
-                                                                t!("image_unavailable").as_ref(),
-                                                            );
-                                                        }
-                                                    }
+                                        if ui
+                                            .add(egui::Button::new(t!("delete").as_ref()))
+                                            .clicked()
+                                        {
+                                            delete_id = Some(record.id);
+                                        }
+                                        if ui
+                                            .add(egui::Button::new(t!("copy").as_ref()))
+                                            .clicked()
+                                        {
+                                            copy = Some(match &record.content {
+                                                RecordContent::Text(text) => {
+                                                    CopyAction::Text(text.clone())
                                                 }
-                                            },
-                                        );
+                                                RecordContent::Image(path) => {
+                                                    CopyAction::Image(path.clone())
+                                                }
+                                            });
+                                        }
 
                                         ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            egui::Layout::left_to_right(egui::Align::Center),
                                             |ui| {
-                                                if ui
-                                                    .small_button(t!("delete").as_ref())
-                                                    .clicked()
-                                                {
-                                                    delete_id = Some(record.id);
-                                                }
-                                                if ui.small_button(t!("copy").as_ref()).clicked() {
-                                                    copy = Some(match &record.content {
-                                                        RecordContent::Text(text) => {
-                                                            CopyAction::Text(text.clone())
+                                                ui.label(
+                                                    egui::RichText::new(&record.time)
+                                                        .small()
+                                                        .color(ui.visuals().weak_text_color()),
+                                                );
+                                                ui.add_space(6.0);
+                                                let content_width =
+                                                    ui.available_width().max(40.0);
+                                                ui.allocate_ui_with_layout(
+                                                    egui::vec2(
+                                                        content_width,
+                                                        CONTENT_HEIGHT,
+                                                    ),
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                    |ui| {
+                                                        ui.set_width(content_width);
+                                                        match &record.content {
+                                                            RecordContent::Text(text) => {
+                                                                let full = text.clone();
+                                                                let mut job =
+                                                                    egui::text::LayoutJob::default();
+                                                                job.wrap.max_width = content_width;
+                                                                job.wrap.max_rows = 2;
+                                                                job.wrap.break_anywhere = true;
+                                                                job.append(
+                                                                    text,
+                                                                    0.0,
+                                                                    egui::TextFormat {
+                                                                        font_id:
+                                                                            egui::TextStyle::Body
+                                                                                .resolve(
+                                                                                    ui.style(),
+                                                                                ),
+                                                                        color: ui
+                                                                            .visuals()
+                                                                            .text_color(),
+                                                                        ..Default::default()
+                                                                    },
+                                                                );
+                                                                ui.add(
+                                                                    egui::Label::new(job)
+                                                                        .show_tooltip_when_elided(
+                                                                            false,
+                                                                        ),
+                                                                )
+                                                                .on_hover_text_at_pointer(full);
+                                                            }
+                                                            RecordContent::Image(path) => {
+                                                                if let std::collections::hash_map::Entry::Vacant(entry) =
+                                                                    texture_cache.entry(record.id)
+                                                                    && let Ok(texture) = texture_from_path(
+                                                                        ui.ctx(),
+                                                                        path,
+                                                                        record.id,
+                                                                    )
+                                                                {
+                                                                    entry.insert(texture);
+                                                                }
+                                                                if let Some(texture) =
+                                                                    texture_cache.get(&record.id)
+                                                                {
+                                                                    let size = texture.size_vec2();
+                                                                    let scale = (CONTENT_HEIGHT
+                                                                        / size.y)
+                                                                        .min(
+                                                                            content_width
+                                                                                / size.x,
+                                                                        )
+                                                                        .min(1.0);
+                                                                    ui.add(
+                                                                        egui::Image::new(texture)
+                                                                            .fit_to_exact_size(
+                                                                                size * scale,
+                                                                            ),
+                                                                    );
+                                                                } else {
+                                                                    ui.weak(t!("image_unavailable").as_ref());
+                                                                }
+                                                            }
                                                         }
-                                                        RecordContent::Image(path) => {
-                                                            CopyAction::Image(path.clone())
-                                                        }
-                                                    });
-                                                }
+                                                    },
+                                                );
                                             },
                                         );
                                     },
@@ -789,9 +837,13 @@ impl KocrApp {
         }
     }
 
-    fn save_preferences(&mut self) {
-        if let Err(error) = self.preferences.save() {
-            self.status = error;
+    fn save_preferences(&mut self) -> bool {
+        match self.preferences.save() {
+            Ok(()) => true,
+            Err(error) => {
+                self.status = error;
+                false
+            }
         }
     }
 
@@ -799,15 +851,19 @@ impl KocrApp {
         ui.label(egui::RichText::new(t!("language").as_ref()).strong());
         ui.add_space(2.0);
         let locale = rust_i18n::locale();
-        if ui.radio(&*locale == "zh-CN", "简体中文").clicked() {
-            self.preferences.locale = "zh-CN".to_owned();
-            rust_i18n::set_locale("zh-CN");
-            self.save_preferences();
-        }
         if ui.radio(&*locale == "en", "English").clicked() {
             self.preferences.locale = "en".to_owned();
             rust_i18n::set_locale("en");
-            self.save_preferences();
+            if self.save_preferences() {
+                self.status = t!("status_language", language = "English").to_string();
+            }
+        }
+        if ui.radio(&*locale == "zh-CN", "简体中文").clicked() {
+            self.preferences.locale = "zh-CN".to_owned();
+            rust_i18n::set_locale("zh-CN");
+            if self.save_preferences() {
+                self.status = t!("status_language", language = "简体中文").to_string();
+            }
         }
 
         ui.add_space(8.0);
@@ -836,7 +892,9 @@ impl KocrApp {
         if theme != theme_preference(&self.preferences.theme) {
             self.preferences.theme = theme_name(theme).to_owned();
             ui.ctx().set_theme(theme);
-            self.save_preferences();
+            if self.save_preferences() {
+                self.status = t!("status_theme", theme = theme_label(theme)).to_string();
+            }
         }
 
         ui.add_space(8.0);
@@ -850,25 +908,62 @@ impl KocrApp {
             if response.drag_stopped() {
                 self.preferences.font_size = self.font_size_draft;
                 apply_ui_style(ui.ctx(), self.font_size_draft);
-                self.save_preferences();
+                if self.save_preferences() {
+                    self.status = t!("status_font_size", size = self.font_size_draft).to_string();
+                }
             }
         });
 
         ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(t!("history").as_ref()).strong());
+
+        ui.add_space(8.0);
+        let mut limit = self.history_limit_draft;
         ui.horizontal(|ui| {
             ui.label(t!("history_limit").as_ref());
-            let mut limit = self.preferences.history_limit;
-            let response = ui.add(
-                egui::Slider::new(&mut limit, 10..=500)
-                    .step_by(10.0)
-                    .integer(),
-            );
-            if response.drag_stopped() {
-                self.preferences.history_limit = limit;
-                self.save_preferences();
-                self.apply_history_limit(limit);
+            if ui
+                .add(
+                    egui::Slider::new(&mut limit, 10..=500)
+                        .step_by(10.0)
+                        .integer(),
+                )
+                .changed()
+            {
+                self.history_limit_draft = limit;
+                self.confirm_history_apply = false;
             }
         });
+
+        let current = self.history.len();
+        let pending = current.saturating_sub(self.history_limit_draft);
+        ui.label(t!("history_current", count = current).to_string());
+        if pending > 0 {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                t!("history_delete_pending", count = pending).to_string(),
+            );
+        }
+        let apply_label = if pending > 0 && self.confirm_history_apply {
+            t!("confirm_cleanup").to_string()
+        } else {
+            t!("apply").to_string()
+        };
+        if ui.button(apply_label).clicked() {
+            if pending > 0 && !self.confirm_history_apply {
+                self.confirm_history_apply = true;
+            } else {
+                let limit = self.history_limit_draft;
+                self.apply_history_retention(limit);
+                self.confirm_history_apply = false;
+            }
+        }
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(t!("behavior").as_ref()).strong());
 
         ui.add_space(8.0);
         ui.horizontal(|ui| {
@@ -886,19 +981,28 @@ impl KocrApp {
             );
             if self.preferences.close_action != close_action {
                 self.preferences.close_action = close_action;
-                self.save_preferences();
+                if self.save_preferences() {
+                    let action = match close_action {
+                        CloseAction::Exit => t!("close_exit").to_string(),
+                        CloseAction::HideToTray => t!("close_hide").to_string(),
+                    };
+                    self.status = t!("status_close_action", action = action).to_string();
+                }
             }
         });
 
         ui.add_space(8.0);
-        if ui
-            .checkbox(
-                &mut self.preferences.remember_window_state,
-                t!("remember_window_state").as_ref(),
-            )
-            .changed()
-        {
-            self.save_preferences();
+        let remember = ui.checkbox(
+            &mut self.preferences.remember_window_state,
+            t!("remember_window_state").as_ref(),
+        );
+        if remember.changed() && self.save_preferences() {
+            let state = if self.preferences.remember_window_state {
+                t!("enabled").to_string()
+            } else {
+                t!("disabled").to_string()
+            };
+            self.status = t!("status_remember_window", state = state).to_string();
         }
     }
 
@@ -921,8 +1025,9 @@ impl KocrApp {
                     } else {
                         format_shortcut(self.shortcut_value(field))
                     };
-                    let response =
-                        ui.add_sized([ui.available_width(), 24.0], egui::Button::new(value));
+                    let response = ui.add(
+                        egui::Button::new(value).min_size(egui::vec2(ui.available_width(), 0.0)),
+                    );
                     button_rects.push(response.rect);
                     if response.clicked() {
                         self.shortcut_recording = Some(field);
@@ -1036,8 +1141,9 @@ fn load_history(limit: usize) -> (Option<History>, Vec<CaptureRecord>, Option<St
         Ok(store) => store,
         Err(error) => return (None, Vec::new(), Some(error)),
     };
-    if let Err(error) = store.prune(limit) {
-        return (Some(store), Vec::new(), Some(error));
+    match store.prune(limit) {
+        Ok(paths) => history::remove_files(paths),
+        Err(error) => return (Some(store), Vec::new(), Some(error)),
     }
     let records = match store.recent() {
         Ok(records) => records,
@@ -1468,6 +1574,7 @@ fn setup_fonts(ctx: &egui::Context) {
 
 fn apply_ui_style(ctx: &egui::Context, size: f32) {
     ctx.all_styles_mut(|style| {
+        style.spacing.button_padding = egui::vec2(6.0, 3.0);
         style.text_styles.insert(
             egui::TextStyle::Heading,
             egui::FontId::new(size + 3.0, egui::FontFamily::Proportional),
@@ -1496,6 +1603,14 @@ fn theme_preference(value: &str) -> egui::ThemePreference {
         "light" => egui::ThemePreference::Light,
         "dark" => egui::ThemePreference::Dark,
         _ => egui::ThemePreference::System,
+    }
+}
+
+fn theme_label(theme: egui::ThemePreference) -> String {
+    match theme {
+        egui::ThemePreference::System => t!("theme_system").to_string(),
+        egui::ThemePreference::Light => t!("theme_light").to_string(),
+        egui::ThemePreference::Dark => t!("theme_dark").to_string(),
     }
 }
 

@@ -112,6 +112,12 @@ language:
 appearance:
   en: Appearance
   zh-CN: 外观
+history:
+  en: History
+  zh-CN: 历史
+behavior:
+  en: Behavior
+  zh-CN: 行为
 theme:
   en: Theme
   zh-CN: 主题
@@ -130,6 +136,18 @@ font_size:
 history_limit:
   en: History limit
   zh-CN: 历史条数
+history_current:
+  en: "Current records: %{count}"
+  zh-CN: "当前 %{count} 条"
+history_delete_pending:
+  en: "Will delete %{count} oldest records"
+  zh-CN: "将删除最旧的 %{count} 条"
+apply:
+  en: Apply
+  zh-CN: 应用
+confirm_cleanup:
+  en: Confirm cleanup
+  zh-CN: 确认清理
 close_action:
   en: When closing
   zh-CN: 关闭窗口时
@@ -142,6 +160,33 @@ close_hide:
 remember_window_state:
   en: Remember window size and position
   zh-CN: 记住窗口大小和位置
+status_language:
+  en: "Language: %{language}"
+  zh-CN: "语言：%{language}"
+status_theme:
+  en: "Theme: %{theme}"
+  zh-CN: "主题：%{theme}"
+status_font_size:
+  en: "Font size: %{size}"
+  zh-CN: "字体大小：%{size}"
+status_history_limit:
+  en: "History limit: %{limit}"
+  zh-CN: "历史保留条数：%{limit}"
+status_history_cleaned:
+  en: "Old history cleaned, keeping %{limit}"
+  zh-CN: "已清理旧历史，保留 %{limit} 条"
+status_close_action:
+  en: "Close window: %{action}"
+  zh-CN: "关闭窗口时：%{action}"
+status_remember_window:
+  en: "Remember window size and position: %{state}"
+  zh-CN: "记住窗口大小和位置：%{state}"
+enabled:
+  en: On
+  zh-CN: 开
+disabled:
+  en: Off
+  zh-CN: 关
 
 tray_show:
   en: Show KOCR

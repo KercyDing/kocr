@@ -194,8 +194,27 @@ impl History {
     }
 
     pub fn prune(&self, limit: usize) -> Result<Vec<PathBuf>, String> {
-        let paths = self.old_image_paths(limit)?;
-        self.connection
+        let transaction = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|error| error.to_string())?;
+        let paths = {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT image_path FROM captures
+                     WHERE image_path IS NOT NULL
+                       AND id NOT IN (
+                           SELECT id FROM captures ORDER BY id DESC LIMIT ?1
+                       )",
+                )
+                .map_err(|error| error.to_string())?;
+            statement
+                .query_map([limit as i64], |row| row.get::<_, String>(0))
+                .map_err(|error| error.to_string())?
+                .map(|path| path.map(PathBuf::from).map_err(|error| error.to_string()))
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        transaction
             .execute(
                 "DELETE FROM captures WHERE id NOT IN (
                     SELECT id FROM captures ORDER BY id DESC LIMIT ?1
@@ -203,6 +222,7 @@ impl History {
                 [limit as i64],
             )
             .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
         Ok(paths)
     }
 
@@ -212,15 +232,6 @@ impl History {
             .execute("DELETE FROM captures", [])
             .map_err(|error| error.to_string())?;
         Ok(paths)
-    }
-
-    fn old_image_paths(&self, limit: usize) -> Result<Vec<PathBuf>, String> {
-        self.image_paths(
-            "SELECT image_path FROM captures
-             WHERE image_path IS NOT NULL
-               AND id NOT IN (SELECT id FROM captures ORDER BY id DESC LIMIT ?1)",
-            [limit as i64],
-        )
     }
 
     fn all_image_paths(&self) -> Result<Vec<PathBuf>, String> {
