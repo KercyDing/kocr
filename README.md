@@ -82,3 +82,5 @@ Set a shortcut to an empty string to disable it.
 [Apache License 2.0](LICENSE)
 
 Third-party notices: [NOTICE](NOTICE)
+
+OCR models are based on PaddleOCR: [LICENSE-PaddleOCR](LICENSE-PaddleOCR).
