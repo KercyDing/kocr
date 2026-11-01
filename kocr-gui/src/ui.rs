@@ -189,7 +189,8 @@ impl KocrApp {
                                                                 ui.add_sized(
                                                                     [content_width, CONTENT_HEIGHT],
                                                                     egui::Label::new(text)
-                                                                        .truncate(),
+                                                                        .truncate()
+                                                                        .show_tooltip_when_elided(false),
                                                                 )
                                                                 .on_hover_text_at_pointer(full);
                                                             }
