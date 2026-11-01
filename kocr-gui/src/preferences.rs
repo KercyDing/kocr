@@ -25,6 +25,7 @@ pub struct Preferences {
     pub locale: String,
     pub close_action: CloseAction,
     pub remember_window_state: bool,
+    pub launch_at_startup: bool,
     pub font_size: f32,
     pub history_limit: usize,
 }
@@ -36,6 +37,7 @@ impl Default for Preferences {
             locale: "en".to_owned(),
             close_action: CloseAction::Exit,
             remember_window_state: true,
+            launch_at_startup: false,
             font_size: 15.0,
             history_limit: 50,
         }
@@ -58,16 +60,20 @@ impl Preferences {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
-        let content = format!(
-            "theme={}\nlocale={}\nclose_action={}\nremember_window_state={}\nfont_size={}\nhistory_limit={}\n",
+        fs::write(path, self.render()).map_err(|error| error.to_string())
+    }
+
+    fn render(&self) -> String {
+        format!(
+            "theme={}\nlocale={}\nclose_action={}\nremember_window_state={}\nlaunch_at_startup={}\nfont_size={}\nhistory_limit={}\n",
             self.theme,
             self.locale,
             self.close_action.as_str(),
             self.remember_window_state,
+            self.launch_at_startup,
             self.font_size,
             self.history_limit,
-        );
-        fs::write(path, content).map_err(|error| error.to_string())
+        )
     }
 }
 
@@ -99,6 +105,12 @@ fn parse(content: &str) -> Preferences {
                 "false" => preferences.remember_window_state = false,
                 _ => {}
             }
+        } else if let Some(value) = line.strip_prefix("launch_at_startup=") {
+            match value.trim() {
+                "true" => preferences.launch_at_startup = true,
+                "false" => preferences.launch_at_startup = false,
+                _ => {}
+            }
         } else if let Some(value) = line.strip_prefix("font_size=")
             && let Ok(size) = value.trim().parse::<f32>()
             && (12.0..=22.0).contains(&size)
@@ -121,14 +133,26 @@ mod tests {
     #[test]
     fn parses_preferences() {
         let preferences = parse(
-            "theme=dark\nlocale=zh-CN\nclose_action=hide_to_tray\nremember_window_state=false\n",
+            "theme=dark\nlocale=zh-CN\nclose_action=hide_to_tray\nremember_window_state=false
+launch_at_startup=true\n",
         );
         assert_eq!(preferences.theme, "dark");
         assert_eq!(preferences.locale, "zh-CN");
         assert_eq!(preferences.close_action, CloseAction::HideToTray);
         assert!(!preferences.remember_window_state);
+        assert!(preferences.launch_at_startup);
         assert_eq!(preferences.font_size, 15.0);
         assert_eq!(preferences.history_limit, 50);
+    }
+
+    #[test]
+    fn round_trips_through_render() {
+        let preferences = Preferences {
+            launch_at_startup: true,
+            ..Preferences::default()
+        };
+
+        assert_eq!(parse(&preferences.render()), preferences);
     }
 
     #[test]

@@ -139,8 +139,13 @@ impl KocrApp {
             Ok(tray) => (Some(tray), None),
             Err(error) => (None, Some(t!("tray_failed", err = error).to_string())),
         };
-        if let Some(error) = tray_error {
-            status = error;
+        if let Some(error) = tray_error.as_ref() {
+            status = error.clone();
+        }
+        if preferences.launch_at_startup
+            && let Err(error) = kocr_core::platform::set_autostart(true)
+        {
+            status = t!("status_launch_at_startup_failed", error = error).to_string();
         }
         let font_size_draft = preferences.font_size;
         let history_limit_draft = preferences.history_limit;
@@ -531,6 +536,7 @@ impl KocrApp {
                     self.status = t!("tray_failed", err = error).to_string();
                     self.tray_ready = false;
                     tray_failed = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 }
             }
         }

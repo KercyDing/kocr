@@ -26,6 +26,7 @@ kocr-ocr = { path = "kocr-ocr" }
 kocr-platform = { path = "kocr-platform" }
 
 anyhow = "1"
+auto-launch = "0.6"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8"

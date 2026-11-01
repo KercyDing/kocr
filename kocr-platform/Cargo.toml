@@ -11,6 +11,9 @@ dirs.workspace = true
 image.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(any(windows, target_os = "linux", target_os = "macos"))'.dependencies]
+auto-launch.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 xcap.workspace = true
 windows.workspace = true

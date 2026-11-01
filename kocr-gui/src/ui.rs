@@ -430,6 +430,12 @@ impl KocrApp {
     }
 
     fn render_preferences(&mut self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| self.render_preferences_content(ui));
+    }
+
+    fn render_preferences_content(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new(t!("language").as_ref()).strong());
         ui.add_space(2.0);
         let locale = rust_i18n::locale();
@@ -579,12 +585,29 @@ impl KocrApp {
             t!("remember_window_state").as_ref(),
         );
         if remember.changed() && self.save_preferences() {
-            let state = if self.preferences.remember_window_state {
-                t!("enabled").to_string()
-            } else {
-                t!("disabled").to_string()
-            };
+            let state = state_label(self.preferences.remember_window_state);
             self.status = t!("status_remember_window", state = state).to_string();
+        }
+
+        ui.add_space(8.0);
+        let launch = ui.checkbox(
+            &mut self.preferences.launch_at_startup,
+            t!("launch_at_startup").as_ref(),
+        );
+        if launch.changed() {
+            let enabled = self.preferences.launch_at_startup;
+            match kocr_core::platform::set_autostart(enabled) {
+                Ok(()) => {
+                    if self.save_preferences() {
+                        let state = state_label(enabled);
+                        self.status = t!("status_launch_at_startup", state = state).to_string();
+                    }
+                }
+                Err(error) => {
+                    self.preferences.launch_at_startup = !enabled;
+                    self.status = t!("status_launch_at_startup_failed", error = error).to_string();
+                }
+            }
         }
     }
 
@@ -699,6 +722,14 @@ fn theme_label(theme: egui::ThemePreference) -> String {
         egui::ThemePreference::System => t!("theme_system").to_string(),
         egui::ThemePreference::Light => t!("theme_light").to_string(),
         egui::ThemePreference::Dark => t!("theme_dark").to_string(),
+    }
+}
+
+fn state_label(enabled: bool) -> String {
+    if enabled {
+        t!("enabled").to_string()
+    } else {
+        t!("disabled").to_string()
     }
 }
 

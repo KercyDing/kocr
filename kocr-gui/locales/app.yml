@@ -172,6 +172,15 @@ close_hide:
 remember_window_state:
   en: Remember window size and position
   zh-CN: 记住窗口大小和位置
+launch_at_startup:
+  en: Launch at startup
+  zh-CN: 开机自启
+status_launch_at_startup:
+  en: "Launch at startup: %{state}"
+  zh-CN: "开机自启：%{state}"
+status_launch_at_startup_failed:
+  en: "Could not change autostart: %{error}"
+  zh-CN: "修改开机自启失败：%{error}"
 status_language:
   en: "Language: %{language}"
   zh-CN: "语言：%{language}"

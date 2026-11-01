@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+mod autostart;
 mod clipboard;
 #[cfg(target_os = "linux")]
 mod linux;
@@ -18,7 +20,21 @@ mod unsupported;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+pub use autostart::{autostart_enabled, set_autostart};
 pub use clipboard::copy_clipboard;
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn autostart_enabled() -> bool {
+    false
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn set_autostart(_enabled: bool) -> Result<(), PlatformError> {
+    Err(PlatformError::Output(
+        "launch at startup is not supported on this platform".to_owned(),
+    ))
+}
 
 #[cfg(target_os = "linux")]
 pub use linux::{capture_region, dependencies};
