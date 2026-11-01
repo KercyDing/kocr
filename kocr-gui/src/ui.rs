@@ -241,6 +241,68 @@ impl KocrApp {
                                                                                     texture,
                                                                                 ));
                                                                             }
+                                                                            let texture = preview
+                                                                                .as_ref()
+                                                                                .filter(
+                                                                                    |(preview_id, _)| {
+                                                                                        *preview_id
+                                                                                            == record.id
+                                                                                    },
+                                                                                )
+                                                                                .map_or(
+                                                                                    texture,
+                                                                                    |(_, texture)| {
+                                                                                        texture
+                                                                                    },
+                                                                                );
+                                                                            const PREVIEW_WIDTH: f32 =
+                                                                                320.0;
+                                                                            const PREVIEW_HEIGHT: f32 =
+                                                                                200.0;
+                                                                            let size = texture
+                                                                                .size_vec2();
+                                                                            let scale = (PREVIEW_WIDTH
+                                                                                / size.x)
+                                                                                .min(
+                                                                                    PREVIEW_HEIGHT
+                                                                                        / size.y,
+                                                                                )
+                                                                                .min(1.0);
+                                                                            ui.allocate_ui(
+                                                                                egui::vec2(
+                                                                                    PREVIEW_WIDTH,
+                                                                                    PREVIEW_HEIGHT,
+                                                                                ),
+                                                                                |ui| {
+                                                                                    ui.set_min_size(
+                                                                                        egui::vec2(
+                                                                                            PREVIEW_WIDTH,
+                                                                                            PREVIEW_HEIGHT,
+                                                                                        ),
+                                                                                    );
+                                                                                    ui.vertical_centered(
+                                                                                        |ui| {
+                                                                                            ui.add_space(
+                                                                                                ((PREVIEW_HEIGHT
+                                                                                                    - size.y
+                                                                                                        * scale)
+                                                                                                    / 2.0)
+                                                                                                    .max(
+                                                                                                        0.0,
+                                                                                                    ),
+                                                                                            );
+                                                                                            ui.add(
+                                                                                                egui::Image::new(
+                                                                                                    texture,
+                                                                                                )
+                                                                                                .fit_to_exact_size(
+                                                                                                    size * scale,
+                                                                                                ),
+                                                                                            );
+                                                                                        },
+                                                                                    );
+                                                                                },
+                                                                            );
                                                                         },
                                                                     );
                                                                 } else {
