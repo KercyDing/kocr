@@ -186,13 +186,30 @@ impl KocrApp {
                                                         match &record.content {
                                                             RecordContent::Text(text) => {
                                                                 let full = text.clone();
-                                                                ui.add_sized(
-                                                                    [content_width, CONTENT_HEIGHT],
-                                                                    egui::Label::new(text)
-                                                                        .truncate()
-                                                                        .show_tooltip_when_elided(false),
-                                                                )
-                                                                .on_hover_text_at_pointer(full);
+                                                                ui.allocate_ui_with_layout(
+                                                                    egui::vec2(
+                                                                        content_width,
+                                                                        CONTENT_HEIGHT,
+                                                                    ),
+                                                                    egui::Layout::left_to_right(
+                                                                        egui::Align::Center,
+                                                                    ),
+                                                                    |ui| {
+                                                                        ui.set_width(
+                                                                            content_width,
+                                                                        );
+                                                                        ui.add(
+                                                                            egui::Label::new(text)
+                                                                                .truncate()
+                                                                                .show_tooltip_when_elided(
+                                                                                    false,
+                                                                                ),
+                                                                        )
+                                                                        .on_hover_text_at_pointer(
+                                                                            full,
+                                                                        );
+                                                                    },
+                                                                );
                                                             }
                                                             RecordContent::Image(path) => {
                                                                 if let std::collections::hash_map::Entry::Vacant(entry) =
