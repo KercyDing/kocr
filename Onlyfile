@@ -101,7 +101,7 @@ group version {
         uv run scripts/notice.py
         only ci
         git add -- Cargo.toml Cargo.lock NOTICE
-        git commit -m "chore: update to {{version}}"
+        git commit -m "update to {{version}}"
         git tag {{version}}
         git push --atomic origin HEAD {{version}}
 }
