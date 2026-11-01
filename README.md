@@ -17,6 +17,10 @@ Capture actions:
 
 Install and select OCR models from the Models page.
 
+### Shortcuts
+
+The GUI does not register capture shortcuts on first launch. Open **Shortcuts**, click an action, and press the desired key combination to register it. Use **Unbind** to remove a shortcut later.
+
 ## CLI
 
 - **Linux**: install the `.deb` or `.rpm` from [Releases](https://github.com/KercyDing/kocr/releases), or `paru -S kocr-bin`.
@@ -41,24 +45,6 @@ kocr install 1               # Install a model
 kocr use 1                   # Select a model
 kocr uninstall 1             # Remove a model
 ```
-
-## Shortcuts
-
-Open **Shortcuts** in the GUI. Shortcuts are unset by default.
-
-## Config
-
-`kocr list` prints the config path.
-
-```toml
-[shortcut]
-copy = "Alt+1"
-save = "Alt+2"
-ocr = "Alt+3"
-oneline = "Alt+4"
-```
-
-Supported modifiers: `Mod`, `Super`, `Ctrl`, `Alt`, `Shift`. Set a shortcut to an empty string to disable it.
 
 ## License
 
