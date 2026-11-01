@@ -2740,6 +2740,7 @@ dependencies = [
  "kocr-config",
  "kocr-core",
  "thiserror 2.0.21",
+ "windows-sys 0.61.2",
  "zbus 6.2.0",
 ]
 

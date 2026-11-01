@@ -2,6 +2,11 @@ use std::fmt::Display;
 
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
+};
+
 use kocr_config::{Key, Modifiers as ConfigModifiers, Shortcut};
 
 use super::{
@@ -59,6 +64,22 @@ impl Bindings {
     }
 }
 
+#[cfg(windows)]
+const WINDOWS_PUMP_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
+#[cfg(not(windows))]
+const WINDOWS_PUMP_INTERVAL: std::time::Duration = POLL_INTERVAL;
+
+#[cfg(windows)]
+fn pump_messages() {
+    unsafe {
+        let mut message = MSG::default();
+        while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+}
+
 pub(super) fn run<F, E>(mut on_trigger: F) -> Result<(), KeyboardError>
 where
     F: FnMut(Action) -> Result<(), E>,
@@ -87,8 +108,19 @@ where
     eprintln!("KOCR shortcuts started (macOS)");
     #[cfg(windows)]
     eprintln!("KOCR shortcuts started (Windows)");
+    let mut last_reload = std::time::Instant::now();
     loop {
-        if let Ok(event) = GlobalHotKeyEvent::receiver().recv_timeout(POLL_INTERVAL)
+        #[cfg(windows)]
+        pump_messages();
+        // WM_HOTKEY is delivered to this thread's queue, so the pump above has
+        // to run before the channel is read. Waiting for POLL_INTERVAL here
+        // would delay a shortcut by up to half a second.
+        let wait = if cfg!(windows) {
+            WINDOWS_PUMP_INTERVAL
+        } else {
+            POLL_INTERVAL
+        };
+        if let Ok(event) = GlobalHotKeyEvent::receiver().recv_timeout(wait)
             && event.state() == HotKeyState::Pressed
             && let Some(action) = bindings.trigger(event.id())
         {
@@ -98,7 +130,10 @@ where
                 eprintln!("\x1b[31mShortcut capture failed: {error}\x1b[0m");
             }
         }
-        reload_config(&manager, &mut config_content, &mut bindings);
+        if last_reload.elapsed() >= POLL_INTERVAL {
+            reload_config(&manager, &mut config_content, &mut bindings);
+            last_reload = std::time::Instant::now();
+        }
     }
 }
 
