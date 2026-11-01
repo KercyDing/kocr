@@ -1,7 +1,9 @@
 //! Egui rendering.
 
+mod theme;
+mod widgets;
+
 use eframe::egui;
-use kocr_shortcuts::Action;
 
 use crate::app::{CopyAction, KocrApp, Page, RecordContent, ShortcutField};
 use crate::models::{progress_fraction, progress_text};
@@ -9,88 +11,101 @@ use crate::preferences::CloseAction;
 use crate::shortcuts::format_shortcut;
 use crate::texture::{preview_from_path, texture_from_path};
 
+pub(crate) use self::theme::{apply_ui_style, theme_preference};
+use self::widgets::{ButtonKind, button, button_sized, card, section_title, slider, tab};
+
 impl KocrApp {
     pub(crate) fn render(&mut self, ui: &mut egui::Ui) {
         egui::Panel::bottom("status-bar")
-            .exact_size(28.0)
+            .exact_size(30.0)
+            .frame(egui::Frame::new().fill(ui.visuals().panel_fill))
             .show(ui, |ui| {
+                let has_shortcut = [
+                    ShortcutField::Copy,
+                    ShortcutField::Save,
+                    ShortcutField::Ocr,
+                    ShortcutField::Oneline,
+                ]
+                .into_iter()
+                .any(|field| !self.shortcut_value(field).is_empty());
                 let status = if self.shortcut_recording.is_some() {
                     t!("recording_status").to_string()
+                } else if !has_shortcut {
+                    t!("shortcuts_unset_status").to_string()
                 } else {
                     self.status.clone()
                 };
-                ui.horizontal_centered(|ui| ui.label(status));
+                ui.horizontal_centered(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(status)
+                            .small()
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                });
             });
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("KOCR");
-                ui.separator();
-                ui.selectable_value(&mut self.page, Page::Capture, t!("tab_capture").as_ref());
-                ui.selectable_value(&mut self.page, Page::Models, t!("tab_models").as_ref());
-                ui.selectable_value(
-                    &mut self.page,
-                    Page::Shortcuts,
-                    t!("tab_shortcuts").as_ref(),
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::new()
+                    .fill(ui.visuals().panel_fill)
+                    .inner_margin(egui::Margin::same(16)),
+            )
+            .show(ui, |ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), 40.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        const TAB_BAR_WIDTH: f32 = 384.0;
+                        ui.add_space(((ui.available_width() - TAB_BAR_WIDTH) / 2.0).max(0.0));
+                        egui::Frame::new()
+                            .fill(ui.visuals().faint_bg_color)
+                            .corner_radius(egui::CornerRadius::same(9))
+                            .inner_margin(egui::Margin::same(4))
+                            .show(ui, |ui| {
+                                if tab(ui, self.page == Page::Capture, t!("tab_capture").as_ref())
+                                    .clicked()
+                                {
+                                    self.page = Page::Capture;
+                                }
+                                if tab(ui, self.page == Page::Models, t!("tab_models").as_ref())
+                                    .clicked()
+                                {
+                                    self.page = Page::Models;
+                                }
+                                if tab(
+                                    ui,
+                                    self.page == Page::Shortcuts,
+                                    t!("tab_shortcuts").as_ref(),
+                                )
+                                .clicked()
+                                {
+                                    self.page = Page::Shortcuts;
+                                }
+                                if tab(
+                                    ui,
+                                    self.page == Page::Preferences,
+                                    t!("tab_settings").as_ref(),
+                                )
+                                .clicked()
+                                {
+                                    self.page = Page::Preferences;
+                                }
+                            });
+                    },
                 );
-                ui.selectable_value(
-                    &mut self.page,
-                    Page::Preferences,
-                    t!("tab_settings").as_ref(),
-                );
-            });
-            ui.separator();
+                ui.add_space(12.0);
 
-            match self.page {
-                Page::Capture => self.render_capture(ui),
-                Page::Models => self.render_models(ui),
-                Page::Shortcuts => self.render_shortcuts(ui),
-                Page::Preferences => self.render_preferences(ui),
-            }
-        });
+                match self.page {
+                    Page::Capture => self.render_capture(ui),
+                    Page::Models => self.render_models(ui),
+                    Page::Shortcuts => self.render_shortcuts(ui),
+                    Page::Preferences => self.render_preferences(ui),
+                }
+            });
     }
 
     fn render_capture(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            if ui
-                .add_enabled(
-                    !self.capturing,
-                    egui::Button::new(t!("capture_png").as_ref()),
-                )
-                .clicked()
-            {
-                self.capture(Action::Copy);
-            }
-            if ui
-                .add_enabled(
-                    !self.capturing,
-                    egui::Button::new(t!("capture_save").as_ref()),
-                )
-                .clicked()
-            {
-                self.capture(Action::Save);
-            }
-            if ui
-                .add_enabled(
-                    !self.capturing,
-                    egui::Button::new(t!("capture_text").as_ref()),
-                )
-                .clicked()
-            {
-                self.capture(Action::Ocr);
-            }
-            if ui
-                .add_enabled(
-                    !self.capturing,
-                    egui::Button::new(t!("capture_oneline").as_ref()),
-                )
-                .clicked()
-            {
-                self.capture(Action::Oneline);
-            }
-        });
-
-        ui.add_space(10.0);
         let mut copy = None;
         let mut delete_id = None;
         let mut clear = false;
@@ -99,7 +114,7 @@ impl KocrApp {
         let total_rows = self.history.len();
 
         ui.horizontal(|ui| {
-            ui.label(t!("recent").as_ref());
+            ui.label(egui::RichText::new(t!("recent").as_ref()).strong());
             ui.label(
                 egui::RichText::new(self.history.len().to_string())
                     .small()
@@ -111,9 +126,17 @@ impl KocrApp {
                 } else {
                     t!("clear_history").into_owned()
                 };
-                if ui
-                    .add_enabled(!self.history.is_empty(), egui::Button::new(clear_label))
-                    .clicked()
+                if button(
+                    ui,
+                    clear_label,
+                    !self.history.is_empty(),
+                    if self.confirm_clear {
+                        ButtonKind::Danger
+                    } else {
+                        ButtonKind::Ghost
+                    },
+                )
+                .clicked()
                 {
                     if self.confirm_clear {
                         clear = true;
@@ -148,16 +171,10 @@ impl KocrApp {
                                     egui::vec2(ui.available_width(), CONTENT_HEIGHT),
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if ui
-                                            .add(egui::Button::new(t!("delete").as_ref()))
-                                            .clicked()
-                                        {
+                                        if button(ui, t!("delete"), true, ButtonKind::Danger).clicked() {
                                             delete_id = Some(record.id);
                                         }
-                                        if ui
-                                            .add(egui::Button::new(t!("copy").as_ref()))
-                                            .clicked()
-                                        {
+                                        if button(ui, t!("copy"), true, ButtonKind::Ghost).clicked() {
                                             copy = Some(match &record.content {
                                                 RecordContent::Text(text) => {
                                                     CopyAction::Text(text.clone())
@@ -372,12 +389,9 @@ impl KocrApp {
         let mut toggle = None;
         let mut action = None;
 
-        egui::Grid::new("models")
-            .num_columns(3)
-            .spacing([12.0, 8.0])
-            .striped(true)
-            .show(ui, |ui| {
-                for model in &models {
+        for model in &models {
+            card(ui, |ui| {
+                ui.horizontal(|ui| {
                     let mut checked = active.as_deref() == Some(model.name.as_str());
                     if ui
                         .add_enabled(model.installed, egui::Checkbox::without_text(&mut checked))
@@ -385,28 +399,37 @@ impl KocrApp {
                     {
                         toggle = Some((model.name.clone(), checked));
                     }
-
-                    ui.label(&model.name);
-
-                    if model.installed {
-                        if ui
-                            .add_enabled(
-                                !self.installing,
-                                egui::Button::new(t!("uninstall").as_ref()),
-                            )
-                            .clicked()
-                        {
-                            action = Some((false, model.name.clone()));
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new(&model.name).strong());
+                        ui.label(
+                            egui::RichText::new(if model.installed {
+                                t!("model_installed").to_string()
+                            } else {
+                                t!("model_not_installed").to_string()
+                            })
+                            .small()
+                            .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let label = if model.installed {
+                            t!("uninstall")
+                        } else {
+                            t!("install")
+                        };
+                        let kind = if model.installed {
+                            ButtonKind::Ghost
+                        } else {
+                            ButtonKind::Primary
+                        };
+                        if button(ui, label, !self.installing, kind).clicked() {
+                            action = Some((!model.installed, model.name.clone()));
                         }
-                    } else if ui
-                        .add_enabled(!self.installing, egui::Button::new(t!("install").as_ref()))
-                        .clicked()
-                    {
-                        action = Some((true, model.name.clone()));
-                    }
-                    ui.end_row();
-                }
+                    });
+                });
             });
+            ui.add_space(6.0);
+        }
 
         if let Some((name, checked)) = toggle {
             self.set_active_model(checked.then_some(name));
@@ -436,7 +459,7 @@ impl KocrApp {
     }
 
     fn render_preferences_content(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new(t!("language").as_ref()).strong());
+        section_title(ui, t!("language").as_ref());
         ui.add_space(2.0);
         let locale = rust_i18n::locale();
         if ui.radio(&*locale == "en", "English").clicked() {
@@ -457,7 +480,7 @@ impl KocrApp {
         ui.add_space(8.0);
         ui.separator();
         ui.add_space(6.0);
-        ui.label(egui::RichText::new(t!("appearance").as_ref()).strong());
+        section_title(ui, t!("appearance").as_ref());
         let mut theme = theme_preference(&self.preferences.theme);
         ui.horizontal(|ui| {
             ui.label(t!("theme").as_ref());
@@ -488,11 +511,13 @@ impl KocrApp {
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             ui.label(t!("font_size").as_ref());
-            let response = ui.add(
-                egui::Slider::new(&mut self.font_size_draft, 12.0..=22.0)
-                    .step_by(1.0)
-                    .integer(),
-            );
+            let response = slider(ui, |ui| {
+                ui.add(
+                    egui::Slider::new(&mut self.font_size_draft, 12.0..=22.0)
+                        .step_by(1.0)
+                        .integer(),
+                )
+            });
             if response.drag_stopped() {
                 self.preferences.font_size = self.font_size_draft;
                 apply_ui_style(ui.ctx(), self.font_size_draft);
@@ -505,19 +530,20 @@ impl KocrApp {
         ui.add_space(8.0);
         ui.separator();
         ui.add_space(6.0);
-        ui.label(egui::RichText::new(t!("history").as_ref()).strong());
+        section_title(ui, t!("history").as_ref());
 
         ui.add_space(8.0);
         let mut limit = self.history_limit_draft;
         ui.horizontal(|ui| {
             ui.label(t!("history_limit").as_ref());
-            if ui
-                .add(
+            if slider(ui, |ui| {
+                ui.add(
                     egui::Slider::new(&mut limit, 10..=500)
                         .step_by(10.0)
                         .integer(),
                 )
-                .changed()
+            })
+            .changed()
             {
                 self.history_limit_draft = limit;
                 self.confirm_history_apply = false;
@@ -538,7 +564,7 @@ impl KocrApp {
         } else {
             t!("apply").to_string()
         };
-        if ui.button(apply_label).clicked() {
+        if button(ui, apply_label, true, ButtonKind::Primary).clicked() {
             if pending > 0 && !self.confirm_history_apply {
                 self.confirm_history_apply = true;
             } else {
@@ -551,7 +577,7 @@ impl KocrApp {
         ui.add_space(8.0);
         ui.separator();
         ui.add_space(6.0);
-        ui.label(egui::RichText::new(t!("behavior").as_ref()).strong());
+        section_title(ui, t!("behavior").as_ref());
 
         ui.add_space(8.0);
         ui.horizontal(|ui| {
@@ -614,7 +640,7 @@ impl KocrApp {
     fn render_shortcuts(&mut self, ui: &mut egui::Ui) {
         let mut button_rects = Vec::new();
         egui::Grid::new("shortcuts")
-            .num_columns(2)
+            .num_columns(3)
             .spacing([8.0, 8.0])
             .min_col_width(110.0)
             .show(ui, |ui| {
@@ -631,12 +657,33 @@ impl KocrApp {
                     } else {
                         format_shortcut(self.shortcut_value(field))
                     };
-                    let response = ui.add(
-                        egui::Button::new(value).min_size(egui::vec2(ui.available_width(), 0.0)),
+                    let response = button_sized(
+                        ui,
+                        value,
+                        true,
+                        if recording {
+                            ButtonKind::Primary
+                        } else {
+                            ButtonKind::Secondary
+                        },
+                        Some(egui::vec2(220.0, 36.0)),
                     );
                     button_rects.push(response.rect);
                     if response.clicked() {
                         self.shortcut_recording = Some(field);
+                    }
+                    if button(
+                        ui,
+                        t!("unbind"),
+                        !self.shortcut_value(field).is_empty(),
+                        ButtonKind::Ghost,
+                    )
+                    .clicked()
+                    {
+                        self.set_shortcut(field, String::new());
+                        self.save();
+                        self.shortcut_recording = None;
+                        self.status = t!("shortcut_unbound").to_string();
                     }
                     ui.end_row();
                 }
@@ -651,12 +698,6 @@ impl KocrApp {
         {
             self.shortcut_recording = None;
         }
-
-        ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(8.0);
-
-        ui.label(format!("{}: {}", t!("shortcuts"), self.shortcuts_status));
     }
 }
 
@@ -666,11 +707,11 @@ pub(crate) fn setup_fonts(ctx: &egui::Context) {
     fonts.families.clear();
     fonts.font_data.insert(
         "noto_sans".to_owned(),
-        egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSans.ttf")).into(),
+        egui::FontData::from_static(include_bytes!("../../assets/fonts/NotoSans.ttf")).into(),
     );
     fonts.font_data.insert(
         "kocr_cjk".to_owned(),
-        egui::FontData::from_static(include_bytes!("../assets/fonts/kocr-cjk.otf")).into(),
+        egui::FontData::from_static(include_bytes!("../../assets/fonts/kocr-cjk.otf")).into(),
     );
     fonts.families.insert(
         egui::FontFamily::Proportional,
@@ -681,40 +722,6 @@ pub(crate) fn setup_fonts(ctx: &egui::Context) {
         vec!["noto_sans".to_owned(), "kocr_cjk".to_owned()],
     );
     ctx.set_fonts(fonts);
-}
-
-pub(crate) fn apply_ui_style(ctx: &egui::Context, size: f32) {
-    ctx.all_styles_mut(|style| {
-        style.spacing.button_padding = egui::vec2(6.0, 3.0);
-        style.text_styles.insert(
-            egui::TextStyle::Heading,
-            egui::FontId::new(size + 3.0, egui::FontFamily::Proportional),
-        );
-        style.text_styles.insert(
-            egui::TextStyle::Body,
-            egui::FontId::new(size, egui::FontFamily::Proportional),
-        );
-        style.text_styles.insert(
-            egui::TextStyle::Button,
-            egui::FontId::new(size, egui::FontFamily::Proportional),
-        );
-        style.text_styles.insert(
-            egui::TextStyle::Small,
-            egui::FontId::new(size - 2.0, egui::FontFamily::Proportional),
-        );
-        style.text_styles.insert(
-            egui::TextStyle::Monospace,
-            egui::FontId::new(size, egui::FontFamily::Monospace),
-        );
-    });
-}
-
-pub(crate) fn theme_preference(value: &str) -> egui::ThemePreference {
-    match value {
-        "light" => egui::ThemePreference::Light,
-        "dark" => egui::ThemePreference::Dark,
-        _ => egui::ThemePreference::System,
-    }
 }
 
 fn theme_label(theme: egui::ThemePreference) -> String {

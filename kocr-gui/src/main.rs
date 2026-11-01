@@ -54,7 +54,7 @@ fn main() -> eframe::Result {
     let persist_window = preferences.remember_window_state;
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([560.0, 480.0])
+            .with_inner_size([520.0, 440.0])
             .with_min_inner_size([520.0, 440.0])
             .with_icon(load_window_icon()),
         renderer: eframe::Renderer::Glow,
@@ -67,9 +67,9 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             ui::setup_fonts(&cc.egui_ctx);
-            ui::apply_ui_style(&cc.egui_ctx, preferences.font_size);
             cc.egui_ctx
                 .set_theme(ui::theme_preference(&preferences.theme));
+            ui::apply_ui_style(&cc.egui_ctx, preferences.font_size);
             Ok(Box::new(KocrApp::new(cc.egui_ctx.clone(), preferences)))
         }),
     )

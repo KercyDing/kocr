@@ -23,8 +23,8 @@ capture_text:
   en: Extract
   zh-CN: 提取
 capture_oneline:
-  en: Extract as one line
-  zh-CN: 提取为单行
+  en: Extract (one line)
+  zh-CN: 单行提取
 recent:
   en: Recent
   zh-CN: 最近结果
@@ -74,6 +74,13 @@ installing_size:
 installed:
   en: "Installed %{name}"
   zh-CN: "已安装 %{name}"
+
+model_installed:
+  en: Installed
+  zh-CN: 已安装
+model_not_installed:
+  en: Not installed
+  zh-CN: 未安装
 uninstalled:
   en: "Uninstalled %{name}"
   zh-CN: "已卸载 %{name}"
@@ -105,12 +112,23 @@ press_shortcut:
 not_set:
   en: Not set
   zh-CN: 未设置
+
+unbind:
+  en: Unbind
+  zh-CN: 解绑
+shortcut_unbound:
+  en: Shortcut unbound
+  zh-CN: 已解绑快捷键
 shortcut_modifier_required:
   en: Use at least one modifier key
   zh-CN: 至少需要一个修饰键
 recording_status:
   en: Press a shortcut, Esc to cancel
   zh-CN: 请按快捷键，Esc 取消
+
+shortcuts_unset_status:
+  en: Set a shortcut in Settings to capture
+  zh-CN: 请先在设置中绑定快捷键
 shortcuts:
   en: Shortcuts
   zh-CN: 快捷键
