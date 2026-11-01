@@ -1,5 +1,4 @@
 !version 0.5
-!shell bash
 
 # =============== CLI ===============
 [help] CLI development tasks
@@ -96,7 +95,7 @@ group version {
     [help] Update version and publish
     [pass] Publish complete.
     [fail] Publish failed.
-    publish(version) ? @has("uv"):
+    publish(version) ? @has("uv") shell~=bash:
         test -z "$(git status --porcelain)"
         uv run scripts/version.py change {{version}}
         uv run scripts/notice.py
