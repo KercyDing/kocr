@@ -21,7 +21,7 @@ case $kind in
         depends="'glibc' 'gcc-libs'"
         provides="'kocr'"
         conflicts="'kocr'"
-        deb_doc=kocr
+        deb_doc=kocr-cli
         ;;
     gui)
         pkgdesc="KOCR desktop app (prebuilt binary)"
