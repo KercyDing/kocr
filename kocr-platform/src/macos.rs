@@ -1,9 +1,6 @@
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-
-use tempfile::Builder;
+use std::process::Command;
 
 use super::{Capture, PlatformError, find_command};
 
@@ -31,67 +28,6 @@ pub fn capture_region(output: &Path) -> Result<Capture, PlatformError> {
     }
 }
 
-pub fn copy_clipboard(content: &[u8], mime: &str) -> Result<(), PlatformError> {
-    if mime == "image/png" {
-        copy_image(content)
-    } else {
-        copy_text(content)
-    }
-}
-
-fn copy_text(content: &[u8]) -> Result<(), PlatformError> {
-    let pbcopy = find_command("pbcopy").ok_or_else(|| missing("pbcopy"))?;
-    let mut child = Command::new(pbcopy)
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|error| PlatformError::Output(format!("could not start pbcopy: {error}")))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| PlatformError::Output("pbcopy stdin was not available".to_owned()))?;
-    stdin
-        .write_all(content)
-        .map_err(|error| PlatformError::Output(format!("could not write to pbcopy: {error}")))?;
-    drop(stdin);
-    let status = child
-        .wait()
-        .map_err(|error| PlatformError::Output(format!("could not wait for pbcopy: {error}")))?;
-    if !status.success() {
-        return Err(PlatformError::Output(format!(
-            "pbcopy exited with {status}"
-        )));
-    }
-    Ok(())
-}
-
-fn copy_image(content: &[u8]) -> Result<(), PlatformError> {
-    let mut file = Builder::new().suffix(".png").tempfile().map_err(|error| {
-        PlatformError::Output(format!("could not create temporary file: {error}"))
-    })?;
-    file.write_all(content)
-        .map_err(|error| PlatformError::Output(format!("could not write image: {error}")))?;
-    file.flush()
-        .map_err(|error| PlatformError::Output(format!("could not flush image: {error}")))?;
-
-    let osascript = find_command("osascript").ok_or_else(|| missing("osascript"))?;
-    let path = file.path().display().to_string();
-    let path = path.replace('\\', "\\\\").replace('"', "\\\"");
-    let script = format!(
-        r#"set the clipboard to (read (POSIX file "{}") as «class PNGf»)"#,
-        path
-    );
-    let status = Command::new(osascript)
-        .args(["-e", &script])
-        .status()
-        .map_err(|error| PlatformError::Output(format!("could not start osascript: {error}")))?;
-    if !status.success() {
-        return Err(PlatformError::Output(format!(
-            "osascript exited with {status}"
-        )));
-    }
-    Ok(())
-}
-
 fn screencapture_path() -> Result<PathBuf, PlatformError> {
     if let Some(path) = find_command("screencapture") {
         return Ok(path);
@@ -107,5 +43,5 @@ fn missing(name: &str) -> PlatformError {
 }
 
 pub fn dependencies() -> &'static [&'static str] {
-    &["screencapture", "osascript", "pbcopy"]
+    &["screencapture"]
 }

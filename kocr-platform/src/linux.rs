@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -29,39 +28,6 @@ pub fn capture_region(output: &Path) -> Result<Capture, PlatformError> {
     }
     Ok(Capture::Saved)
 }
-
-pub fn copy_clipboard(content: &[u8], mime: &str) -> Result<(), PlatformError> {
-    let wl_copy = require_command("wl-copy")?;
-    let mut child = Command::new(wl_copy)
-        .args(["--type", mime])
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|error| PlatformError::Output(format!("could not start wl-copy: {error}")))?;
-
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| PlatformError::Output("wl-copy stdin was not available".to_owned()))?;
-    stdin
-        .write_all(content)
-        .map_err(|error| PlatformError::Output(format!("could not write to wl-copy: {error}")))?;
-    drop(stdin);
-
-    let status = child
-        .wait()
-        .map_err(|error| PlatformError::Output(format!("could not wait for wl-copy: {error}")))?;
-    if !status.success() {
-        return Err(PlatformError::Output(format!(
-            "wl-copy exited with {status}"
-        )));
-    }
-    Ok(())
-}
-
-pub fn dependencies() -> &'static [&'static str] {
-    &["spectacle", "wl-copy", "notify-send"]
-}
-
 fn require_command(name: &str) -> Result<PathBuf, PlatformError> {
     find_command(name)
         .ok_or_else(|| PlatformError::MissingDependency(format!("{name} not found in PATH")))
@@ -89,6 +55,10 @@ fn spectacle_args(release_capture: bool) -> Vec<&'static str> {
     }
     args.push("--output");
     args
+}
+
+pub fn dependencies() -> &'static [&'static str] {
+    &["spectacle", "notify-send"]
 }
 
 #[cfg(test)]

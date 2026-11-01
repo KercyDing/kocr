@@ -177,46 +177,19 @@ impl KocrApp {
                                                         .color(ui.visuals().weak_text_color()),
                                                 );
                                                 ui.add_space(6.0);
-                                                let content_width =
-                                                    ui.available_width().max(40.0);
+                                                let content_width = ui.available_width().max(1.0);
                                                 ui.allocate_ui_with_layout(
-                                                    egui::vec2(
-                                                        content_width,
-                                                        CONTENT_HEIGHT,
-                                                    ),
-                                                    egui::Layout::left_to_right(
-                                                        egui::Align::Center,
-                                                    ),
+                                                    egui::vec2(content_width, CONTENT_HEIGHT),
+                                                    egui::Layout::left_to_right(egui::Align::Center),
                                                     |ui| {
                                                         ui.set_width(content_width);
                                                         match &record.content {
                                                             RecordContent::Text(text) => {
                                                                 let full = text.clone();
-                                                                let mut job =
-                                                                    egui::text::LayoutJob::default();
-                                                                job.wrap.max_width = content_width;
-                                                                job.wrap.max_rows = 2;
-                                                                job.wrap.break_anywhere = true;
-                                                                job.append(
-                                                                    text,
-                                                                    0.0,
-                                                                    egui::TextFormat {
-                                                                        font_id:
-                                                                            egui::TextStyle::Body
-                                                                                .resolve(
-                                                                                    ui.style(),
-                                                                                ),
-                                                                        color: ui
-                                                                            .visuals()
-                                                                            .text_color(),
-                                                                        ..Default::default()
-                                                                    },
-                                                                );
-                                                                ui.add(
-                                                                    egui::Label::new(job)
-                                                                        .show_tooltip_when_elided(
-                                                                            false,
-                                                                        ),
+                                                                ui.add_sized(
+                                                                    [content_width, CONTENT_HEIGHT],
+                                                                    egui::Label::new(text)
+                                                                        .truncate(),
                                                                 )
                                                                 .on_hover_text_at_pointer(full);
                                                             }
@@ -267,72 +240,10 @@ impl KocrApp {
                                                                                     texture,
                                                                                 ));
                                                                             }
-                                                                            let texture = preview
-                                                                                .as_ref()
-                                                                                .filter(
-                                                                                    |(preview_id, _)| {
-                                                                                        *preview_id
-                                                                                            == record.id
-                                                                                    },
-                                                                                )
-                                                                                .map_or(
-                                                                                    texture,
-                                                                                    |(_, texture)| {
-                                                                                        texture
-                                                                                    },
-                                                                                );
-                                                                            const PREVIEW_WIDTH: f32 =
-                                                                                320.0;
-                                                                            const PREVIEW_HEIGHT: f32 =
-                                                                                200.0;
-                                                                            let size = texture
-                                                                                .size_vec2();
-                                                                            let scale = (PREVIEW_WIDTH
-                                                                                / size.x)
-                                                                                .min(
-                                                                                    PREVIEW_HEIGHT
-                                                                                        / size.y,
-                                                                                )
-                                                                                .min(1.0);
-                                                                            ui.allocate_ui(
-                                                                                egui::vec2(
-                                                                                    PREVIEW_WIDTH,
-                                                                                    PREVIEW_HEIGHT,
-                                                                                ),
-                                                                                |ui| {
-                                                                                    ui.set_min_size(
-                                                                                        egui::vec2(
-                                                                                            PREVIEW_WIDTH,
-                                                                                            PREVIEW_HEIGHT,
-                                                                                        ),
-                                                                                    );
-                                                                                    ui.vertical_centered(
-                                                                                        |ui| {
-                                                                                            ui.add_space(
-                                                                                                ((PREVIEW_HEIGHT
-                                                                                                    - size.y
-                                                                                                        * scale)
-                                                                                                    / 2.0)
-                                                                                                    .max(
-                                                                                                        0.0,
-                                                                                                    ),
-                                                                                            );
-                                                                                            ui.add(
-                                                                                                egui::Image::new(
-                                                                                                    texture,
-                                                                                                )
-                                                                                                .fit_to_exact_size(
-                                                                                                    size * scale,
-                                                                                                ),
-                                                                                            );
-                                                                                        },
-                                                                                    );
-                                                                                },
-                                                                            );
                                                                         },
                                                                     );
                                                                 } else {
-                                                                    ui.weak(t!("image_unavailable").as_ref());
+                                                                    ui.weak(t!("preview_unavailable").as_ref());
                                                                 }
                                                             }
                                                         }

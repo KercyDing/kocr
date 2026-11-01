@@ -33,6 +33,16 @@ dirs = "7"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
 gtk = "0.18"
 image = { version = "0.25", default-features = false, features = ["png"] }
+arboard = "3"
+xcap = { version = "0.9", features = ["image"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
 futures-util = "0.3"
 global-hotkey = "0.9"
 rusqlite = { version = "0.41", features = ["bundled"] }

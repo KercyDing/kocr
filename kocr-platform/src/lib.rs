@@ -8,19 +8,26 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+mod clipboard;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 mod unsupported;
+#[cfg(windows)]
+mod windows;
+
+pub use clipboard::copy_clipboard;
 
 #[cfg(target_os = "linux")]
-pub use linux::{capture_region, copy_clipboard, dependencies};
+pub use linux::{capture_region, dependencies};
 #[cfg(target_os = "macos")]
-pub use macos::{capture_region, copy_clipboard, dependencies};
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub use unsupported::{capture_region, copy_clipboard, dependencies};
+pub use macos::{capture_region, dependencies};
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+pub use unsupported::{capture_region, dependencies};
+#[cfg(windows)]
+pub use windows::{capture_region, dependencies};
 
 #[derive(Debug, Error)]
 pub enum PlatformError {

@@ -6,6 +6,11 @@ license.workspace = true
 description = "Platform integration for kocr"
 
 [dependencies]
+arboard.workspace = true
 dirs.workspace = true
+image.workspace = true
 thiserror.workspace = true
-tempfile.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+xcap.workspace = true
+windows.workspace = true
