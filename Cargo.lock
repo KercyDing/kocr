@@ -2670,7 +2670,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "kocr-cli"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap",
  "comfy-table",
@@ -2679,7 +2679,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-config"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "dirs 7.0.0",
  "serde",
@@ -2690,7 +2690,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kocr-model",
  "kocr-ocr",
@@ -2701,7 +2701,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-gui"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "chrono",
  "eframe",
@@ -2720,7 +2720,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-model"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kocr-config",
  "kocr-platform",
@@ -2733,7 +2733,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-ocr"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "kocr-model",
  "rusto-rs",
@@ -2744,7 +2744,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-platform"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "arboard",
  "auto-launch",
@@ -2757,7 +2757,7 @@ dependencies = [
 
 [[package]]
 name = "kocr-shortcuts"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "futures-util",
  "global-hotkey",
