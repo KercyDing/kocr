@@ -213,9 +213,8 @@ impl KocrApp {
                     self.capturing = false;
                     match result {
                         Ok(output) => {
-                            let now = Local::now();
-                            let created_at = now.timestamp();
-                            let time = now.format("%H:%M:%S").to_string();
+                            let created_at = Local::now().timestamp();
+                            let time = format_time(created_at);
                             match output.text {
                                 Some(text) => {
                                     if !text.is_empty() {
@@ -670,11 +669,7 @@ fn load_history(limit: usize) -> (Option<History>, Vec<CaptureRecord>, Option<St
 }
 
 fn stored_record(record: StoredRecord) -> Option<CaptureRecord> {
-    let time = Local
-        .timestamp_opt(record.created_at, 0)
-        .single()
-        .map(|time| time.format("%m-%d %H:%M:%S").to_string())
-        .unwrap_or_else(|| "--:--:--".to_owned());
+    let time = format_time(record.created_at);
     let content = match record.content {
         StoredContent::Text(text) => RecordContent::Text(text),
         StoredContent::Image(path) => RecordContent::Image(path),
@@ -684,4 +679,28 @@ fn stored_record(record: StoredRecord) -> Option<CaptureRecord> {
         content,
         time,
     })
+}
+
+fn format_time(created_at: i64) -> String {
+    Local
+        .timestamp_opt(created_at, 0)
+        .single()
+        .map(|time| time.format("%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| "--:--:--".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_time;
+
+    #[test]
+    fn formats_record_time_with_date() {
+        let formatted = format_time(0);
+
+        assert_eq!(formatted.len(), "MM-DD HH:MM:SS".len());
+        assert_eq!(&formatted[2..3], "-");
+        assert_eq!(&formatted[5..6], " ");
+        assert_eq!(&formatted[8..9], ":");
+        assert_eq!(&formatted[11..12], ":");
+    }
 }
