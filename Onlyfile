@@ -8,21 +8,19 @@ build():
 
 [help] Run in debug mode
 [fail] Debug run failed.
-run():
-    zig build run
+run(img_path = "assets/sample.png"):
+    zig build run -- {{img_path}}
 
 [help] Build in release mode
-[desc] Run `only build-release false` to turn off the strip.
 [pass] Release build complete.
 [fail] Release build failed.
-build-release(strip = "true"):
-    zig build -Doptimize=ReleaseFast -Dstrip={{strip}}
+build-release():
+    zig build -Doptimize=fast -Dstrip=true
 
 [help] Run in release mode
-[desc] Run `only run-release false` to turn off the strip.
 [fail] Release run failed.
-run-release(strip = "true"):
-    zig build run -Doptimize=ReleaseFast -Dstrip={{strip}}
+run-release(img_path = "assets/sample.png"):
+    zig build run -Doptimize=fast -Dstrip=true -- {{img_path}}
 
 [help] Format all Zig files
 [pass] Formatting complete.
