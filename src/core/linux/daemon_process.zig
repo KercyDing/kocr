@@ -8,6 +8,25 @@ pub const DaemonError = error{
     ProcessControlUnavailable,
 };
 
+pub fn lock(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !std.Io.File {
+    const dir = try config.dir(io, allocator, environ);
+    defer allocator.free(dir);
+    const path = try std.Io.Dir.path.join(allocator, &.{ dir, "daemon.lock" });
+    defer allocator.free(path);
+    try std.Io.Dir.cwd().createDirPath(io, std.Io.Dir.path.dirname(path) orelse ".");
+    const file = try std.Io.Dir.cwd().createFile(io, path, .{ .read = true, .truncate = false });
+    // LOCK_EX | LOCK_NB
+    if (std.os.linux.flock(file.handle, 2 | 4) != 0) {
+        file.close(io);
+        return error.AlreadyRunning;
+    }
+    return file;
+}
+
 pub fn isRunning(
     io: std.Io,
     allocator: std.mem.Allocator,

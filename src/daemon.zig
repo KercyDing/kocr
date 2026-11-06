@@ -14,6 +14,11 @@ pub fn run(init: std.process.Init) !void {
     };
     std.posix.sigaction(std.posix.SIG.PIPE, &ignore_pipe, null);
 
+    const lock = core.daemon_process.lock(init.io, init.gpa, init.environ_map) catch |err| switch (err) {
+        error.AlreadyRunning => return,
+        else => return err,
+    };
+    defer lock.close(init.io);
     core.daemon_process.acquire(init.io, init.gpa, init.environ_map) catch |err| switch (err) {
         error.AlreadyRunning => return,
         else => return err,
@@ -86,6 +91,7 @@ fn workerLoop(daemon: *Daemon) void {
     while (daemon.running.load(.acquire)) {
         if (daemon.queue.pop()) |action| {
             runAction(daemon, action) catch |err| {
+                std.debug.print("kocr: action {s} failed: {s}\n", .{ @tagName(action), @errorName(err) });
                 notify(daemon, "kocr action failed", @errorName(err));
             };
         } else {
