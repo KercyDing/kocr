@@ -30,9 +30,11 @@ group cli {
     [desc] Build release and install kocr.
     [pass] Installed kocr.
     [fail] Installation failed.
-    install() ? @os("windows") & build-release:
+    install()
+        ? @os("windows")
+        & build-release
         shell~=pwsh
-        :
+    :
         | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
         | $installPath = Join-Path $installDir "kocr.exe"
         | $stagedPath = Join-Path $env:TEMP "kocr-install-staged.exe"
@@ -61,9 +63,7 @@ group cli {
     [desc] Remove the installed kocr binary.
     [pass] Uninstalled kocr.
     [fail] Uninstallation failed.
-    uninstall() ? @os("windows"):
-        shell~=pwsh
-        :
+    uninstall() ? @os("windows") shell~=pwsh:
         | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
         | Remove-Item (Join-Path $installDir "kocr.exe") -Force -ErrorAction SilentlyContinue
         | Remove-Item $installDir -Force -ErrorAction SilentlyContinue
@@ -103,9 +103,11 @@ group gui {
     [desc] Build release and install kocr-gui.
     [pass] Installed kocr-gui.
     [fail] Installation failed.
-    install() ? @os("windows") & build-release:
+    install()
+        ? @os("windows")
+        & build-release
         shell~=pwsh
-        :
+    :
         | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
         | $installPath = Join-Path $installDir "kocr-gui.exe"
         | $stagedPath = Join-Path $env:TEMP "kocr-gui-install-staged.exe"
@@ -134,9 +136,7 @@ group gui {
     [desc] Remove the installed kocr-gui binary.
     [pass] Uninstalled kocr-gui.
     [fail] Uninstallation failed.
-    uninstall() ? @os("windows"):
-        shell~=pwsh
-        :
+    uninstall() ? @os("windows") shell~=pwsh:
         | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
         | Remove-Item (Join-Path $installDir "kocr-gui.exe") -Force -ErrorAction SilentlyContinue
 
