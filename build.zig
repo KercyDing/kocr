@@ -29,6 +29,10 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    const zqlite = b.dependency("zqlite", .{
+        .target = target,
+        .optimize = optimize,
+    });
 
     const config_mod = b.addModule("config", .{
         .root_source_file = b.path("src/config.zig"),
@@ -126,10 +130,12 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
         .strip = strip,
+        .link_libc = true,
         .imports = &.{
             .{ .name = "model", .module = model_mod },
             .{ .name = "downloader", .module = downloader_mod },
             .{ .name = "zignal", .module = zignal.module("zignal") },
+            .{ .name = "zqlite", .module = zqlite.module("zqlite") },
         },
     });
 

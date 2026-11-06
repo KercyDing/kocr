@@ -20,7 +20,7 @@ pub const Config = struct {
     };
 };
 
-pub fn path(
+pub fn dir(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
@@ -28,7 +28,17 @@ pub fn path(
     const base = try known_folders.getPath(io, allocator, environ, .roaming_configuration) orelse
         return error.ConfigDirUnavailable;
     defer allocator.free(base);
-    return std.Io.Dir.path.join(allocator, &.{ base, "kocr", "config.json" });
+    return std.Io.Dir.path.join(allocator, &.{ base, "kocr" });
+}
+
+pub fn path(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) ![]u8 {
+    const config_dir = try dir(io, allocator, environ);
+    defer allocator.free(config_dir);
+    return std.Io.Dir.path.join(allocator, &.{ config_dir, "config.json" });
 }
 
 pub fn load(
