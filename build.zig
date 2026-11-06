@@ -67,12 +67,15 @@ pub fn build(b: *std.Build) !void {
             .linux => &.{
                 .{ .name = "goose", .module = goose.module("goose") },
                 .{ .name = "core_types", .module = core_types },
+                .{ .name = "config", .module = config_mod },
             },
             .windows, .macos => &.{
                 .{ .name = "core_types", .module = core_types },
+                .{ .name = "config", .module = config_mod },
             },
             else => &.{
                 .{ .name = "core_types", .module = core_types },
+                .{ .name = "config", .module = config_mod },
             },
         },
     });
@@ -160,6 +163,7 @@ pub fn build(b: *std.Build) !void {
         .strip = strip,
         .imports = &.{
             .{ .name = "config", .module = config_mod },
+            .{ .name = "core", .module = core_mod },
             .{ .name = "kocr", .module = kocr_mod },
             .{ .name = "cli", .module = cli },
         },
@@ -274,6 +278,9 @@ const qt_libs = [_][]const u8{
     "qclipboard",
     "qcombobox",
     "qfiledialog",
+    "qkeysequenceedit",
+    "qdialog",
+    "qcheckbox",
     "qobject",
     "qsize",
     "qkeysequence",
@@ -285,6 +292,7 @@ const qt_libs = [_][]const u8{
     "qlistwidget",
     "qplaintextedit",
     "qpushbutton",
+    "qpalette",
     "qpixmap",
     "qsplitter",
     "qtimer",

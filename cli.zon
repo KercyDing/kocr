@@ -79,6 +79,11 @@
             },
         },
         .{
+            .name = "daemon",
+            .about = "Run global shortcuts in the background",
+            .args = .{},
+        },
+        .{
             .name = "install",
             .about = "Download and install a model package",
             .args = .{

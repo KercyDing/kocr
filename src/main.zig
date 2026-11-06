@@ -2,6 +2,8 @@ const std = @import("std");
 
 const cli = @import("cli");
 const config = @import("config");
+const core = @import("core");
+const daemon = @import("daemon.zig");
 const kocr = @import("kocr");
 
 pub fn main(init: std.process.Init) !void {
@@ -10,6 +12,7 @@ pub fn main(init: std.process.Init) !void {
         .image => |args| try runImage(init, args),
         .install => |args| try runInstall(init, args),
         .use => |args| try runUse(init, args),
+        .daemon => try daemon.run(init),
     }
 }
 

@@ -41,7 +41,7 @@ Or:
 zig build run-gui
 ```
 
-The current GUI manages model installs/removals, displays text and image history, and provides one-shot capture actions for copying/saving a region and extracting text. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`. Shortcut configuration and the background daemon are not implemented yet.
+The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by the standalone `kocr daemon` process, so the GUI does not need to stay open. Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop`. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
 
 Windows (`zigwin32`) and macOS (`zig-objc`) entry points are wired into the build but currently stop with an explicit "not implemented" compile error.
 

@@ -9,9 +9,13 @@ const kocr = @import("kocr");
 const qt6 = @import("libqt6zig");
 
 const QApplication = qt6.QApplication;
+const QCheckBox = qt6.QCheckBox;
 const QComboBox = qt6.QComboBox;
+const QDialog = qt6.QDialog;
 const QFileDialog = qt6.QFileDialog;
 const QHBoxLayout = qt6.QHBoxLayout;
+const QKeySequence = qt6.QKeySequence;
+const QKeySequenceEdit = qt6.QKeySequenceEdit;
 const QLabel = qt6.QLabel;
 const QListWidget = qt6.QListWidget;
 const QListWidgetItem = qt6.QListWidgetItem;
@@ -58,6 +62,9 @@ const App = struct {
     io: std.Io,
     environ: *const std.process.Environ.Map,
     root: QWidget,
+    daemon_status: QLabel,
+    daemon_toggle: QPushButton,
+    daemon_running: bool = false,
     profile: QComboBox,
     model_status: QLabel,
     install: QPushButton,
@@ -111,6 +118,32 @@ const App = struct {
             self.status.setText("Error: unable to allocate profile name");
             return null;
         };
+    }
+
+    fn updateDaemonStatus(self: *App) void {
+        const running = core.daemon_process.isRunning(self.io, self.allocator, self.environ) catch false;
+        self.daemon_running = running;
+        self.daemon_status.setText(if (running) "Daemon: running" else "Daemon: stopped");
+        self.daemon_toggle.setText(if (running) "Stop" else "Start");
+    }
+
+    fn toggleDaemon(self: *App) void {
+        if (self.daemon_running) {
+            core.daemon_process.stop(self.io, self.allocator, self.environ) catch |err| {
+                var message: [256]u8 = undefined;
+                self.status.setText(std.fmt.bufPrint(&message, "Daemon stop failed: {s}", .{@errorName(err)}) catch "Daemon stop failed");
+                return;
+            };
+            self.status.setText("Daemon stopped");
+        } else {
+            const started = core.daemon_process.ensureRunning(self.io, self.allocator, self.environ) catch |err| {
+                var message: [256]u8 = undefined;
+                self.status.setText(std.fmt.bufPrint(&message, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
+                return;
+            };
+            self.status.setText(if (started) "Daemon started" else "Daemon already running");
+        }
+        self.updateDaemonStatus();
     }
 
     fn updateModelStatus(self: *App) void {
@@ -544,6 +577,163 @@ fn formatTime(timestamp: i64) []const u8 {
 var time_buffer: [32]u8 = undefined;
 var active_app: ?*App = null;
 
+const SettingsState = struct {
+    app: *App,
+    dialog: QDialog,
+    copy_edit: QKeySequenceEdit,
+    save_edit: QKeySequenceEdit,
+    ocr_edit: QKeySequenceEdit,
+    oneline_edit: QKeySequenceEdit,
+    hints: [4]QLabel,
+    autostart: QCheckBox,
+
+    fn clearShortcutFocus(self: *SettingsState) void {
+        self.copy_edit.clearFocus();
+        self.save_edit.clearFocus();
+        self.ocr_edit.clearFocus();
+        self.oneline_edit.clearFocus();
+        self.dialog.setFocus();
+    }
+};
+
+var settings_state: ?*SettingsState = null;
+
+fn openSettings(app: *App) void {
+    if (settings_state != null) return;
+    const state = app.allocator.create(SettingsState) catch return;
+    var parsed = config.load(app.allocator, app.io, app.environ) catch |err| {
+        var message: [256]u8 = undefined;
+        app.status.setText(std.fmt.bufPrint(&message, "Config error: {s}", .{@errorName(err)}) catch "Config error");
+        app.allocator.destroy(state);
+        return;
+    };
+    defer parsed.deinit();
+
+    const dialog = QDialog.new(app.root);
+    dialog.setWindowTitle("kocr gui settings");
+    dialog.resize(560, 320);
+    dialog.onMousePressEvent(settingsDialogPressed);
+    const layout = QVBoxLayout.new(dialog);
+    layout.addWidget(QLabel.new3("Shortcuts"));
+    const rows = [_]struct { label: []const u8, value: ?[]const u8 }{
+        .{ .label = "Copy image", .value = parsed.value.shortcuts.copy },
+        .{ .label = "Save image", .value = parsed.value.shortcuts.save },
+        .{ .label = "Extract text", .value = parsed.value.shortcuts.ocr },
+        .{ .label = "One line", .value = parsed.value.shortcuts.oneline },
+    };
+    var editors: [4]QKeySequenceEdit = undefined;
+    var hints: [4]QLabel = undefined;
+    for (rows, 0..) |row, index| {
+        const line = QHBoxLayout.new2();
+        const label = QLabel.new3(row.label);
+        label.setFixedWidth(140);
+        line.addWidget(label);
+        editors[index] = QKeySequenceEdit.new(dialog);
+        editors[index].setObjectName("shortcutEditor");
+        editors[index].setClearButtonEnabled(true);
+        if (row.value) |value| editors[index].setKeySequence(QKeySequence.fromString(value));
+        line.addWidget2(editors[index], 1);
+        hints[index] = QLabel.new5("Press shortcut…", editors[index]);
+        var hint_palette = hints[index].palette();
+        const placeholder_color = hint_palette.color2(qt6.qpalette_enums.ColorRole.PlaceholderText);
+        hint_palette.setColor2(qt6.qpalette_enums.ColorRole.WindowText, placeholder_color);
+        hints[index].setPalette(hint_palette);
+        hints[index].setStyleSheet("background: transparent; padding-left: 6px;");
+        hints[index].setAttribute2(qt6.qnamespace_enums.WidgetAttribute.WA_TransparentForMouseEvents, true);
+        hints[index].setVisible(row.value == null or row.value.?.len == 0);
+        editors[index].onResizeEvent(shortcutResized);
+        layout.addLayout(line);
+    }
+    layout.addSpacing(12);
+    layout.addWidget(QLabel.new3("Daemon"));
+    const autostart = QCheckBox.new4("Start daemon at login", dialog);
+    autostart.setChecked(core.autostart.enabled(app.io, app.allocator, app.environ) catch false);
+    layout.addWidget(autostart);
+
+    const buttons = QHBoxLayout.new2();
+    buttons.addStretch();
+    const cancel = QPushButton.new5("Cancel", dialog);
+    const save = QPushButton.new5("Save", dialog);
+    cancel.onClicked(cancelSettings);
+    save.onClicked(saveSettings);
+    buttons.addWidget(cancel);
+    buttons.addWidget(save);
+    layout.addLayout(buttons);
+
+    state.* = .{
+        .app = app,
+        .dialog = dialog,
+        .copy_edit = editors[0],
+        .save_edit = editors[1],
+        .ocr_edit = editors[2],
+        .oneline_edit = editors[3],
+        .hints = hints,
+        .autostart = autostart,
+    };
+    settings_state = state;
+    editors[0].onKeySequenceChanged(shortcutChanged);
+    editors[1].onKeySequenceChanged(shortcutChanged);
+    editors[2].onKeySequenceChanged(shortcutChanged);
+    editors[3].onKeySequenceChanged(shortcutChanged);
+    _ = dialog.exec();
+    settings_state = null;
+    dialog.delete();
+    app.allocator.destroy(state);
+}
+
+fn saveSettings(_: QPushButton) callconv(.c) void {
+    const state = settings_state orelse return;
+    const allocator = state.app.allocator;
+    const copy = state.copy_edit.keySequence().toString(allocator);
+    defer allocator.free(copy);
+    const save = state.save_edit.keySequence().toString(allocator);
+    defer allocator.free(save);
+    const ocr = state.ocr_edit.keySequence().toString(allocator);
+    defer allocator.free(ocr);
+    const oneline = state.oneline_edit.keySequence().toString(allocator);
+    defer allocator.free(oneline);
+
+    var parsed = config.load(allocator, state.app.io, state.app.environ) catch |err| {
+        var message: [256]u8 = undefined;
+        state.app.status.setText(std.fmt.bufPrint(&message, "Config error: {s}", .{@errorName(err)}) catch "Config error");
+        return;
+    };
+    defer parsed.deinit();
+    parsed.value.shortcuts.copy = copy;
+    parsed.value.shortcuts.save = save;
+    parsed.value.shortcuts.ocr = ocr;
+    parsed.value.shortcuts.oneline = oneline;
+    config.save(allocator, state.app.io, state.app.environ, parsed.value) catch |err| {
+        var message: [256]u8 = undefined;
+        state.app.status.setText(std.fmt.bufPrint(&message, "Could not save config: {s}", .{@errorName(err)}) catch "Could not save config");
+        return;
+    };
+    const executable_dir = std.process.executableDirPathAlloc(state.app.io, allocator) catch "";
+    defer if (executable_dir.len != 0) allocator.free(executable_dir);
+    const daemon_executable = if (executable_dir.len != 0)
+        std.Io.Dir.path.join(allocator, &.{ executable_dir, "kocr" }) catch ""
+    else
+        "";
+    defer if (daemon_executable.len != 0) allocator.free(daemon_executable);
+
+    core.autostart.set(
+        state.app.io,
+        allocator,
+        state.app.environ,
+        state.autostart.isChecked(),
+        daemon_executable,
+    ) catch |err| {
+        var message: [256]u8 = undefined;
+        state.app.status.setText(std.fmt.bufPrint(&message, "Could not update autostart: {s}", .{@errorName(err)}) catch "Could not update autostart");
+    };
+    state.app.status.setText("Settings saved");
+    state.dialog.accept();
+}
+
+fn cancelSettings(_: QPushButton) callconv(.c) void {
+    if (settings_state) |state| state.dialog.reject();
+}
+
 fn pollCallback(_: QTimer) callconv(.c) void {
     if (active_app) |app| app.poll();
 }
@@ -552,11 +742,49 @@ fn historyPollCallback(_: QTimer) callconv(.c) void {
     if (active_app) |app| {
         app.pollHistory();
         app.updateModelStatus();
+        app.updateDaemonStatus();
     }
 }
 
 fn rootMousePressed(_: QWidget, _: qt6.QMouseEvent) callconv(.c) void {
     if (active_app) |app| app.clearHistorySelection();
+}
+
+fn shortcutResized(editor: QKeySequenceEdit, _: qt6.QResizeEvent) callconv(.c) void {
+    const state = settings_state orelse return;
+    const editors = [_]QKeySequenceEdit{ state.copy_edit, state.save_edit, state.ocr_edit, state.oneline_edit };
+    for (editors, 0..) |candidate, index| {
+        if (candidate.ptr == editor.ptr) {
+            state.hints[index].setGeometry(0, 0, editor.width(), editor.height());
+            break;
+        }
+    }
+}
+
+fn shortcutChanged(editor: QKeySequenceEdit, sequence: QKeySequence) callconv(.c) void {
+    const state = settings_state orelse return;
+    const text = sequence.toString(state.app.allocator);
+    defer state.app.allocator.free(text);
+    const empty = text.len == 0;
+    const editors = [_]QKeySequenceEdit{ state.copy_edit, state.save_edit, state.ocr_edit, state.oneline_edit };
+    for (editors, 0..) |candidate, index| {
+        if (candidate.ptr == editor.ptr) {
+            state.hints[index].setVisible(empty);
+            break;
+        }
+    }
+}
+
+fn settingsDialogPressed(_: QDialog, _: qt6.QMouseEvent) callconv(.c) void {
+    if (settings_state) |state| state.clearShortcutFocus();
+}
+
+fn daemonToggleCallback(_: QPushButton) callconv(.c) void {
+    if (active_app) |app| app.toggleDaemon();
+}
+
+fn settingsCallback(_: QPushButton) callconv(.c) void {
+    if (active_app) |app| openSettings(app);
 }
 
 fn installCallback(_: QPushButton) callconv(.c) void {
@@ -640,13 +868,24 @@ pub fn run(init: std.process.Init) !void {
     const root = QWidget.new2();
     defer root.delete();
     root.setObjectName("kocrWindow");
-    root.setWindowTitle("kocr");
+    root.setWindowTitle("kocr gui");
     root.resize(760, 560);
     root.onCloseEvent(closeCallback);
     root.onMousePressEvent(rootMousePressed);
 
-    const title = QLabel.new3("kocr settings");
-    title.setObjectName("titleLabel");
+    const daemon_status = QLabel.new3("Daemon: checking…");
+    daemon_status.setObjectName("daemonStatus");
+    const daemon_toggle = QPushButton.new5("Start daemon", root);
+    daemon_toggle.setObjectName("daemonToggleButton");
+    daemon_toggle.onClicked(daemonToggleCallback);
+    const settings = QPushButton.new5("Settings…", root);
+    settings.setObjectName("settingsButton");
+    settings.onClicked(settingsCallback);
+    const header = QHBoxLayout.new2();
+    header.addWidget(daemon_status);
+    header.addWidget(daemon_toggle);
+    header.addStretch();
+    header.addWidget(settings);
 
     const profile = QComboBox.new(root);
     profile.setObjectName("modelProfile");
@@ -743,7 +982,7 @@ pub fn run(init: std.process.Init) !void {
     status.setWordWrap(true);
 
     const layout = QVBoxLayout.new(root);
-    layout.addWidget(title);
+    layout.addLayout(header);
     layout.addSpacing(8);
     layout.addLayout(action_row);
     layout.addSpacing(8);
@@ -760,6 +999,8 @@ pub fn run(init: std.process.Init) !void {
         .io = init.io,
         .environ = init.environ_map,
         .root = root,
+        .daemon_status = daemon_status,
+        .daemon_toggle = daemon_toggle,
         .profile = profile,
         .model_status = model_status,
         .install = install,
@@ -788,6 +1029,7 @@ pub fn run(init: std.process.Init) !void {
 
     app.loadSelection();
     app.updateModelStatus();
+    app.updateDaemonStatus();
     app.loadHistory();
 
     root.show();

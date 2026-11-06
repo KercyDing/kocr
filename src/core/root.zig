@@ -14,6 +14,9 @@ pub const Binding = types.Binding;
 pub const Capture = platform.Capture;
 pub const Screenshot = platform.screenshot;
 pub const Keyboard = platform.keyboard;
+pub const autostart = platform.autostart;
+pub const clipboard = platform.clipboard;
+pub const daemon_process = platform.daemon_process;
 
 pub const CaptureError = Screenshot.CaptureError;
 pub const KeyboardError = Keyboard.KeyboardError;
@@ -37,6 +40,16 @@ pub fn listen(
     handler: types.Handler,
 ) !void {
     return Keyboard.listen(allocator, io, environ, bindings, context, handler);
+}
+
+pub fn listenConfigured(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    return Keyboard.listenConfigured(allocator, io, environ, context, handler);
 }
 
 test {

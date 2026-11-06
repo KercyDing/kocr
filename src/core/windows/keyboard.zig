@@ -14,3 +14,13 @@ pub fn listen(
 ) !void {
     return error.UnsupportedPlatform;
 }
+
+pub fn listenConfigured(
+    _: std.mem.Allocator,
+    _: std.Io,
+    _: *const std.process.Environ.Map,
+    _: *anyopaque,
+    _: types.Handler,
+) !void {
+    return error.UnsupportedPlatform;
+}
