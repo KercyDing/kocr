@@ -16,9 +16,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-24.04
+          - runner: ubuntu-22.04
+            os: linux
             arch: x86_64
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-22.04-arm
+            os: linux
+            arch: arm64
+          - runner: windows-2022
+            os: windows
+            arch: x86_64
+          - runner: windows-11-arm
+            os: windows
             arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -37,29 +45,45 @@ jobs:
           path: |
             .zig-cache
             ~/.cache/zig
-          key: zig-release-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
+            ~/AppData/Local/zig
+          key: zig-release-cli-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
           restore-keys: |
-            zig-release-${{ runner.os }}-${{ matrix.arch }}-
+            zig-release-cli-${{ matrix.os }}-${{ matrix.arch }}-
 
       - name: Build CLI
         run: zig build -Doptimize=fast -Dstrip=true
 
-      - name: Package CLI
+      - name: Package CLI (Linux)
+        if: runner.os == 'Linux'
         run: |
           mkdir -p dist-cli
           cp zig-out/bin/kocr README.md LICENSE dist-cli/
           tar -C dist-cli -czf kocr-cli-linux-${{ matrix.arch }}.tar.gz .
-
-      - name: Inspect CLI
-        run: |
           file zig-out/bin/kocr
           tar -tzf kocr-cli-linux-${{ matrix.arch }}.tar.gz
 
-      - name: Upload CLI
+      - name: Package CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path zig-out/bin/kocr.exe, README.md, LICENSE -DestinationPath kocr-cli-windows-${{ matrix.arch }}.zip
+          Get-Item zig-out/bin/kocr.exe | Select-Object Name, Length
+
+      - name: Upload CLI (Linux)
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7.0.2
         with:
           name: kocr-cli-linux-${{ matrix.arch }}
           path: kocr-cli-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload CLI (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: kocr-cli-windows-${{ matrix.arch }}
+          path: kocr-cli-windows-${{ matrix.arch }}.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -68,20 +92,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-26.04
+          - runner: ubuntu-22.04
+            os: linux
             arch: x86_64
-          - runner: ubuntu-26.04-arm
+          - runner: ubuntu-22.04-arm
+            os: linux
+            arch: arm64
+          - runner: windows-2022
+            os: windows
+            arch: x86_64
+          - runner: windows-11-arm
+            os: windows
             arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
-
-      - name: Install Qt
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-private-dev
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2.2.1
@@ -94,28 +121,44 @@ jobs:
           path: |
             .zig-cache
             ~/.cache/zig
-          key: zig-release-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
+            ~/AppData/Local/zig
+          key: zig-release-gui-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
           restore-keys: |
-            zig-release-${{ runner.os }}-${{ matrix.arch }}-
+            zig-release-gui-${{ matrix.os }}-${{ matrix.arch }}-
 
       - name: Build GUI
         run: zig build gui -Doptimize=fast -Dstrip=true
 
-      - name: Package GUI
+      - name: Package GUI (Linux)
+        if: runner.os == 'Linux'
         run: |
           mkdir -p dist-gui
           cp zig-out/bin/kocr-gui README.md LICENSE dist-gui/
-          tar -C dist-gui -czf kocr-linux-${{ matrix.arch }}.tar.gz .
-
-      - name: Inspect GUI
-        run: |
+          tar -C dist-gui -czf kocr-gui-linux-${{ matrix.arch }}.tar.gz .
           file zig-out/bin/kocr-gui
-          tar -tzf kocr-linux-${{ matrix.arch }}.tar.gz
+          tar -tzf kocr-gui-linux-${{ matrix.arch }}.tar.gz
 
-      - name: Upload GUI
+      - name: Package GUI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path zig-out/bin/kocr-gui.exe, README.md, LICENSE -DestinationPath kocr-gui-windows-${{ matrix.arch }}.zip
+          Get-Item zig-out/bin/kocr-gui.exe | Select-Object Name, Length
+
+      - name: Upload GUI (Linux)
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: kocr-linux-${{ matrix.arch }}
-          path: kocr-linux-${{ matrix.arch }}.tar.gz
+          name: kocr-gui-linux-${{ matrix.arch }}
+          path: kocr-gui-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload GUI (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: kocr-gui-windows-${{ matrix.arch }}
+          path: kocr-gui-windows-${{ matrix.arch }}.zip
           if-no-files-found: error
           retention-days: 7
