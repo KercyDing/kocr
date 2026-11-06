@@ -25,10 +25,13 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    const goose = try b.dependencyLazy("goose", .{
-        .target = target,
-        .optimize = optimize,
-    });
+    const goose = if (target.result.os.tag == .linux)
+        try b.dependencyLazy("goose", .{
+            .target = target,
+            .optimize = optimize,
+        })
+    else
+        null;
     const zqlite = b.dependency("zqlite", .{
         .target = target,
         .optimize = optimize,
@@ -65,7 +68,7 @@ pub fn build(b: *std.Build) !void {
         .strip = strip,
         .imports = switch (target.result.os.tag) {
             .linux => &.{
-                .{ .name = "goose", .module = goose.module("goose") },
+                .{ .name = "goose", .module = goose.?.module("goose") },
                 .{ .name = "core_types", .module = core_types },
                 .{ .name = "config", .module = config_mod },
             },
