@@ -1,10 +1,8 @@
 # kocr
 
-An offline OCR tool.
+Offline OCR for images.
 
 ## Build
-
-Build:
 
 ```bash
 zig build
@@ -25,12 +23,33 @@ kocr install tiny
 kocr install small --force
 ```
 
+## GUI
+
+Linux uses the native Qt6 Widgets frontend from `rcalixte/libqt6zig`. Qt 6.8+ development files are required.
+
+```bash
+zig build gui
+./zig-out/bin/kocr-gui
+```
+
+Or:
+
+```bash
+zig build run-gui
+```
+
+The current GUI manages model installs/removals and displays OCR history. Shortcut configuration, capture actions, and the background daemon are not implemented yet.
+
+Windows (`zigwin32`) and macOS (`zig-objc`) entry points are wired into the build but currently stop with an explicit "not implemented" compile error.
+
 ## Using Only
 
 If [Only](https://github.com/onlyjs/only) is installed, the same workflow is available through the project `Onlyfile`:
 
 ```bash
-only build
-only run
+only cli build
+only cli run image image.png
+only gui build
+only gui run
 only clean
 ```
