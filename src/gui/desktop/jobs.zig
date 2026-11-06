@@ -47,13 +47,14 @@ pub const Job = struct {
 pub fn worker(job: *Job) void {
     switch (job.kind) {
         .install => {
-            _ = core.downloader.install(job.io, job.allocator, job.environ, job.profile, .{
+            const installed = core.downloader.install(job.io, job.allocator, job.environ, job.profile, .{
                 .force = false,
                 .progress = .{ .context = job, .report = reportProgress },
             }) catch |err| {
                 finishError(job, err);
                 return;
             };
+            job.allocator.free(installed);
         },
         .remove => {
             core.downloader.remove(job.io, job.allocator, job.environ, job.profile) catch |err| {
