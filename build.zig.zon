@@ -17,8 +17,8 @@
             .hash = "known_folders-0.0.0-Fy-PJiLLAABzqCdF6GWFmE36oCwioOh6Uxj4FF1Neanr",
         },
         .zommand = .{
-            .url = "git+https://github.com/KercyDing/zommand?ref=main#f5149d95fe0154dd8c5b3694336438e3564b392a",
-            .hash = "zommand-0.0.1-Ph_F7UyzAADGVM5xDcKmYvy--iV-8Nyrnnh_CnrLfcUo",
+            .url = "git+https://github.com/KercyDing/zommand?ref=main#2beb866662ebba77b31e6e9608d61b5f5dbc5890",
+            .hash = "zommand-0.0.1-Ph_F7Sy4AADYm5HuWIZJk1jmEe_zveJ48JiiEAKpr9oj",
         },
         .zqlite = .{
             .url = "git+https://github.com/karlseguin/zqlite.zig?ref=master#865223b734a5113f731ab1eb1d7d81c8ac252913",
