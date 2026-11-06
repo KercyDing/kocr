@@ -112,6 +112,7 @@ const App = struct {
     }
 
     fn updateModelStatus(self: *App) void {
+        if (self.job != null) return;
         const profile = self.profile.currentText(self.allocator);
         defer self.allocator.free(profile);
         var message: [512]u8 = undefined;
@@ -508,7 +509,10 @@ fn pollCallback(_: QTimer) callconv(.c) void {
 }
 
 fn historyPollCallback(_: QTimer) callconv(.c) void {
-    if (active_app) |app| app.pollHistory();
+    if (active_app) |app| {
+        app.pollHistory();
+        app.updateModelStatus();
+    }
 }
 
 fn rootMousePressed(_: QWidget, _: qt6.QMouseEvent) callconv(.c) void {
@@ -521,10 +525,6 @@ fn installCallback(_: QPushButton) callconv(.c) void {
 
 fn removeCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.startModel(.remove);
-}
-
-fn refreshModelCallback(_: QPushButton) callconv(.c) void {
-    if (active_app) |app| app.updateModelStatus();
 }
 
 fn profileChanged(_: QComboBox, _: i32) callconv(.c) void {
@@ -627,10 +627,6 @@ pub fn run(init: std.process.Init) !void {
     remove.setObjectName("removeModelButton");
     remove.onClicked(removeCallback);
 
-    const refresh_model = QPushButton.new5("Refresh", root);
-    refresh_model.setObjectName("refreshModelButton");
-    refresh_model.onClicked(refreshModelCallback);
-
     const copy_image = QPushButton.new5("Copy image", root);
     copy_image.setObjectName("copyImageButton");
     copy_image.onClicked(copyImageCallback);
@@ -658,7 +654,6 @@ pub fn run(init: std.process.Init) !void {
     model_row.addWidget(profile);
     model_row.addWidget(install);
     model_row.addWidget(remove);
-    model_row.addWidget(refresh_model);
 
     const history_title = QLabel.new3("History");
     history_title.setObjectName("historyTitle");
