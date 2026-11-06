@@ -34,6 +34,7 @@ pub const State = struct {
     records: []core.history.Record = &.{},
     rows: []Row = &.{},
     history_revision: ?core.history.Revision = null,
+    dark: ?bool = null,
     title_bar_dark: ?bool = null,
     shortcuts: [4]?[]u8 = .{ null, null, null, null },
 

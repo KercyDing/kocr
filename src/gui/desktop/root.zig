@@ -9,12 +9,14 @@ const history = @import("history.zig");
 const main = @import("main.zig");
 const model = @import("model.zig");
 const state_mod = @import("state.zig");
+const theme = @import("theme.zig");
 const titlebar = @import("titlebar.zig");
 
 const State = state_mod.State;
 
 fn refreshTimer(context: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(context.?));
+    theme.sync(state);
     const dark = nui.isDark();
     if (state.title_bar_dark != dark) {
         state.title_bar_dark = dark;
@@ -51,6 +53,7 @@ pub fn run(init: std.process.Init) !void {
     });
     state.main_window = window;
     titlebar.apply(window);
+    theme.apply(&state, window);
     state.title_bar_dark = nui.isDark();
 
     model.loadSelection(&state);
