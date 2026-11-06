@@ -1,0 +1,89 @@
+.{
+    .name = "kocr",
+    .version = "0.0.1",
+    .about = "Offline OCR for images",
+    .commands = .{
+        .{
+            .name = "image",
+            .about = "Recognize text from an image",
+            .args = .{
+                .{
+                    .positional = .{
+                        .id = "path",
+                        .help = "Input image path",
+                        .required = true,
+                    },
+                },
+                .{
+                    .option = .{
+                        .id = "profile",
+                        .help = "Model profile: tiny, small or medium",
+                        .default = "tiny",
+                    },
+                },
+                .{
+                    .option = .{
+                        .id = "model_dir",
+                        .help = "Model directory",
+                    },
+                },
+                .{
+                    .option = .{
+                        .id = "rec_param",
+                        .help = "Recognition param file",
+                    },
+                },
+                .{
+                    .option = .{
+                        .id = "rec_bin",
+                        .help = "Recognition bin file",
+                    },
+                },
+                .{
+                    .option = .{
+                        .id = "keys",
+                        .help = "Dictionary file",
+                    },
+                },
+                .{
+                    .option = .{
+                        .id = "threads",
+                        .help = "Inference threads, or auto",
+                        .default = "auto",
+                    },
+                },
+                .{
+                    .flag = .{
+                        .id = "detect",
+                        .help = "Print detected text boxes",
+                    },
+                },
+                .{
+                    .flag = .{
+                        .id = "line",
+                        .help = "Recognize a single text line",
+                    },
+                },
+            },
+        },
+        .{
+            .name = "install",
+            .about = "Download and install a model package",
+            .args = .{
+                .{
+                    .positional = .{
+                        .id = "profile",
+                        .help = "Model profile: tiny, small or medium",
+                        .required = true,
+                    },
+                },
+                .{
+                    .flag = .{
+                        .id = "force",
+                        .help = "Replace an existing installed model",
+                    },
+                },
+            },
+        },
+    },
+}

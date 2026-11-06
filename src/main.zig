@@ -1,92 +1,35 @@
 const std = @import("std");
 const zignal = @import("zignal");
 
+const cli = @import("cli");
 const model = @import("model/model.zig");
 const ocr = @import("ocr.zig");
 const downloader = @import("downloader/mod.zig");
 
-const usage =
-    \\usage: kocr <image> [options]
-    \\
-    \\  --profile <name>    tiny, small or medium (default: tiny)
-    \\  --model-dir <path>  model directory
-    \\  --rec-param <path>  recognition .param
-    \\  --rec-bin <path>    recognition .bin
-    \\  --keys <path>       dictionary
-    \\  --threads <n>       inference threads (default: auto)
-    \\  --detect            print detected text boxes
-    \\  --line              recognize a single text line (skip detection)
-    \\  --install <profile> download and install a model package
-    \\  --force             replace an existing installed model
-    \\
-;
-
 pub fn main(init: std.process.Init) !void {
-    var args = try init.minimal.args.iterateAllocator(init.gpa);
-    defer args.deinit();
-    _ = args.skip();
-
-    var image_path: ?[]const u8 = null;
-    var profile: []const u8 = "tiny";
-    var model_dir_arg: ?[]const u8 = null;
-    var rec_param_arg: ?[]const u8 = null;
-    var rec_bin_arg: ?[]const u8 = null;
-    var keys_arg: ?[]const u8 = null;
-    var threads_arg: ?i32 = null;
-    var detect_only = false;
-    var line_only = false;
-    var install_profile: ?[]const u8 = null;
-    var force = false;
-
-    while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "--help")) {
-            std.debug.print("{s}", .{usage});
-            return;
-        } else if (std.mem.eql(u8, arg, "--profile")) {
-            profile = args.next() orelse return usageError();
-        } else if (std.mem.eql(u8, arg, "--model-dir")) {
-            model_dir_arg = args.next() orelse return usageError();
-        } else if (std.mem.eql(u8, arg, "--rec-param")) {
-            rec_param_arg = args.next() orelse return usageError();
-        } else if (std.mem.eql(u8, arg, "--rec-bin")) {
-            rec_bin_arg = args.next() orelse return usageError();
-        } else if (std.mem.eql(u8, arg, "--keys")) {
-            keys_arg = args.next() orelse return usageError();
-        } else if (std.mem.eql(u8, arg, "--detect")) {
-            detect_only = true;
-        } else if (std.mem.eql(u8, arg, "--line")) {
-            line_only = true;
-        } else if (std.mem.eql(u8, arg, "--install")) {
-            install_profile = args.next() orelse return usageError();
-        } else if (std.mem.eql(u8, arg, "--force")) {
-            force = true;
-        } else if (std.mem.eql(u8, arg, "--threads")) {
-            const value = args.next() orelse return usageError();
-            threads_arg = std.fmt.parseInt(i32, value, 10) catch return usageError();
-        } else if (std.mem.startsWith(u8, arg, "-")) {
-            return usageError();
-        } else if (image_path == null) {
-            image_path = arg;
-        } else {
-            return usageError();
-        }
+    const result = try cli.parse(init.io, init.arena.allocator(), init.minimal.args);
+    switch (result) {
+        .image => |args| try runImage(init, args),
+        .install => |args| try runInstall(init, args),
     }
+}
 
-    const threads = threads_arg orelse @as(i32, @intCast(@min(std.Thread.getCpuCount() catch 4, 8)));
+fn runInstall(init: std.process.Init, args: cli.Install) !void {
+    const installed = try downloader.install(init.io, init.gpa, init.environ_map, args.profile, .{ .force = args.force });
+    defer init.gpa.free(installed);
+    std.debug.print("installed {s}\n", .{installed});
+}
 
-    if (install_profile) |install_name| {
-        const installed = try downloader.install(init.io, init.gpa, init.environ_map, install_name, .{ .force = force });
-        defer init.gpa.free(installed);
-        std.debug.print("installed {s}\n", .{installed});
-        return;
-    }
+fn runImage(init: std.process.Init, args: cli.Image) !void {
+    const threads = if (std.mem.eql(u8, args.threads, "auto"))
+        @as(i32, @intCast(@min(std.Thread.getCpuCount() catch 4, 8)))
+    else
+        std.fmt.parseInt(i32, args.threads, 10) catch return error.InvalidThreads;
 
-    const path = image_path orelse return usageError();
-
-    const model_dir = if (model_dir_arg) |dir|
+    const model_dir = if (args.model_dir) |dir|
         try init.gpa.dupe(u8, dir)
     else
-        try model.paths.profileDir(init.io, init.gpa, init.environ_map, profile);
+        try model.paths.profileDir(init.io, init.gpa, init.environ_map, args.profile);
     defer init.gpa.free(model_dir);
 
     var manifest = try model.loadManifest(init.gpa, init.io, model_dir);
@@ -107,14 +50,14 @@ pub fn main(init: std.process.Init) !void {
     defer init.gpa.free(det_param);
     const det_bin = try resolve(init.gpa, null, model_dir, det_bin_name);
     defer init.gpa.free(det_bin);
-    const rec_param = try resolve(init.gpa, rec_param_arg, model_dir, rec_param_name);
+    const rec_param = try resolve(init.gpa, args.rec_param, model_dir, rec_param_name);
     defer init.gpa.free(rec_param);
-    const rec_bin = try resolve(init.gpa, rec_bin_arg, model_dir, rec_bin_name);
+    const rec_bin = try resolve(init.gpa, args.rec_bin, model_dir, rec_bin_name);
     defer init.gpa.free(rec_bin);
-    const keys = try resolve(init.gpa, keys_arg, model_dir, keys_name);
+    const keys = try resolve(init.gpa, args.keys, model_dir, keys_name);
     defer init.gpa.free(keys);
 
-    if (detect_only) {
+    if (args.detect) {
         var det = try model.det.Det.init(init.gpa, .{
             .param = det_param,
             .bin = det_bin,
@@ -123,7 +66,7 @@ pub fn main(init: std.process.Init) !void {
         }, threads);
         defer det.deinit();
 
-        const boxes = try det.detectFile(init.io, path);
+        const boxes = try det.detectFile(init.io, args.path);
         defer init.gpa.free(boxes);
         for (boxes, 0..) |box, index| {
             std.debug.print("{d}: [{d},{d},{d},{d}]\n", .{
@@ -162,14 +105,14 @@ pub fn main(init: std.process.Init) !void {
     }, threads);
     defer rec.deinit();
 
-    if (line_only) {
-        var result = try rec.recognizeFile(init.io, path);
+    if (args.line) {
+        var result = try rec.recognizeFile(init.io, args.path);
         defer result.deinit(init.gpa);
         std.debug.print("{s}\n", .{result.text});
         return;
     }
 
-    var image: zignal.Image(zignal.Rgb(u8)) = try .load(init.io, init.gpa, path);
+    var image: zignal.Image(zignal.Rgb(u8)) = try .load(init.io, init.gpa, args.path);
     defer image.deinit(init.gpa);
 
     var det = try model.det.Det.init(init.gpa, .{
@@ -195,9 +138,4 @@ fn resolve(
 ) ![]u8 {
     if (override) |path| return allocator.dupe(u8, path);
     return std.Io.Dir.path.join(allocator, &.{ dir, name });
-}
-
-fn usageError() noreturn {
-    std.debug.print("{s}", .{usage});
-    std.process.exit(2);
 }

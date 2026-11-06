@@ -13,10 +13,17 @@ zig build
 Run:
 
 ```bash
-zig build run -- image.png
+zig build run -- image image.png
 ```
 
-`kocr image.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
+`kocr image image.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
+
+Install a model package:
+
+```bash
+kocr install tiny
+kocr install small --force
+```
 
 ## Using Only
 

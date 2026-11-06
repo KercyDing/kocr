@@ -16,12 +16,17 @@
             .url = "git+https://github.com/ziglibs/known-folders.git#c7a8a1974ccf8b5b022ee7f4b13fd734cdd89ae1",
             .hash = "known_folders-0.0.0-Fy-PJiLLAABzqCdF6GWFmE36oCwioOh6Uxj4FF1Neanr",
         },
+        .zommand = .{
+            .url = "git+https://github.com/KercyDing/zommand?ref=main#f5149d95fe0154dd8c5b3694336438e3564b392a",
+            .hash = "zommand-0.0.1-Ph_F7UyzAADGVM5xDcKmYvy--iV-8Nyrnnh_CnrLfcUo",
+        },
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
         "assets",
+        "cli.zon",
         "LICENSE",
         "README.md",
     },

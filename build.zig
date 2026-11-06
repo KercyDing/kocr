@@ -1,4 +1,5 @@
 const std = @import("std");
+const zommand = @import("zommand");
 const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
@@ -24,6 +25,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const cli = zommand.createCli(b, .{
+        .target = target,
+        .optimize = optimize,
+        .schema = b.path("cli.zon"),
+    });
+
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -33,6 +40,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ncnn", .module = ncnn.module("ncnn") },
             .{ .name = "zignal", .module = zignal.module("zignal") },
             .{ .name = "known_folders", .module = known_folders.module("known-folders") },
+            .{ .name = "cli", .module = cli },
         },
     });
 

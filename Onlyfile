@@ -8,8 +8,8 @@ build():
 
 [help] Run in debug mode
 [fail] Debug run failed.
-run(img_path = "assets/6.png"):
-    zig build run -- {{img_path}}
+run(arg..):
+    zig build run -- {{arg}}
 
 [help] Build in release mode
 [pass] Release build complete.
@@ -19,8 +19,8 @@ build-release():
 
 [help] Run in release mode
 [fail] Release run failed.
-run-release(img_name):
-    zig build run -Doptimize=fast -Dstrip=true -- assets/{{img_name}}.png
+run-release(arg..):
+    zig build run -Doptimize=fast -Dstrip=true -- {{arg}}
 
 [help] Format all Zig files
 [pass] Formatting complete.
