@@ -24,12 +24,19 @@ pub fn toggleDaemon(state: *State) void {
         };
         state.setMainStatus("Daemon stopped");
     } else {
-        const started = daemon.ensureRunning(state.io, state.allocator, state.environ) catch |err| {
-            var buffer: [256]u8 = undefined;
-            state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
-            return;
+        daemon.ensureRunning(state.io, state.allocator, state.environ) catch |err| switch (err) {
+            error.AlreadyRunning => {
+                state.setMainStatus("Daemon already running");
+                _ = updateDaemon(state);
+                return;
+            },
+            else => {
+                var buffer: [256]u8 = undefined;
+                state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
+                return;
+            },
         };
-        state.setMainStatus(if (started) "Daemon started" else "Daemon already running");
+        state.setMainStatus("Daemon started");
     }
     _ = updateDaemon(state);
 }

@@ -289,8 +289,8 @@ pub fn ensureRunning(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
-) !bool {
-    if (try isRunning(io, allocator, environ)) return false;
+) !void {
+    if (try isRunning(io, allocator, environ)) return DaemonError.AlreadyRunning;
     const executable = try std.process.executablePathAlloc(io, allocator);
     defer allocator.free(executable);
     const config_dir = try core.config.dir(io, allocator, environ);
@@ -308,7 +308,7 @@ pub fn ensureRunning(
     }) catch return error.ProcessControlUnavailable;
     _ = &child;
     std.Io.sleep(io, .{ .nanoseconds = 500 * std.time.ns_per_ms }, .awake) catch {};
-    return isRunning(io, allocator, environ);
+    if (!try isRunning(io, allocator, environ)) return DaemonError.ProcessControlUnavailable;
 }
 
 fn pidPath(
@@ -320,3 +320,5 @@ fn pidPath(
     defer allocator.free(dir);
     return std.Io.Dir.path.join(allocator, &.{ dir, "daemon.pid" });
 }
+
+pub fn initProcess() void {}

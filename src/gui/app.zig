@@ -6,6 +6,7 @@ const std = @import("std");
 const daemon = @import("daemon/root.zig");
 
 pub fn main(init: std.process.Init) !void {
+    daemon.initProcess();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     for (args[1..]) |arg| {
         if (std.mem.eql(u8, arg, "--daemon")) return daemon.run(init);

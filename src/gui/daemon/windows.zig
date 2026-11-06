@@ -7,7 +7,19 @@ const win32 = @import("win32");
 
 const native = @import("native.zig");
 
+const mutex_name = win32.zig.L("Local\\kocr-daemon");
+
+pub fn initProcess() void {
+    if (win32.user32.SetProcessDpiAwarenessContext(win32.ui.hi_dpi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) == 0) {
+        _ = win32.user32.SetProcessDPIAware();
+    }
+}
+
 pub fn run(init: std.process.Init) !void {
+    kernel32.SetLastError(foundation.ERROR_SUCCESS);
+    const mutex = kernel32.CreateMutexW(null, 0, mutex_name) orelse return DaemonError.ProcessControlUnavailable;
+    defer _ = kernel32.CloseHandle(mutex);
+    if (kernel32.GetLastError() == foundation.ERROR_ALREADY_EXISTS) return DaemonError.AlreadyRunning;
     acquire(init.io, init.gpa, init.environ_map) catch |err| switch (err) {
         error.AlreadyRunning => return,
         else => return err,
@@ -27,6 +39,20 @@ pub const DaemonError = error{
 };
 
 pub fn isRunning(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !bool {
+    if (kernel32.OpenMutexW(.{ .SYNCHRONIZATION_SYNCHRONIZE = 1 }, 0, mutex_name)) |mutex| {
+        _ = kernel32.CloseHandle(mutex);
+        return true;
+    }
+    return pidRunning(io, allocator, environ);
+}
+
+/// Process liveness from the pid file alone: the daemon's own mutex says it
+/// is alive, so `acquire` must not consult it.
+fn pidRunning(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
@@ -51,7 +77,7 @@ pub fn acquire(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !void {
-    if (try isRunning(io, allocator, environ)) return DaemonError.AlreadyRunning;
+    if (try pidRunning(io, allocator, environ)) return DaemonError.AlreadyRunning;
     const path = try pidPath(io, allocator, environ);
     defer allocator.free(path);
     try std.Io.Dir.cwd().createDirPath(io, std.Io.Dir.path.dirname(path) orelse ".");
@@ -67,6 +93,10 @@ pub fn release(
 ) void {
     const path = pidPath(io, allocator, environ) catch return;
     defer allocator.free(path);
+    const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(64)) catch return;
+    defer allocator.free(content);
+    const pid = std.fmt.parseInt(u32, std.mem.trim(u8, content, " \t\r\n"), 10) catch return;
+    if (pid != kernel32.GetCurrentProcessId()) return;
     std.Io.Dir.cwd().deleteFile(io, path) catch {};
 }
 
@@ -100,8 +130,8 @@ pub fn ensureRunning(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
-) !bool {
-    if (try isRunning(io, allocator, environ)) return false;
+) !void {
+    if (try isRunning(io, allocator, environ)) return DaemonError.AlreadyRunning;
     const executable = try std.process.executablePathAlloc(io, allocator);
     defer allocator.free(executable);
     var child = std.process.spawn(io, .{
@@ -112,7 +142,7 @@ pub fn ensureRunning(
     }) catch return DaemonError.ProcessControlUnavailable;
     child.stdin = null;
     std.Io.sleep(io, .{ .nanoseconds = 500 * std.time.ns_per_ms }, .awake) catch {};
-    return isRunning(io, allocator, environ);
+    if (!try isRunning(io, allocator, environ)) return DaemonError.ProcessControlUnavailable;
 }
 
 fn pidPath(

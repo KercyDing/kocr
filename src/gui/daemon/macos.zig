@@ -10,10 +10,12 @@ pub fn isRunning(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.
     return false;
 }
 
-pub fn ensureRunning(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !bool {
+pub fn ensureRunning(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) anyerror!void {
     return error.UnsupportedPlatform;
 }
 
 pub fn stop(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !void {
     return error.UnsupportedPlatform;
 }
+
+pub fn initProcess() void {}

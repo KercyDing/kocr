@@ -9,6 +9,7 @@ const platform = switch (builtin.os.tag) {
     else => @compileError("kocr daemon supports Linux, Windows, and macOS only"),
 };
 
+pub const initProcess = platform.initProcess;
 pub const run = platform.run;
 pub const isRunning = platform.isRunning;
 pub const ensureRunning = platform.ensureRunning;
