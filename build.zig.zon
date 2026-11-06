@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.17.1",
     .dependencies = .{
         .ncnn = .{
-            .url = "git+https://github.com/kercyding/ncnn.zig#f39446fa5bf1571fc20b59db32856101d88daf7f",
-            .hash = "ncnn_zig-0.0.1-nXBvaqkqAgB3wEMke-rxZl9WsH7zCQ2W9_8QGyRAObgP",
+            .url = "git+https://github.com/kercyding/ncnn.zig?ref=main#ab11f6716177f7a7785b57383726c80c44894318",
+            .hash = "ncnn_zig-0.0.1-nXBvajgqAgDSc47mxmqXH_znhms_O_Iuw8aG8Z1FFIvA",
         },
         .zignal = .{
             .url = "git+https://github.com/arrufat/zignal#6a14fedfb3249b597883e79adc6ec3d7ffd2cc10",
