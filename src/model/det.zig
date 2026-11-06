@@ -7,7 +7,7 @@ const zignal = @import("zignal");
 
 const Rgb = zignal.Rgb(u8);
 
-const max_side: u32 = 960;
+const max_side: u32 = 768;
 const stride: u32 = 32;
 const bin_threshold: f32 = 0.2;
 const box_threshold: f32 = 0.45;

@@ -56,99 +56,63 @@ fn boxGeometry(box: model.det.TextBox) BoxGeometry {
     };
 }
 
-pub fn recognizeImage(
-    allocator: std.mem.Allocator,
-    io: std.Io,
+pub const Detection = struct {
     image: zignal.Image(zignal.Rgb(u8)),
-    det: *model.det.Det,
-    rec: *model.rec.Rec,
-    cls: ?*model.cls.Cls,
-) ![]Line {
-    return recognizeCore(allocator, io, image, det, rec, cls, true);
-}
+    boxes: []model.det.TextBox,
+    owned_image: bool,
 
-fn recognizeCore(
+    pub fn deinit(self: *Detection, allocator: std.mem.Allocator) void {
+        allocator.free(self.boxes);
+        if (self.owned_image) self.image.deinit(allocator);
+    }
+};
+
+pub fn detectImage(
     allocator: std.mem.Allocator,
     io: std.Io,
     image: zignal.Image(zignal.Rgb(u8)),
     det: *model.det.Det,
-    rec: *model.rec.Rec,
     cls: ?*model.cls.Cls,
-    allow_rotate: bool,
-) ![]Line {
+) !Detection {
     const boxes = try det.detectImage(io, image);
-    defer allocator.free(boxes);
-
+    errdefer allocator.free(boxes);
     std.mem.sort(model.det.TextBox, boxes, {}, boxLessThan);
 
-    var groups: std.ArrayList(LineGroup) = .empty;
-    defer {
-        for (groups.items) |*group| group.boxes.deinit(allocator);
-        groups.deinit(allocator);
-    }
+    var groups = try buildGroups(allocator, boxes);
+    defer freeGroups(allocator, &groups);
 
-    for (boxes, 0..) |box, index| {
-        const top: f32 = @floatFromInt(box.bounds.top);
-        const bottom: f32 = @floatFromInt(box.bounds.bottom);
-        const geometry = boxGeometry(box);
-        var matched: ?*LineGroup = null;
+    if (cls) |classifier| {
+        var rot_weight: f32 = 0;
+        var no_rot_weight: f32 = 0;
         for (groups.items) |*group| {
-            const dot = geometry.ux * group.ux + geometry.uy * group.uy;
-            if (dot < 0.98) continue;
-            const dx = geometry.cx - group.cx;
-            const dy = geometry.cy - group.cy;
-            const perpendicular = @abs(dx * group.vx + dy * group.vy);
-            if (perpendicular > 0.5 * @max(geometry.half_h, group.half_h)) continue;
-            const along = @abs(dx * group.ux + dy * group.uy);
-            const reach = geometry.half_w + group.half_w + @max(geometry.half_h, group.half_h);
-            if (along <= reach) {
-                matched = group;
-                break;
-            }
+            var crop = try groupCrop(io, allocator, image, boxes, group.boxes.items);
+            defer crop.deinit(allocator);
+            const result = try classifier.classify(io, crop);
+            if (result.is_rot) rot_weight += result.score else no_rot_weight += result.score;
         }
-        if (matched) |group| {
-            try group.boxes.append(allocator, index);
-            group.top = @min(group.top, top);
-            group.bottom = @max(group.bottom, bottom);
-            group.center = (group.top + group.bottom) * 0.5;
-        } else {
-            var group = LineGroup{
-                .top = top,
-                .bottom = bottom,
-                .center = (top + bottom) * 0.5,
-                .cx = geometry.cx,
-                .cy = geometry.cy,
-                .ux = geometry.ux,
-                .uy = geometry.uy,
-                .vx = geometry.vx,
-                .vy = geometry.vy,
-                .half_w = geometry.half_w,
-                .half_h = geometry.half_h,
-            };
-            try group.boxes.append(allocator, index);
-            try groups.append(allocator, group);
+        if (rot_weight > no_rot_weight) {
+            var rotated = try rotate180(io, allocator, image);
+            errdefer rotated.deinit(allocator);
+            const rotated_boxes = try det.detectImage(io, rotated);
+            std.mem.sort(model.det.TextBox, rotated_boxes, {}, boxLessThan);
+            allocator.free(boxes);
+            return .{ .image = rotated, .boxes = rotated_boxes, .owned_image = true };
         }
     }
 
-    std.mem.sort(LineGroup, groups.items, {}, groupLessThan);
+    return .{ .image = image, .boxes = boxes, .owned_image = false };
+}
 
-    if (allow_rotate) {
-        if (cls) |classifier| {
-            var rot_weight: f32 = 0;
-            var no_rot_weight: f32 = 0;
-            for (groups.items) |*group| {
-                var crop = try groupCrop(io, allocator, image, boxes, group.boxes.items);
-                defer crop.deinit(allocator);
-                const result = try classifier.classify(io, crop);
-                if (result.is_rot) rot_weight += result.score else no_rot_weight += result.score;
-            }
-            if (rot_weight > no_rot_weight) {
-                var rotated = try rotate180(io, allocator, image);
-                defer rotated.deinit(allocator);
-                return recognizeCore(allocator, io, rotated, det, rec, null, false);
-            }
-        }
-    }
+pub fn recognizeBoxes(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    image: zignal.Image(zignal.Rgb(u8)),
+    boxes: []model.det.TextBox,
+    rec: *model.rec.Rec,
+) ![]Line {
+    std.mem.sort(model.det.TextBox, boxes, {}, boxLessThan);
+    var groups = try buildGroups(allocator, boxes);
+    defer freeGroups(allocator, &groups);
 
     var lines: std.ArrayList(Line) = .empty;
     errdefer freeLines(allocator, lines.items);
@@ -219,6 +183,61 @@ fn recognizeCore(
         }
     }
     return lines.toOwnedSlice(allocator);
+}
+
+fn buildGroups(allocator: std.mem.Allocator, boxes: []const model.det.TextBox) !std.ArrayList(LineGroup) {
+    var groups: std.ArrayList(LineGroup) = .empty;
+    errdefer freeGroups(allocator, &groups);
+
+    for (boxes, 0..) |box, index| {
+        const top: f32 = @floatFromInt(box.bounds.top);
+        const bottom: f32 = @floatFromInt(box.bounds.bottom);
+        const geometry = boxGeometry(box);
+        var matched: ?*LineGroup = null;
+        for (groups.items) |*group| {
+            const dot = geometry.ux * group.ux + geometry.uy * group.uy;
+            if (dot < 0.98) continue;
+            const dx = geometry.cx - group.cx;
+            const dy = geometry.cy - group.cy;
+            const perpendicular = @abs(dx * group.vx + dy * group.vy);
+            if (perpendicular > 0.5 * @max(geometry.half_h, group.half_h)) continue;
+            const along = @abs(dx * group.ux + dy * group.uy);
+            const reach = geometry.half_w + group.half_w + @max(geometry.half_h, group.half_h);
+            if (along <= reach) {
+                matched = group;
+                break;
+            }
+        }
+        if (matched) |group| {
+            try group.boxes.append(allocator, index);
+            group.top = @min(group.top, top);
+            group.bottom = @max(group.bottom, bottom);
+            group.center = (group.top + group.bottom) * 0.5;
+        } else {
+            var group = LineGroup{
+                .top = top,
+                .bottom = bottom,
+                .center = (top + bottom) * 0.5,
+                .cx = geometry.cx,
+                .cy = geometry.cy,
+                .ux = geometry.ux,
+                .uy = geometry.uy,
+                .vx = geometry.vx,
+                .vy = geometry.vy,
+                .half_w = geometry.half_w,
+                .half_h = geometry.half_h,
+            };
+            try group.boxes.append(allocator, index);
+            try groups.append(allocator, group);
+        }
+    }
+    std.mem.sort(LineGroup, groups.items, {}, groupLessThan);
+    return groups;
+}
+
+fn freeGroups(allocator: std.mem.Allocator, groups: *std.ArrayList(LineGroup)) void {
+    for (groups.items) |*group| group.boxes.deinit(allocator);
+    groups.deinit(allocator);
 }
 
 fn separatedPrefix(boxes: []const model.det.TextBox, indices: []const usize) ?usize {

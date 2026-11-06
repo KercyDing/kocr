@@ -82,20 +82,51 @@ fn runImage(init: std.process.Init, args: cli.Image) !void {
         return;
     }
 
-    var cls: ?model.cls.Cls = null;
-    if (cls_names) |names| {
-        const cls_param = try resolve(init.gpa, null, model_dir, names.param);
-        defer init.gpa.free(cls_param);
-        const cls_bin = try resolve(init.gpa, null, model_dir, names.bin);
-        defer init.gpa.free(cls_bin);
-        cls = try model.cls.Cls.init(init.gpa, .{
-            .param = cls_param,
-            .bin = cls_bin,
-            .input = names.input,
-            .output = names.output,
-        }, 1);
+    if (args.line) {
+        var rec = try model.rec.Rec.init(init.gpa, init.io, .{
+            .param = rec_param,
+            .bin = rec_bin,
+            .keys = keys,
+            .input = rec_input_name,
+            .output = rec_output_name,
+        }, threads);
+        defer rec.deinit();
+        var result = try rec.recognizeFile(init.io, args.path);
+        defer result.deinit(init.gpa);
+        std.debug.print("{s}\n", .{result.text});
+        return;
     }
-    defer if (cls) |*classifier| classifier.deinit();
+
+    var image: zignal.Image(zignal.Rgb(u8)) = try .load(init.io, init.gpa, args.path);
+    defer image.deinit(init.gpa);
+
+    var detected = blk: {
+        var cls: ?model.cls.Cls = null;
+        if (cls_names) |names| {
+            const cls_param = try resolve(init.gpa, null, model_dir, names.param);
+            defer init.gpa.free(cls_param);
+            const cls_bin = try resolve(init.gpa, null, model_dir, names.bin);
+            defer init.gpa.free(cls_bin);
+            cls = try model.cls.Cls.init(init.gpa, .{
+                .param = cls_param,
+                .bin = cls_bin,
+                .input = names.input,
+                .output = names.output,
+            }, 1);
+        }
+        defer if (cls) |*classifier| classifier.deinit();
+
+        var det = try model.det.Det.init(init.gpa, .{
+            .param = det_param,
+            .bin = det_bin,
+            .input = det_input_name,
+            .output = det_output_name,
+        }, threads);
+        defer det.deinit();
+
+        break :blk try ocr.detectImage(init.gpa, init.io, image, &det, if (cls) |*classifier| classifier else null);
+    };
+    defer detected.deinit(init.gpa);
 
     var rec = try model.rec.Rec.init(init.gpa, init.io, .{
         .param = rec_param,
@@ -106,25 +137,7 @@ fn runImage(init: std.process.Init, args: cli.Image) !void {
     }, threads);
     defer rec.deinit();
 
-    if (args.line) {
-        var result = try rec.recognizeFile(init.io, args.path);
-        defer result.deinit(init.gpa);
-        std.debug.print("{s}\n", .{result.text});
-        return;
-    }
-
-    var image: zignal.Image(zignal.Rgb(u8)) = try .load(init.io, init.gpa, args.path);
-    defer image.deinit(init.gpa);
-
-    var det = try model.det.Det.init(init.gpa, .{
-        .param = det_param,
-        .bin = det_bin,
-        .input = det_input_name,
-        .output = det_output_name,
-    }, threads);
-    defer det.deinit();
-
-    const lines = try ocr.recognizeImage(init.gpa, init.io, image, &det, &rec, if (cls) |*classifier| classifier else null);
+    const lines = try ocr.recognizeBoxes(init.gpa, init.io, detected.image, detected.boxes, &rec);
     defer ocr.freeLines(init.gpa, lines);
     for (lines) |line| {
         std.debug.print("{s}\n", .{line.text});
