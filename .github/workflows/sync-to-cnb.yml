@@ -1,0 +1,110 @@
+name: Sync to CNB
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (for example: v1.0.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-to-cnb-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Set up Go
+        if: github.event_name != 'push'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Clone release-sync
+        if: github.event_name != 'push'
+        run: git clone --depth 1 https://github.com/SeaLantern-Studio/release-sync.git
+
+      - name: Download dependencies
+        if: github.event_name != 'push'
+        working-directory: release-sync
+        run: go mod download
+
+      - name: Mirror branches and fill missing tags
+        shell: bash
+        env:
+          SOURCE_GITHUB_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          echo "::add-mask::${SOURCE_GITHUB_TOKEN}"
+          echo "::add-mask::${CNB_TOKEN}"
+
+          SOURCE_URL="https://x-access-token:${SOURCE_GITHUB_TOKEN}@github.com/KercyDing/kocr.git"
+          TARGET_URL="https://cnb:${CNB_TOKEN}@cnb.cool/KercyDing/kocr"
+          MIRROR_DIR="$(mktemp -d)"
+          trap 'rm -rf "$MIRROR_DIR"' EXIT
+
+          git clone --mirror "$SOURCE_URL" "$MIRROR_DIR/repository.git"
+
+          # Force-push all branches and prune branches that only exist on CNB.
+          git -C "$MIRROR_DIR/repository.git" push \
+            --force \
+            --prune \
+            "$TARGET_URL" \
+            'refs/heads/*:refs/heads/*'
+
+          # Never rewrite or delete tags that already exist on CNB.
+          while IFS= read -r tag; do
+            if git ls-remote --exit-code --tags "$TARGET_URL" "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "Keeping existing CNB tag: $tag"
+            else
+              git -C "$MIRROR_DIR/repository.git" push \
+                "$TARGET_URL" \
+                "refs/tags/$tag:refs/tags/$tag"
+            fi
+          done < <(git -C "$MIRROR_DIR/repository.git" tag --list)
+
+      - name: Sync latest release
+        if: github.event_name == 'release'
+        working-directory: release-sync
+        env:
+          PLUGIN_SOURCE_URL: https://github.com
+          PLUGIN_SOURCE_PLATFORM: github
+          PLUGIN_SOURCE_REPO: KercyDing/kocr
+          PLUGIN_CNB_ROOT_ORGANIZATION: KercyDing
+          PLUGIN_MIGRATE_ORGANIZATION_MAPPING_LEVEL: "2"
+          PLUGIN_MIGRATE_CODE: "false"
+          PLUGIN_MIGRATE_RELEASE: "true"
+          PLUGIN_CNB_URL: https://cnb.cool
+          PLUGIN_SOURCE_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+          PLUGIN_CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        run: go run .
+
+      - name: Sync selected tag
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: release-sync
+        env:
+          PLUGIN_SOURCE_URL: https://github.com
+          PLUGIN_SOURCE_PLATFORM: github
+          PLUGIN_SOURCE_REPO: KercyDing/kocr
+          PLUGIN_CNB_ROOT_ORGANIZATION: KercyDing
+          PLUGIN_MIGRATE_ORGANIZATION_MAPPING_LEVEL: "2"
+          PLUGIN_MIGRATE_CODE: "false"
+          PLUGIN_MIGRATE_RELEASE: "true"
+          PLUGIN_MIGRATE_RELEASE_TAG: ${{ inputs.tag }}
+          PLUGIN_CNB_URL: https://cnb.cool
+          PLUGIN_SOURCE_TOKEN: ${{ secrets.SOURCE_GITHUB_TOKEN }}
+          PLUGIN_CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        run: go run .
