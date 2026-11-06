@@ -32,3 +32,49 @@ fmt():
 [fail] Clean failed.
 clean():
     rm -rf .zig-cache zig-out zig-pkg
+
+[help] Install kocr
+[desc] Build release and install kocr.
+[pass] Installed kocr.
+[fail] Installation failed.
+install() ? @os("windows") & build-release:
+    shell~=pwsh
+    :
+    | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+    | $installPath = Join-Path $installDir "kocr.exe"
+    | $stagedPath = Join-Path $env:TEMP "kocr-install-staged.exe"
+    | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+    | $shellPath = (Get-Process -Id $PID).Path
+    |
+    | New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+    | Copy-Item zig-out\bin\kocr.exe -Destination $stagedPath -Force
+    | $script = "Wait-Process -Id $parentPid; Copy-Item -LiteralPath '$stagedPath' -Destination '$installPath' -Force; Remove-Item -LiteralPath '$stagedPath' -Force"
+    | $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+    | Start-Process -WindowStyle Hidden -FilePath $shellPath -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
+    | $size = (Get-Item $stagedPath).Length / 1MB
+    | Write-Output ("installed kocr ({0:N2} MB)" -f $size)
+
+[desc] Install to ~/.local/bin/kocr.
+install() & build-release:
+    | install_dir="$HOME/.local/bin"
+    | staged_path="$install_dir/.kocr-install"
+    | mkdir -p "$install_dir"
+    | cp zig-out/bin/kocr "$staged_path"
+    | chmod +x "$staged_path"
+    | mv "$staged_path" "$install_dir/kocr"
+    | du -sh "$install_dir/kocr"
+
+[help] Uninstall kocr
+[desc] Remove the installed kocr binary.
+[pass] Uninstalled kocr.
+[fail] Uninstallation failed.
+uninstall() ? @os("windows"):
+    shell~=pwsh
+    :
+    | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+    | Remove-Item (Join-Path $installDir "kocr.exe") -Force -ErrorAction SilentlyContinue
+    | Remove-Item $installDir -Force -ErrorAction SilentlyContinue
+
+[desc] Remove ~/.local/bin/kocr.
+uninstall():
+    rm -f "$HOME/.local/bin/kocr"
