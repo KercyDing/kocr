@@ -98,6 +98,51 @@ group gui {
     [fail] GUI release run failed.
     run-release():
         zig build run-gui -Doptimize=fast -Dstrip=true
+
+    [help] Install kocr-gui
+    [desc] Build release and install kocr-gui.
+    [pass] Installed kocr-gui.
+    [fail] Installation failed.
+    install() ? @os("windows") & build-release:
+        shell~=pwsh
+        :
+        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+        | $installPath = Join-Path $installDir "kocr-gui.exe"
+        | $stagedPath = Join-Path $env:TEMP "kocr-gui-install-staged.exe"
+        | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+        | $shellPath = (Get-Process -Id $PID).Path
+        |
+        | New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+        | Copy-Item zig-out\bin\kocr-gui.exe -Destination $stagedPath -Force
+        | $script = "Wait-Process -Id $parentPid; Copy-Item -LiteralPath '$stagedPath' -Destination '$installPath' -Force; Remove-Item -LiteralPath '$stagedPath' -Force"
+        | $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+        | Start-Process -WindowStyle Hidden -FilePath $shellPath -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
+        | $size = (Get-Item $stagedPath).Length / 1MB
+        | Write-Output ("installed kocr-gui ({0:N2} MB)" -f $size)
+
+    [desc] Install to ~/.local/bin/kocr-gui.
+    install() & build-release:
+        | install_dir="$HOME/.local/bin"
+        | staged_path="$install_dir/.kocr-gui-install"
+        | mkdir -p "$install_dir"
+        | cp zig-out/bin/kocr-gui "$staged_path"
+        | chmod +x "$staged_path"
+        | mv "$staged_path" "$install_dir/kocr-gui"
+        | du -sh "$install_dir/kocr-gui"
+
+    [help] Uninstall kocr-gui
+    [desc] Remove the installed kocr-gui binary.
+    [pass] Uninstalled kocr-gui.
+    [fail] Uninstallation failed.
+    uninstall() ? @os("windows"):
+        shell~=pwsh
+        :
+        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+        | Remove-Item (Join-Path $installDir "kocr-gui.exe") -Force -ErrorAction SilentlyContinue
+
+    [desc] Remove ~/.local/bin/kocr-gui.
+    uninstall():
+        rm -f "$HOME/.local/bin/kocr-gui"
 }
 
 # =============== Common ===============

@@ -54,5 +54,7 @@ only cli build
 only cli run image image.png
 only gui build
 only gui run
+only gui install
+only gui uninstall
 only clean
 ```
