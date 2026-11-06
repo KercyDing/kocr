@@ -53,9 +53,10 @@ pub fn install(
     defer cleanup(io, archive);
     defer cleanup(io, staging);
 
-    try download(io, allocator, package.url, archive);
-    if (!try verify(io, archive, package.sha256))
-        return InstallError.HashMismatch;
+    if (!try downloadVerified(io, allocator, package.cnb_url, archive, package.sha256)) {
+        if (!try downloadVerified(io, allocator, package.github_url, archive, package.sha256))
+            return InstallError.DownloadFailed;
+    }
 
     try std.Io.Dir.cwd().createDirPath(io, staging);
     try extract(io, archive, staging);
@@ -65,6 +66,17 @@ pub fn install(
 
 fn cleanup(io: std.Io, path: []const u8) void {
     std.Io.Dir.cwd().deleteTree(io, path) catch {};
+}
+
+fn downloadVerified(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    url: []const u8,
+    destination: []const u8,
+    expected: []const u8,
+) !bool {
+    download(io, allocator, url, destination) catch return false;
+    return verify(io, destination, expected) catch false;
 }
 
 fn download(io: std.Io, allocator: std.mem.Allocator, url: []const u8, destination: []const u8) !void {
