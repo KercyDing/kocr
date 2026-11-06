@@ -142,18 +142,6 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    const daemon_mod = b.addModule("daemon", .{
-        .root_source_file = b.path("src/gui/daemon.zig"),
-        .target = target,
-        .optimize = optimize,
-        .strip = strip,
-        .imports = &.{
-            .{ .name = "config", .module = config_mod },
-            .{ .name = "core", .module = core_mod },
-            .{ .name = "kocr", .module = kocr_mod },
-        },
-    });
-
     const kocr_tests = b.addTest(.{
         .name = "kocr-tests",
         .root_module = kocr_mod,
@@ -195,7 +183,7 @@ pub fn build(b: *std.Build) !void {
     run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);
 
-    try addGui(b, target, optimize, strip, kocr_mod, core_mod, config_mod, daemon_mod);
+    try addGui(b, target, optimize, strip, kocr_mod, core_mod, config_mod);
 }
 
 fn addGui(
@@ -206,22 +194,9 @@ fn addGui(
     kocr_mod: *std.Build.Module,
     core_mod: *std.Build.Module,
     config_mod: *std.Build.Module,
-    daemon_mod: *std.Build.Module,
 ) !void {
-    const gui_root = switch (target.result.os.tag) {
-        .linux => b.path("src/gui/linux.zig"),
-        .windows => b.path("src/gui/windows.zig"),
-        .macos => b.path("src/gui/macos.zig"),
-        else => {
-            const fail = b.addFail("kocr-gui supports Linux, Windows, and macOS only");
-            const gui_step = b.step("gui", "Build the native GUI");
-            gui_step.dependOn(&fail.step);
-            return;
-        },
-    };
-
     const gui_mod = b.createModule(.{
-        .root_source_file = gui_root,
+        .root_source_file = b.path("src/gui/app.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
@@ -229,7 +204,6 @@ fn addGui(
             .{ .name = "config", .module = config_mod },
             .{ .name = "core", .module = core_mod },
             .{ .name = "kocr", .module = kocr_mod },
-            .{ .name = "daemon", .module = daemon_mod },
         },
     });
     gui_mod.link_libc = true;
