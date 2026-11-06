@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const config_mod = b.addModule("config", .{
-        .root_source_file = b.path("src/config.zig"),
+        .root_source_file = b.path("src/core/config.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
@@ -45,10 +45,10 @@ pub fn build(b: *std.Build) !void {
     });
 
     const core_platform_root = switch (target.result.os.tag) {
-        .linux => b.path("src/core/linux/root.zig"),
-        .windows => b.path("src/core/windows/root.zig"),
-        .macos => b.path("src/core/macos/root.zig"),
-        else => b.path("src/core/windows/root.zig"),
+        .linux => b.path("src/core/platforms/linux/root.zig"),
+        .windows => b.path("src/core/platforms/windows/root.zig"),
+        .macos => b.path("src/core/platforms/macos/root.zig"),
+        else => b.path("src/core/platforms/windows/root.zig"),
     };
 
     const core_types = b.addModule("core_types", .{
@@ -107,7 +107,7 @@ pub fn build(b: *std.Build) !void {
     core_test_step.dependOn(&run_core_tests.step);
 
     const model_mod = b.addModule("model", .{
-        .root_source_file = b.path("src/model/model.zig"),
+        .root_source_file = b.path("src/core/model/model.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
@@ -119,7 +119,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const downloader_mod = b.addModule("downloader", .{
-        .root_source_file = b.path("src/downloader/download.zig"),
+        .root_source_file = b.path("src/core/downloader/download.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
@@ -129,7 +129,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const kocr_mod = b.addModule("kocr", .{
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("src/core/lib.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
@@ -143,7 +143,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const daemon_mod = b.addModule("daemon", .{
-        .root_source_file = b.path("src/daemon.zig"),
+        .root_source_file = b.path("src/gui/daemon.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
@@ -169,7 +169,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const exe_mod = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("src/cli/main.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
