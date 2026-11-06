@@ -1,5 +1,5 @@
 //! Platform-independent capture, shortcut, and daemon entry points.
-//! Platform-specific rules live below `<platform>/` and are selected by the build.
+//! Platform-specific rules live below `<platform>/` and are selected at compile time.
 
 const std = @import("std");
 

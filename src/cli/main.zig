@@ -6,6 +6,33 @@ const kocr = @import("kocr");
 
 const profiles = kocr.downloader.catalog.profiles;
 
+const InstallProgress = struct {
+    last_percent: u8 = 101,
+    printed: bool = false,
+
+    fn report(context: *anyopaque, downloaded: u64, total: u64) void {
+        const self: *InstallProgress = @ptrCast(@alignCast(context));
+        if (total == 0) {
+            if (!self.printed) {
+                self.printed = true;
+                std.debug.print("\rdownloading…", .{});
+            }
+            return;
+        }
+        const percent: u8 = @intCast(@min(100, downloaded * 100 / total));
+        if (percent == self.last_percent) return;
+        self.last_percent = percent;
+        self.printed = true;
+        std.debug.print("\rdownloading {d}%", .{percent});
+    }
+
+    fn finish(self: *InstallProgress) void {
+        if (!self.printed) return;
+        std.debug.print("\r                  \r", .{});
+        self.printed = false;
+    }
+};
+
 pub fn main(init: std.process.Init) !void {
     const result = try cli.parse(init.io, init.arena.allocator(), init.minimal.args);
     switch (result) {
@@ -48,11 +75,20 @@ fn select(init: std.process.Init, profile: []const u8) !void {
 fn runInstall(init: std.process.Init, args: cli.Install) !void {
     const profile = args.profile;
     validateProfile(profile);
-    const installed = kocr.downloader.install(init.io, init.gpa, init.environ_map, profile, .{ .force = args.force }) catch |err| switch (err) {
-        error.AlreadyInstalled => fail("{s} is already installed\nreinstall with: kocr install {s} --force\n", .{ profile, profile }),
+    var progress = InstallProgress{};
+    errdefer progress.finish();
+    const installed = kocr.downloader.install(init.io, init.gpa, init.environ_map, profile, .{
+        .force = args.force,
+        .progress = .{ .context = &progress, .report = InstallProgress.report },
+    }) catch |err| switch (err) {
+        error.AlreadyInstalled => {
+            progress.finish();
+            fail("{s} is already installed\nreinstall with: kocr install {s} --force\n", .{ profile, profile });
+        },
         else => return err,
     };
     defer init.gpa.free(installed);
+    progress.finish();
     std.debug.print("installed {s} at {s}\n", .{ profile, installed });
     try select(init, profile);
     std.debug.print("now using {s}\n", .{profile});

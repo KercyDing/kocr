@@ -30,7 +30,7 @@ kocr use small
 
 ## GUI
 
-Linux uses the native Qt6 Widgets frontend from `rcalixte/libqt6zig`. Qt 6.8+ development files are required.
+The GUI is shared across Linux, Windows, and macOS and drawn with [nanoui](https://github.com/justrach/nanoui): D3D11 on Windows, Metal on macOS, GTK on Linux.
 
 ```bash
 zig build gui
@@ -43,9 +43,9 @@ Or:
 zig build run-gui
 ```
 
-The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon`, so the GUI does not need to stay open. Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop`. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
+The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon` (platform code in `src/gui/daemon/`), so the GUI does not need to stay open. Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop` on Linux. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
 
-Windows (`zigwin32`) and macOS (`zig-objc`) entry points are wired into the build but currently stop with an explicit "not implemented" compile error.
+On macOS, the platform layer under `src/core/platforms/macos` still stubs capture, clipboard, and shortcuts; the UI runs but those actions report `UnsupportedPlatform`.
 
 ## Using Only
 

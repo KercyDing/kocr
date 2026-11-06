@@ -6,8 +6,14 @@ pub const catalog = @import("catalog.zig");
 
 const model = @import("model").paths;
 
+pub const Progress = struct {
+    context: *anyopaque,
+    report: *const fn (context: *anyopaque, downloaded: u64, total: u64) void,
+};
+
 pub const InstallOptions = struct {
     force: bool = false,
+    progress: ?Progress = null,
 };
 
 pub const InstallError = error{
@@ -56,8 +62,8 @@ pub fn install(
     defer cleanup(io, archive);
     defer cleanup(io, staging);
 
-    if (!try downloadVerified(io, allocator, package.cnb_url, archive, package.sha256)) {
-        if (!try downloadVerified(io, allocator, package.github_url, archive, package.sha256))
+    if (!try downloadVerified(io, allocator, package.cnb_url, archive, package.sha256, options.progress)) {
+        if (!try downloadVerified(io, allocator, package.github_url, archive, package.sha256, options.progress))
             return InstallError.DownloadFailed;
     }
 
@@ -104,25 +110,48 @@ fn downloadVerified(
     url: []const u8,
     destination: []const u8,
     expected: []const u8,
+    progress: ?Progress,
 ) !bool {
-    download(io, allocator, url, destination) catch return false;
+    download(io, allocator, url, destination, progress) catch return false;
     return verify(io, destination, expected) catch false;
 }
 
-fn download(io: std.Io, allocator: std.mem.Allocator, url: []const u8, destination: []const u8) !void {
+fn download(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    url: []const u8,
+    destination: []const u8,
+    progress: ?Progress,
+) !void {
     var client: std.http.Client = .{ .allocator = allocator, .io = io };
     defer client.deinit();
 
+    const uri = std.Uri.parse(url) catch return InstallError.DownloadFailed;
+    var request = client.request(.GET, uri, .{}) catch return InstallError.DownloadFailed;
+    defer request.deinit();
+    request.sendBodiless() catch return InstallError.DownloadFailed;
+
+    var header_buffer: [16 * 1024]u8 = undefined;
+    var response = request.receiveHead(&header_buffer) catch return InstallError.DownloadFailed;
+    if (response.head.status != .ok) return InstallError.DownloadFailed;
+
+    const total = response.head.content_length orelse 0;
+    if (progress) |callback| callback.report(callback.context, 0, total);
+
     var file = try std.Io.Dir.cwd().createFile(io, destination, .{ .truncate = true });
     defer file.close(io);
-    var file_buffer: [64 * 1024]u8 = undefined;
-    var writer = file.writer(io, &file_buffer);
-    const result = client.fetch(.{
-        .location = .{ .url = url },
-        .response_writer = &writer.interface,
-    }) catch return InstallError.DownloadFailed;
-    try writer.end();
-    if (result.status != .ok) return InstallError.DownloadFailed;
+
+    var transfer_buffer: [64 * 1024]u8 = undefined;
+    var reader = response.reader(&transfer_buffer);
+    var chunk: [64 * 1024]u8 = undefined;
+    var downloaded: u64 = 0;
+    while (true) {
+        const len = reader.readSliceShort(&chunk) catch return InstallError.DownloadFailed;
+        if (len == 0) break;
+        try file.writeStreamingAll(io, chunk[0..len]);
+        downloaded += @intCast(len);
+        if (progress) |callback| callback.report(callback.context, downloaded, total);
+    }
 }
 
 fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {

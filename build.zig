@@ -32,6 +32,10 @@ pub fn build(b: *std.Build) !void {
         })
     else
         null;
+    const win32 = if (target.result.os.tag == .windows)
+        try b.dependencyLazy("win32", .{})
+    else
+        null;
     const zqlite = b.dependency("zqlite", .{
         .target = target,
         .optimize = optimize,
@@ -47,13 +51,6 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    const core_platform_root = switch (target.result.os.tag) {
-        .linux => b.path("src/core/platforms/linux/root.zig"),
-        .windows => b.path("src/core/platforms/windows/root.zig"),
-        .macos => b.path("src/core/platforms/macos/root.zig"),
-        else => b.path("src/core/platforms/windows/root.zig"),
-    };
-
     const core_types = b.addModule("core_types", .{
         .root_source_file = b.path("src/core/types.zig"),
         .target = target,
@@ -62,19 +59,21 @@ pub fn build(b: *std.Build) !void {
     });
 
     const core_platform = b.addModule("core_platform", .{
-        .root_source_file = core_platform_root,
+        .root_source_file = b.path("src/core/platforms/root.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
         .imports = switch (target.result.os.tag) {
             .linux => &.{
+                .{ .name = "core_types", .module = core_types },
+                .{ .name = "config", .module = config_mod },
                 .{ .name = "goose", .module = goose.?.module("goose") },
-                .{ .name = "core_types", .module = core_types },
-                .{ .name = "config", .module = config_mod },
             },
-            .windows, .macos => &.{
+            .windows => &.{
                 .{ .name = "core_types", .module = core_types },
                 .{ .name = "config", .module = config_mod },
+                .{ .name = "win32", .module = win32.?.module("win32") },
+                .{ .name = "zignal", .module = zignal.module("zignal") },
             },
             else => &.{
                 .{ .name = "core_types", .module = core_types },
@@ -176,6 +175,7 @@ pub fn build(b: *std.Build) !void {
         .name = "kocr",
         .root_module = exe_mod,
     });
+    if (target.result.os.tag == .windows) linkWindowsLibraries(exe);
 
     b.installArtifact(exe);
 
@@ -216,79 +216,43 @@ fn addGui(
         .root_module = gui_mod,
     });
 
-    switch (target.result.os.tag) {
-        .linux => {
-            const qt6 = try b.dependencyLazy("qt6", .{
-                .target = target,
-                .optimize = optimize,
-            });
-            const qt6_build = b.lazyImport(@This(), "qt6") orelse
-                return error.LazyDependencyNeeded;
-            gui_mod.addImport("libqt6zig", qt6.module("libqt6zig"));
-            for (qt_libs) |lib| gui.root_module.linkLibrary(qt6.artifact(lib));
-            try qt6_build.configureQtExeRootModule(b, gui, .{});
+    const nanoui = if (target.result.os.tag == .windows)
+        b.dependency("nanoui", .{
+            .target = target,
+            .optimize = optimize,
+            .webview2 = "none",
+        })
+    else
+        b.dependency("nanoui", .{
+            .target = target,
+            .optimize = optimize,
+        });
+    gui_mod.addImport("nanoui", nanoui.module("nanoui"));
 
-            const install_gui = b.addInstallArtifact(gui, .{});
-            const gui_step = b.step("gui", "Build the Linux Qt6 GUI");
-            gui_step.dependOn(&install_gui.step);
-
-            const gui_cmd = b.addRunArtifact(gui);
-            gui_cmd.step.dependOn(&install_gui.step);
-            gui_cmd.addPassthruArgs();
-            const gui_run = b.step("run-gui", "Run the Linux Qt6 GUI");
-            gui_run.dependOn(&gui_cmd.step);
-        },
-        .windows => {
-            const win32 = try b.dependencyLazy("win32", .{});
-            gui_mod.addImport("win32", win32.module("win32"));
-            gui.subsystem = .windows;
-            addGuiStep(b, gui);
-        },
-        .macos => {
-            const objc = try b.dependencyLazy("objc", .{
-                .target = target,
-                .optimize = optimize,
-            });
-            gui_mod.addImport("objc", objc.module("objc"));
-            addGuiStep(b, gui);
-        },
-        else => unreachable,
+    if (target.result.os.tag == .windows) {
+        linkWindowsLibraries(gui);
+        gui.subsystem = .windows;
     }
+    addGuiStep(b, gui);
 }
 
 fn addGuiStep(b: *std.Build, gui: *std.Build.Step.Compile) void {
+    const install_gui = b.addInstallArtifact(gui, .{});
     const gui_step = b.step("gui", "Build the native GUI");
-    gui_step.dependOn(&b.addInstallArtifact(gui, .{}).step);
+    gui_step.dependOn(&install_gui.step);
+
+    const gui_cmd = b.addRunArtifact(gui);
+    gui_cmd.step.dependOn(&install_gui.step);
+    gui_cmd.addPassthruArgs();
+    const gui_run = b.step("run-gui", "Run the native GUI");
+    gui_run.dependOn(&gui_cmd.step);
 }
 
-const qt_libs = [_][]const u8{
-    "qabstractbutton",
-    "qapplication",
-    "qguiapplication",
-    "qboxlayout",
-    "qclipboard",
-    "qcombobox",
-    "qfiledialog",
-    "qkeysequenceedit",
-    "qdialog",
-    "qcheckbox",
-    "qobject",
-    "qsize",
-    "qkeysequence",
-    "qlayout",
-    "qlabel",
-    "qabstractitemview",
-    "qlineedit",
-    "qlistview",
-    "qlistwidget",
-    "qplaintextedit",
-    "qpushbutton",
-    "qpalette",
-    "qpixmap",
-    "qsplitter",
-    "qtimer",
-    "qwidget",
-};
+fn linkWindowsLibraries(artifact: *std.Build.Step.Compile) void {
+    for ([_][]const u8{ "user32", "gdi32", "comctl32", "comdlg32", "advapi32" }) |lib| {
+        artifact.root_module.linkSystemLibrary(lib, .{});
+    }
+}
 
 comptime {
     const minimum = std.SemanticVersion.parse("0.17.1") catch unreachable;

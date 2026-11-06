@@ -95,6 +95,17 @@ pub fn freeLines(allocator: std.mem.Allocator, lines: []Line) void {
     ocr.freeLines(allocator, lines);
 }
 
+/// Joins recognized lines with spaces (`one_line`) or newlines.
+pub fn linesToText(allocator: std.mem.Allocator, lines: []const Line, one_line: bool) ![]u8 {
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+    for (lines, 0..) |line, index| {
+        if (index != 0) try text.append(allocator, if (one_line) ' ' else '\n');
+        try text.appendSlice(allocator, line.text);
+    }
+    return text.toOwnedSlice(allocator);
+}
+
 // Keeps manifest-backed tensor names alive until all loaded networks are destroyed.
 const ModelFiles = struct {
     allocator: std.mem.Allocator,

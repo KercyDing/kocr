@@ -8,6 +8,10 @@
             .url = "git+https://github.com/kercyding/ncnn.zig?ref=main#ab11f6716177f7a7785b57383726c80c44894318",
             .hash = "ncnn_zig-0.0.1-nXBvajgqAgDSc47mxmqXH_znhms_O_Iuw8aG8Z1FFIvA",
         },
+        .nanoui = .{
+            .url = "git+https://github.com/justrach/nanoui?ref=main#e26765e8422f0a719e3bb90d9d97067d92d495b7",
+            .hash = "nanoui-0.12.0-we0KMbp2JQDpk0V0TsRtnyfRjh3MzkJUpBCekoD2YdOc",
+        },
         .zignal = .{
             .url = "git+https://github.com/arrufat/zignal#6a14fedfb3249b597883e79adc6ec3d7ffd2cc10",
             .hash = "zignal-0.12.0-dev-OrZ3s82KKgCsPD83scYfJYzqYjS46SeHN_BqCV5vlZhI",
@@ -25,11 +29,6 @@
             .hash = "zqlite-0.0.1-RWLaY4Y8nADz2l5aBE-JVyDyM3sZzHjq0agNykuVZKqQ",
         },
         // Linux
-        .qt6 = .{
-            .url = "git+https://github.com/rcalixte/libqt6zig?ref=master#76fbd35d3b4d67721e5ca5cd323c06cd83afeaad",
-            .hash = "libqt6zig-6.8.2-OSXtXJRx4BxEkhok6OWmDklZGRHmnWFVTag8HX66JGuq",
-            .lazy = true,
-        },
         .goose = .{
             .url = "git+https://github.com/luxluth/goose?ref=master#8b22c35c67cdfc563296fabe4a7e15b5632a0742",
             .hash = "goose-4.0.1-e9MzML9aBAC8cYvi7WGtEXuYk7Fip9gpw0Z437Gb57YF",
@@ -39,12 +38,6 @@
         .win32 = .{
             .url = "git+https://github.com/marlersoft/zigwin32?ref=main#fb2645891520f3e99931db17a7eba04057e87e89",
             .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
-            .lazy = true,
-        },
-        // MacOS
-        .objc = .{
-            .url = "git+https://github.com/mitchellh/zig-objc?ref=main#bee663fdfaa0c554235dc36b1dce88d136a190ec",
-            .hash = "zig_objc-0.0.0-Ir_Sp_4tAQDXtPi51nW_jD9LOEzBvU9lofwO9Pzi6IB4",
             .lazy = true,
         },
     },

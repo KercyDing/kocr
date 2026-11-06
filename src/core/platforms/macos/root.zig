@@ -26,4 +26,11 @@ pub const daemon_process = struct {
     pub fn ensureRunning(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !bool {
         return error.UnsupportedPlatform;
     }
+    pub fn stop(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !void {
+        return error.UnsupportedPlatform;
+    }
+    pub fn acquire(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !void {
+        return error.UnsupportedPlatform;
+    }
+    pub fn release(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) void {}
 };

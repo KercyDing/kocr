@@ -1,19 +1,14 @@
-//! Unified GUI entry point. Platform frontends live under `platforms/`.
+//! Unified GUI entry point: `--daemon` runs the platform daemon, otherwise
+//! the shared nanoui desktop UI.
 
 const std = @import("std");
-const builtin = @import("builtin");
 
-const platform = switch (builtin.os.tag) {
-    .linux => @import("platforms/linux.zig"),
-    .macos => @import("platforms/macos.zig"),
-    .windows => @import("platforms/windows.zig"),
-    else => @compileError("kocr-gui supports Linux, Windows, and macOS only"),
-};
+const daemon = @import("daemon/root.zig");
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     for (args[1..]) |arg| {
-        if (std.mem.eql(u8, arg, "--daemon")) return platform.runDaemon(init);
+        if (std.mem.eql(u8, arg, "--daemon")) return daemon.run(init);
     }
-    try platform.run(init);
+    try @import("desktop/root.zig").run(init);
 }
