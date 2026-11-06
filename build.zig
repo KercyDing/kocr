@@ -26,6 +26,69 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    const goose = b.dependency("goose", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const core_platform_root = switch (target.result.os.tag) {
+        .linux => b.path("src/core/linux/root.zig"),
+        .windows => b.path("src/core/windows/root.zig"),
+        .macos => b.path("src/core/macos/root.zig"),
+        else => b.path("src/core/windows/root.zig"),
+    };
+
+    const core_types = b.addModule("core_types", .{
+        .root_source_file = b.path("src/core/types.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+    });
+
+    const core_platform = b.addModule("core_platform", .{
+        .root_source_file = core_platform_root,
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = switch (target.result.os.tag) {
+            .linux => &.{
+                .{ .name = "goose", .module = goose.module("goose") },
+                .{ .name = "core_types", .module = core_types },
+            },
+            .windows, .macos => &.{
+                .{ .name = "core_types", .module = core_types },
+            },
+            else => &.{
+                .{ .name = "core_types", .module = core_types },
+            },
+        },
+    });
+
+    const core_mod = b.addModule("core", .{
+        .root_source_file = b.path("src/core/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "core_platform", .module = core_platform },
+            .{ .name = "core_types", .module = core_types },
+        },
+    });
+
+    const core_check = b.addObject(.{
+        .name = "core-check",
+        .root_module = core_mod,
+    });
+    const core_check_step = b.step("check-core", "Type-check the core module");
+    core_check_step.dependOn(&core_check.step);
+
+    const core_tests = b.addTest(.{
+        .name = "core-tests",
+        .root_module = core_mod,
+    });
+    const run_core_tests = b.addRunArtifact(core_tests);
+    const core_test_step = b.step("test-core", "Run core tests");
+    core_test_step.dependOn(&run_core_tests.step);
 
     const model_mod = b.addModule("model", .{
         .root_source_file = b.path("src/model/model.zig"),

@@ -23,14 +23,22 @@
         .qt6 = .{
             .url = "git+https://github.com/rcalixte/libqt6zig?ref=master#76fbd35d3b4d67721e5ca5cd323c06cd83afeaad",
             .hash = "libqt6zig-6.8.2-OSXtXJRx4BxEkhok6OWmDklZGRHmnWFVTag8HX66JGuq",
+            .lazy = true,
         },
         .win32 = .{
             .url = "git+https://github.com/marlersoft/zigwin32?ref=main#fb2645891520f3e99931db17a7eba04057e87e89",
             .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
+            .lazy = true,
         },
         .objc = .{
             .url = "git+https://github.com/mitchellh/zig-objc?ref=main#bee663fdfaa0c554235dc36b1dce88d136a190ec",
             .hash = "zig_objc-0.0.0-Ir_Sp_4tAQDXtPi51nW_jD9LOEzBvU9lofwO9Pzi6IB4",
+            .lazy = true,
+        },
+        .goose = .{
+            .url = "git+https://github.com/luxluth/goose?ref=master#8b22c35c67cdfc563296fabe4a7e15b5632a0742",
+            .hash = "goose-4.0.1-e9MzML9aBAC8cYvi7WGtEXuYk7Fip9gpw0Z437Gb57YF",
+            .lazy = true,
         },
     },
     .paths = .{
