@@ -154,7 +154,7 @@ pub fn build(b: *std.Build) !void {
     run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);
 
-    try addGui(b, target, optimize, strip, kocr_mod);
+    try addGui(b, target, optimize, strip, kocr_mod, core_mod);
 }
 
 fn addGui(
@@ -163,6 +163,7 @@ fn addGui(
     optimize: std.builtin.OptimizeMode,
     strip: bool,
     kocr_mod: *std.Build.Module,
+    core_mod: *std.Build.Module,
 ) !void {
     const gui_root = switch (target.result.os.tag) {
         .linux => b.path("src/gui/linux.zig"),
@@ -182,6 +183,7 @@ fn addGui(
         .optimize = optimize,
         .strip = strip,
         .imports = &.{
+            .{ .name = "core", .module = core_mod },
             .{ .name = "kocr", .module = kocr_mod },
         },
     });

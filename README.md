@@ -38,7 +38,7 @@ Or:
 zig build run-gui
 ```
 
-The current GUI manages model installs/removals and displays OCR history. Shortcut configuration, capture actions, and the background daemon are not implemented yet.
+The current GUI manages model installs/removals, displays OCR history, and provides one-shot capture actions for copying/saving a region and extracting text. Shortcut configuration and the background daemon are not implemented yet.
 
 Windows (`zigwin32`) and macOS (`zig-objc`) entry points are wired into the build but currently stop with an explicit "not implemented" compile error.
 

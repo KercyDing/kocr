@@ -3,20 +3,30 @@
 
 const std = @import("std");
 
+const core = @import("core");
 const kocr = @import("kocr");
 const qt6 = @import("libqt6zig");
 
 const QApplication = qt6.QApplication;
 const QComboBox = qt6.QComboBox;
+const QFileDialog = qt6.QFileDialog;
 const QHBoxLayout = qt6.QHBoxLayout;
 const QLabel = qt6.QLabel;
 const QListWidget = qt6.QListWidget;
+const QPixmap = qt6.QPixmap;
 const QPushButton = qt6.QPushButton;
 const QTimer = qt6.QTimer;
 const QVBoxLayout = qt6.QVBoxLayout;
 const QWidget = qt6.QWidget;
 
-const JobKind = enum { install, remove };
+const JobKind = enum {
+    install,
+    remove,
+    copy_image,
+    save_image,
+    extract,
+    extract_oneline,
+};
 
 const Job = struct {
     allocator: std.mem.Allocator,
@@ -24,13 +34,18 @@ const Job = struct {
     environ: *const std.process.Environ.Map,
     kind: JobKind,
     profile: []u8,
+    output_path: ?[]u8 = null,
+    lines: ?[]kocr.Line = null,
+    cancelled: bool = false,
     done: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     error_text: ?[]u8 = null,
     thread: ?std.Thread = null,
 
     fn deinit(self: *Job) void {
+        if (self.lines) |lines| kocr.freeLines(self.allocator, lines);
         if (self.error_text) |text| self.allocator.free(text);
         self.allocator.free(self.profile);
+        if (self.output_path) |path| self.allocator.free(path);
         self.allocator.destroy(self);
     }
 };
@@ -44,6 +59,10 @@ const App = struct {
     model_status: QLabel,
     install: QPushButton,
     remove: QPushButton,
+    copy_image: QPushButton,
+    save_image: QPushButton,
+    extract: QPushButton,
+    extract_oneline: QPushButton,
     history: QListWidget,
     copy: QPushButton,
     clear: QPushButton,
@@ -56,6 +75,10 @@ const App = struct {
         self.profile.setEnabled(!busy);
         self.install.setEnabled(!busy);
         self.remove.setEnabled(!busy);
+        self.copy_image.setEnabled(!busy);
+        self.save_image.setEnabled(!busy);
+        self.extract.setEnabled(!busy);
+        self.extract_oneline.setEnabled(!busy);
         self.copy.setEnabled(!busy);
         self.clear.setEnabled(!busy);
     }
@@ -115,12 +138,18 @@ const App = struct {
         }
     }
 
-    fn start(self: *App, kind: JobKind) void {
+    fn start(self: *App, kind: JobKind, output_path: ?[]const u8) void {
         if (self.job != null) return;
         const profile = self.selectedProfile() orelse return;
+        const owned_path = if (output_path) |path| self.allocator.dupe(u8, path) catch {
+            self.allocator.free(profile);
+            self.status.setText("Error: unable to allocate output path");
+            return;
+        } else null;
 
         const job = self.allocator.create(Job) catch {
             self.allocator.free(profile);
+            if (owned_path) |path| self.allocator.free(path);
             self.status.setText("Error: unable to allocate job");
             return;
         };
@@ -130,10 +159,16 @@ const App = struct {
             .environ = self.environ,
             .kind = kind,
             .profile = profile,
+            .output_path = owned_path,
         };
         self.job = job;
         self.setBusy(true);
-        self.status.setText(if (kind == .install) "Installing model…" else "Removing model…");
+        self.status.setText(switch (kind) {
+            .install => "Installing model…",
+            .remove => "Removing model…",
+            .copy_image, .save_image => "Capturing region…",
+            .extract, .extract_oneline => "Capturing and recognizing…",
+        });
         job.thread = std.Thread.spawn(.{}, worker, .{job}) catch {
             self.job = null;
             self.setBusy(false);
@@ -144,23 +179,109 @@ const App = struct {
         self.timer.start(50);
     }
 
+    fn startModel(self: *App, kind: JobKind) void {
+        self.start(kind, null);
+    }
+
+    fn capturePath(self: *App) ?[]u8 {
+        const now = std.Io.Clock.real.now(self.io);
+        return std.fmt.allocPrint(self.allocator, "/tmp/kocr-{d}.png", .{now.nanoseconds}) catch {
+            self.status.setText("Error: unable to allocate capture path");
+            return null;
+        };
+    }
+
     fn poll(self: *App) void {
         const job = self.job orelse return;
         if (!job.done.load(.acquire)) return;
         self.timer.stop();
         if (job.thread) |thread| thread.join();
+
         const error_text = job.error_text;
         job.error_text = null;
         const kind = job.kind;
+        const cancelled = job.cancelled;
+        const output_path = job.output_path;
+        const lines = job.lines;
+        job.lines = null;
+        job.output_path = null;
         self.job = null;
         self.setBusy(false);
-        self.updateModelStatus();
+
         if (error_text) |text| {
             self.status.setText(text);
             self.allocator.free(text);
-        } else {
-            self.status.setText(if (kind == .install) "Model installed" else "Model removed");
+            if (kind != .save_image) {
+                if (output_path) |path| std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
+            }
+        } else if (cancelled) {
+            self.status.setText("Capture cancelled");
+        } else switch (kind) {
+            .install => {
+                self.updateModelStatus();
+                self.status.setText("Model installed");
+            },
+            .remove => {
+                self.updateModelStatus();
+                self.status.setText("Model removed");
+            },
+            .copy_image => {
+                if (output_path) |path| {
+                    const pixmap = QPixmap.new4(path);
+                    defer pixmap.delete();
+                    QApplication.clipboard().setPixmap(pixmap);
+                    self.status.setText("Screenshot copied");
+                    std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
+                }
+            },
+            .save_image => {
+                if (output_path) |temporary| {
+                    const destination = QFileDialog.getSaveFileName4(
+                        self.allocator,
+                        self.root,
+                        "Save screenshot",
+                        "",
+                        "PNG (*.png)",
+                    );
+                    defer self.allocator.free(destination);
+                    if (destination.len == 0) {
+                        self.status.setText("Save cancelled");
+                        std.Io.Dir.cwd().deleteFile(self.io, temporary) catch {};
+                    } else {
+                        var saved = true;
+                        std.Io.Dir.copyFileAbsolute(temporary, destination, self.io, .{}) catch |err| {
+                            var message: [256]u8 = undefined;
+                            self.status.setText(std.fmt.bufPrint(&message, "Save failed: {s}", .{@errorName(err)}) catch "Save failed");
+                            saved = false;
+                        };
+                        if (saved) self.status.setText("Screenshot saved");
+                        std.Io.Dir.cwd().deleteFile(self.io, temporary) catch {};
+                    }
+                }
+            },
+            .extract, .extract_oneline => {
+                if (lines) |recognized| {
+                    const text = linesToText(self.allocator, recognized, kind == .extract_oneline) catch null;
+                    if (text) |result| {
+                        defer self.allocator.free(result);
+                        QApplication.clipboard().setText(result);
+                        if (result.len != 0) {
+                            kocr.history.appendText(self.io, self.allocator, self.environ, result) catch {};
+                        }
+                        self.loadHistory();
+                        self.status.setText(if (result.len == 0) "No text found" else "Text copied");
+                    } else {
+                        self.status.setText("Error: unable to format text");
+                    }
+                    kocr.freeLines(self.allocator, recognized);
+                }
+                if (output_path) |path| std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
+            },
         }
+        if (lines != null and kind != .extract and kind != .extract_oneline) {
+            kocr.freeLines(self.allocator, lines.?);
+        }
+        if (output_path) |path| self.allocator.free(path);
         job.deinit();
     }
 
@@ -189,20 +310,59 @@ fn worker(job: *Job) void {
     switch (job.kind) {
         .install => {
             _ = kocr.downloader.install(job.io, job.allocator, job.environ, job.profile, .{ .force = false }) catch |err| {
-                setError(job, err);
-                job.done.store(true, .release);
+                finishError(job, err);
                 return;
             };
         },
         .remove => {
             kocr.downloader.remove(job.io, job.allocator, job.environ, job.profile) catch |err| {
-                setError(job, err);
-                job.done.store(true, .release);
+                finishError(job, err);
                 return;
             };
         },
+        .copy_image, .save_image, .extract, .extract_oneline => {
+            const path = job.output_path orelse {
+                finishError(job, error.InvalidOutputPath);
+                return;
+            };
+            const capture = core.captureRegion(job.allocator, job.io, path) catch |err| {
+                finishError(job, err);
+                return;
+            };
+            if (capture == .cancelled) {
+                job.cancelled = true;
+                job.done.store(true, .release);
+                return;
+            }
+            if (job.kind == .extract or job.kind == .extract_oneline) {
+                const model_dir = kocr.paths.profileDir(job.io, job.allocator, job.environ, job.profile) catch |err| {
+                    finishError(job, err);
+                    return;
+                };
+                defer job.allocator.free(model_dir);
+                job.lines = kocr.recognizeFile(job.allocator, job.io, path, .{ .model_dir = model_dir }) catch |err| {
+                    finishError(job, err);
+                    return;
+                };
+            }
+        },
     }
     job.done.store(true, .release);
+}
+
+fn finishError(job: *Job, err: anyerror) void {
+    setError(job, err);
+    job.done.store(true, .release);
+}
+
+fn linesToText(allocator: std.mem.Allocator, lines: []const kocr.Line, one_line: bool) ![]u8 {
+    var text: std.ArrayList(u8) = .empty;
+    errdefer text.deinit(allocator);
+    for (lines, 0..) |line, index| {
+        if (index != 0) try text.append(allocator, if (one_line) ' ' else '\n');
+        try text.appendSlice(allocator, line.text);
+    }
+    return text.toOwnedSlice(allocator);
 }
 
 fn setError(job: *Job, err: anyerror) void {
@@ -238,11 +398,11 @@ fn pollCallback(_: QTimer) callconv(.c) void {
 }
 
 fn installCallback(_: QPushButton) callconv(.c) void {
-    if (active_app) |app| app.start(.install);
+    if (active_app) |app| app.startModel(.install);
 }
 
 fn removeCallback(_: QPushButton) callconv(.c) void {
-    if (active_app) |app| app.start(.remove);
+    if (active_app) |app| app.startModel(.remove);
 }
 
 fn refreshModelCallback(_: QPushButton) callconv(.c) void {
@@ -251,6 +411,34 @@ fn refreshModelCallback(_: QPushButton) callconv(.c) void {
 
 fn profileChanged(_: QComboBox, _: i32) callconv(.c) void {
     if (active_app) |app| app.updateModelStatus();
+}
+
+fn copyImageCallback(_: QPushButton) callconv(.c) void {
+    const app = active_app orelse return;
+    const path = app.capturePath() orelse return;
+    defer app.allocator.free(path);
+    app.start(.copy_image, path);
+}
+
+fn saveImageCallback(_: QPushButton) callconv(.c) void {
+    const app = active_app orelse return;
+    const path = app.capturePath() orelse return;
+    defer app.allocator.free(path);
+    app.start(.save_image, path);
+}
+
+fn extractCallback(_: QPushButton) callconv(.c) void {
+    const app = active_app orelse return;
+    const path = app.capturePath() orelse return;
+    defer app.allocator.free(path);
+    app.start(.extract, path);
+}
+
+fn extractOnelineCallback(_: QPushButton) callconv(.c) void {
+    const app = active_app orelse return;
+    const path = app.capturePath() orelse return;
+    defer app.allocator.free(path);
+    app.start(.extract_oneline, path);
 }
 
 fn copyCallback(_: QPushButton) callconv(.c) void {
@@ -316,6 +504,28 @@ pub fn run(init: std.process.Init) !void {
     refresh_model.setObjectName("refreshModelButton");
     refresh_model.onClicked(refreshModelCallback);
 
+    const copy_image = QPushButton.new5("Copy image", root);
+    copy_image.setObjectName("copyImageButton");
+    copy_image.onClicked(copyImageCallback);
+
+    const save_image = QPushButton.new5("Save image", root);
+    save_image.setObjectName("saveImageButton");
+    save_image.onClicked(saveImageCallback);
+
+    const extract = QPushButton.new5("Extract text", root);
+    extract.setObjectName("extractTextButton");
+    extract.onClicked(extractCallback);
+
+    const extract_oneline = QPushButton.new5("One line", root);
+    extract_oneline.setObjectName("extractOneLineButton");
+    extract_oneline.onClicked(extractOnelineCallback);
+
+    const action_row = QHBoxLayout.new2();
+    action_row.addWidget(copy_image);
+    action_row.addWidget(save_image);
+    action_row.addWidget(extract);
+    action_row.addWidget(extract_oneline);
+
     const model_row = QHBoxLayout.new2();
     model_row.addWidget(QLabel.new3("Model:"));
     model_row.addWidget(profile);
@@ -353,6 +563,8 @@ pub fn run(init: std.process.Init) !void {
     const layout = QVBoxLayout.new(root);
     layout.addWidget(title);
     layout.addSpacing(8);
+    layout.addLayout(action_row);
+    layout.addSpacing(8);
     layout.addLayout(model_row);
     layout.addWidget(model_status);
     layout.addSpacing(16);
@@ -370,6 +582,10 @@ pub fn run(init: std.process.Init) !void {
         .model_status = model_status,
         .install = install,
         .remove = remove,
+        .copy_image = copy_image,
+        .save_image = save_image,
+        .extract = extract,
+        .extract_oneline = extract_oneline,
         .history = history,
         .copy = copy,
         .clear = clear,
