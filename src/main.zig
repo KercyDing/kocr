@@ -3,6 +3,7 @@ const zignal = @import("zignal");
 
 const model = @import("model/model.zig");
 const ocr = @import("ocr.zig");
+const downloader = @import("downloader/mod.zig");
 
 const usage =
     \\usage: kocr <image> [options]
@@ -15,6 +16,8 @@ const usage =
     \\  --threads <n>       inference threads (default: auto)
     \\  --detect            print detected text boxes
     \\  --line              recognize a single text line (skip detection)
+    \\  --install <profile> download and install a model package
+    \\  --force             replace an existing installed model
     \\
 ;
 
@@ -32,6 +35,8 @@ pub fn main(init: std.process.Init) !void {
     var threads_arg: ?i32 = null;
     var detect_only = false;
     var line_only = false;
+    var install_profile: ?[]const u8 = null;
+    var force = false;
 
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "--help")) {
@@ -51,6 +56,10 @@ pub fn main(init: std.process.Init) !void {
             detect_only = true;
         } else if (std.mem.eql(u8, arg, "--line")) {
             line_only = true;
+        } else if (std.mem.eql(u8, arg, "--install")) {
+            install_profile = args.next() orelse return usageError();
+        } else if (std.mem.eql(u8, arg, "--force")) {
+            force = true;
         } else if (std.mem.eql(u8, arg, "--threads")) {
             const value = args.next() orelse return usageError();
             threads_arg = std.fmt.parseInt(i32, value, 10) catch return usageError();
@@ -63,8 +72,16 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    const path = image_path orelse return usageError();
     const threads = threads_arg orelse @as(i32, @intCast(@min(std.Thread.getCpuCount() catch 4, 8)));
+
+    if (install_profile) |install_name| {
+        const installed = try downloader.install(init.io, init.gpa, init.environ_map, install_name, .{ .force = force });
+        defer init.gpa.free(installed);
+        std.debug.print("installed {s}\n", .{installed});
+        return;
+    }
+
+    const path = image_path orelse return usageError();
 
     const model_dir = if (model_dir_arg) |dir|
         try init.gpa.dupe(u8, dir)
