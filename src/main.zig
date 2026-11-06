@@ -11,6 +11,7 @@ pub fn main(init: std.process.Init) !void {
     switch (result) {
         .image => |args| try runImage(init, args),
         .install => |args| try runInstall(init, args),
+        .uninstall => |args| try runUninstall(init, args),
         .use => |args| try runUse(init, args),
         .daemon => try daemon.run(init),
     }
@@ -20,6 +21,22 @@ fn runInstall(init: std.process.Init, args: cli.Install) !void {
     const installed = try kocr.downloader.install(init.io, init.gpa, init.environ_map, args.profile, .{ .force = args.force });
     defer init.gpa.free(installed);
     std.debug.print("installed {s}\n", .{installed});
+}
+
+fn runUninstall(init: std.process.Init, args: cli.Uninstall) !void {
+    if (!try kocr.downloader.isInstalled(init.io, init.gpa, init.environ_map, args.profile))
+        return error.ModelNotInstalled;
+    try kocr.downloader.remove(init.io, init.gpa, init.environ_map, args.profile);
+
+    var parsed = try config.load(init.gpa, init.io, init.environ_map);
+    defer parsed.deinit();
+    if (parsed.value.models.select) |selected| {
+        if (std.mem.eql(u8, selected, args.profile)) {
+            parsed.value.models.select = null;
+            try config.save(init.gpa, init.io, init.environ_map, parsed.value);
+        }
+    }
+    std.debug.print("uninstalled {s}\n", .{args.profile});
 }
 
 fn runUse(init: std.process.Init, args: cli.Use) !void {

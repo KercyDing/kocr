@@ -102,5 +102,18 @@
                 },
             },
         },
+        .{
+            .name = "uninstall",
+            .about = "Remove an installed model package",
+            .args = .{
+                .{
+                    .positional = .{
+                        .id = "profile",
+                        .help = "Model profile: tiny, small or medium",
+                        .required = true,
+                    },
+                },
+            },
+        },
     },
 }

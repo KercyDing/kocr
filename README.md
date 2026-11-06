@@ -21,6 +21,7 @@ Install a model package:
 ```bash
 kocr install tiny
 kocr install small --force
+kocr uninstall small
 kocr use small
 ```
 
