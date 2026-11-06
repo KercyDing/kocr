@@ -81,9 +81,16 @@ const App = struct {
         self.save_image.setEnabled(!busy);
         self.extract.setEnabled(!busy);
         self.extract_oneline.setEnabled(!busy);
-        self.copy.setEnabled(!busy);
-        self.delete_selected.setEnabled(!busy);
-        self.clear.setEnabled(!busy);
+        self.updateHistoryButtons();
+    }
+
+    fn updateHistoryButtons(self: *App) void {
+        const row = self.history.currentRow();
+        const selected = row >= 0 and row < self.records.len;
+        const available = self.job == null;
+        self.copy.setEnabled(available and selected);
+        self.delete_selected.setEnabled(available and selected);
+        self.clear.setEnabled(available and self.records.len != 0);
     }
 
     fn selectedProfile(self: *App) ?[]u8 {
@@ -167,6 +174,7 @@ const App = struct {
         } else if (self.history.currentRow() < 0) {
             self.history.setCurrentRow(0);
         }
+        self.updateHistoryButtons();
     }
 
     fn start(self: *App, kind: JobKind, output_path: ?[]const u8) void {
@@ -514,6 +522,10 @@ fn extractOnelineCallback(_: QPushButton) callconv(.c) void {
     app.start(.extract_oneline, path);
 }
 
+fn historySelectionChanged(_: QListWidget, _: i32) callconv(.c) void {
+    if (active_app) |app| app.updateHistoryButtons();
+}
+
 fn copyCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.copySelected();
 }
@@ -615,12 +627,13 @@ pub fn run(init: std.process.Init) !void {
 
     const history = QListWidget.new(root);
     history.setObjectName("historyList");
+    history.onCurrentRowChanged(historySelectionChanged);
 
     const copy = QPushButton.new5("Copy", root);
     copy.setObjectName("copyHistoryButton");
     copy.onClicked(copyCallback);
 
-    const delete_selected = QPushButton.new5("Delete current", root);
+    const delete_selected = QPushButton.new5("Delete", root);
     delete_selected.setObjectName("deleteHistoryButton");
     delete_selected.onClicked(deleteCallback);
 
