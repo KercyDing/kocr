@@ -133,6 +133,14 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const kocr_tests = b.addTest(.{
+        .name = "kocr-tests",
+        .root_module = kocr_mod,
+    });
+    const run_kocr_tests = b.addRunArtifact(kocr_tests);
+    const kocr_test_step = b.step("test-kocr", "Run OCR tests");
+    kocr_test_step.dependOn(&run_kocr_tests.step);
+
     const cli = zommand.createCli(b, .{
         .target = target,
         .optimize = optimize,

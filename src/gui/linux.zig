@@ -259,6 +259,8 @@ const App = struct {
                     const pixmap = QPixmap.new4(path);
                     defer pixmap.delete();
                     QApplication.clipboard().setPixmap(pixmap);
+                    kocr.history.appendImage(self.io, self.allocator, self.environ, path) catch {};
+                    self.loadHistory();
                     self.status.setText("Screenshot copied");
                     std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
                 }
@@ -283,7 +285,11 @@ const App = struct {
                             self.status.setText(std.fmt.bufPrint(&message, "Save failed: {s}", .{@errorName(err)}) catch "Save failed");
                             saved = false;
                         };
-                        if (saved) self.status.setText("Screenshot saved");
+                        if (saved) {
+                            kocr.history.appendImage(self.io, self.allocator, self.environ, destination) catch {};
+                            self.loadHistory();
+                            self.status.setText("Screenshot saved");
+                        }
                         std.Io.Dir.cwd().deleteFile(self.io, temporary) catch {};
                     }
                 }
@@ -320,8 +326,18 @@ const App = struct {
             self.status.setText("Select a history entry first");
             return;
         }
-        QApplication.clipboard().setText(self.records[@intCast(row)].text);
-        self.status.setText("Copied to clipboard");
+        switch (self.records[@intCast(row)].content) {
+            .text => |text| {
+                QApplication.clipboard().setText(text);
+                self.status.setText("Copied to clipboard");
+            },
+            .image => |path| {
+                const pixmap = QPixmap.new4(path);
+                defer pixmap.delete();
+                QApplication.clipboard().setPixmap(pixmap);
+                self.status.setText("Image copied to clipboard");
+            },
+        }
     }
 
     fn clearHistory(self: *App) void {
@@ -399,9 +415,16 @@ fn setError(job: *Job, err: anyerror) void {
 }
 
 fn historyLabel(allocator: std.mem.Allocator, record: kocr.history.Record) ![]u8 {
-    const end = std.mem.indexOfScalar(u8, record.text, '\n') orelse record.text.len;
-    const preview = record.text[0..@min(end, 96)];
-    return std.fmt.allocPrint(allocator, "{s}  {s}", .{ formatTime(record.created_at), preview });
+    return switch (record.content) {
+        .text => |text| blk: {
+            const end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
+            break :blk std.fmt.allocPrint(allocator, "{s}  {s}", .{ formatTime(record.created_at), text[0..@min(end, 96)] });
+        },
+        .image => |path| std.fmt.allocPrint(allocator, "{s}  [image] {s}", .{
+            formatTime(record.created_at),
+            std.Io.Dir.path.basename(path),
+        }),
+    };
 }
 
 fn formatTime(timestamp: i64) []const u8 {
