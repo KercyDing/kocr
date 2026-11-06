@@ -110,7 +110,13 @@ pub fn setError(job: *Job, err: anyerror) void {
 
 fn tempPath(state: *State) ?[]u8 {
     const now = std.Io.Clock.real.now(state.io);
-    const temp = state.environ.get("TEMP") orelse state.environ.get("TMPDIR") orelse state.environ.get("TMP") orelse ".";
+    // Must be absolute: history.appendImage refuses relative paths, and
+    // TEMP/TMPDIR/TMP are unset on most Linux desktops.
+    const temp = nui.path(state.allocator, .temp, "kocr") catch {
+        state.setMainStatus("Error: unable to find a temporary directory");
+        return null;
+    };
+    defer state.allocator.free(temp);
     return std.fmt.allocPrint(state.allocator, "{s}{c}kocr-{d}.png", .{
         temp,
         std.Io.Dir.path.sep,
