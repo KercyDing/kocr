@@ -1,5 +1,7 @@
 pub const paths = @import("paths.zig");
 pub const rec = @import("rec.zig");
+pub const det = @import("det.zig");
+pub const cls = @import("cls.zig");
 
 const std = @import("std");
 
@@ -10,6 +12,7 @@ pub const Manifest = struct {
     space_index: usize,
     det: Tensor,
     rec: Tensor,
+    cls: ?Tensor = null,
 
     pub const Tensor = struct {
         param: []const u8,
@@ -24,7 +27,7 @@ pub fn loadManifest(
     io: std.Io,
     dir: []const u8,
 ) !?std.json.Parsed(Manifest) {
-    const path = try std.fs.path.join(allocator, &.{ dir, "manifest.json" });
+    const path = try std.Io.Dir.path.join(allocator, &.{ dir, "manifest.json" });
     defer allocator.free(path);
 
     const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1 << 20)) catch |err| switch (err) {

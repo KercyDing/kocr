@@ -6,13 +6,13 @@ const zignal = @import("zignal");
 
 const Rgb = zignal.Rgb(u8);
 const target_h = 48;
-const means = [_]f32{ 127.5, 127.5, 127.5 };
-const norms = [_]f32{ 1.0 / 127.5, 1.0 / 127.5, 1.0 / 127.5 };
 
 pub const Paths = struct {
     param: []const u8,
     bin: []const u8,
     keys: []const u8,
+    input: []const u8 = "input",
+    output: []const u8 = "output",
 };
 
 pub const Result = struct {
@@ -29,6 +29,8 @@ pub const Rec = struct {
     net: ncnn.Net,
     keys: [][]const u8,
     keys_buf: []u8,
+    input_name: []const u8,
+    output_name: []const u8,
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, paths: Paths, threads: i32) !Rec {
         const keys_buf = try std.Io.Dir.cwd().readFileAlloc(io, paths.keys, allocator, .limited(8 << 20));
@@ -56,42 +58,55 @@ pub const Rec = struct {
             .net = net,
             .keys = try keys.toOwnedSlice(allocator),
             .keys_buf = keys_buf,
+            .input_name = try allocator.dupe(u8, paths.input),
+            .output_name = try allocator.dupe(u8, paths.output),
         };
     }
 
     pub fn deinit(self: *Rec) void {
         self.allocator.free(self.keys);
         self.allocator.free(self.keys_buf);
+        self.allocator.free(self.input_name);
+        self.allocator.free(self.output_name);
         self.net.deinit();
     }
 
     pub fn recognizeFile(self: *Rec, io: std.Io, path: []const u8) !Result {
         var image: zignal.Image(Rgb) = try .load(io, self.allocator, path);
         defer image.deinit(self.allocator);
-        return self.recognizeImage(image);
+        return self.recognizeImage(io, image);
     }
 
-    pub fn recognizeImage(self: *Rec, image: zignal.Image(Rgb)) !Result {
+    pub fn recognizeImage(self: *Rec, io: std.Io, image: zignal.Image(Rgb)) !Result {
         const ratio = @as(f32, @floatFromInt(target_h)) / @as(f32, @floatFromInt(image.rows));
-        const resized_w: usize = @max(1, @as(usize, @intFromFloat(@as(f32, @floatFromInt(image.cols)) * ratio)));
-        const pixels: []const u8 = @as([*]const u8, @ptrCast(image.data.ptr))[0 .. image.data.len * @sizeOf(Rgb)];
+        const resized_w: u32 = @max(1, @as(u32, @intFromFloat(@ceil(@as(f32, @floatFromInt(image.cols)) * ratio))));
+        const input_width: u32 = @max(resized_w, 320);
 
-        var input = try ncnn.pixel.fromPixelsResize(
-            pixels,
-            @backingInt(ncnn.pixel.Format.rgb),
-            image.cols,
-            image.rows,
-            image.stride * @sizeOf(Rgb),
-            resized_w,
-            target_h,
-        );
+        var resized: zignal.Image(Rgb) = try .init(self.allocator, target_h, resized_w);
+        defer resized.deinit(self.allocator);
+        image.resize(io, self.allocator, resized, .lanczos);
+
+        var input = try ncnn.Mat.create3d(input_width, target_h, 3);
         defer input.deinit();
-        try ncnn.pixel.subtractMeanNormalize(input, &means, &norms);
+        for (0..3) |c| {
+            const plane = try input.channelFloat(c);
+            @memset(plane, -1.0);
+        }
+        for (0..target_h) |y| {
+            for (0..resized.cols) |x| {
+                const pixel = resized.data[y * resized.stride + x];
+                const bgr = [3]u8{ pixel.b, pixel.g, pixel.r };
+                for (bgr, 0..) |value, c| {
+                    const plane = try input.channelFloat(c);
+                    plane[y * input_width + x] = @as(f32, @floatFromInt(value)) / 127.5 - 1.0;
+                }
+            }
+        }
 
         var ex = try self.net.createExtractor();
         defer ex.deinit();
-        try ex.input("input", input);
-        var output = try ex.extract("output");
+        try ex.input(self.input_name, input);
+        var output = try ex.extract(self.output_name);
         defer output.deinit();
 
         const rows = output.height();
@@ -123,8 +138,11 @@ pub const Rec = struct {
             previous = best;
         }
 
+        const trimmed = std.mem.trim(u8, text.items, " \t\r\n");
+        const result_text = try self.allocator.dupe(u8, trimmed);
+        text.deinit(self.allocator);
         return .{
-            .text = try text.toOwnedSlice(self.allocator),
+            .text = result_text,
             .score = if (chars == 0) 0 else total / @as(f32, @floatFromInt(chars)),
         };
     }

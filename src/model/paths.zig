@@ -20,7 +20,7 @@ pub fn modelsRoot(
     const base = try known_folders.getPath(io, allocator, environ, dataFolder()) orelse
         return error.DataDirUnavailable;
     defer allocator.free(base);
-    return std.fs.path.join(allocator, &.{ base, "kocr", "models" });
+    return std.Io.Dir.path.join(allocator, &.{ base, "kocr", "models" });
 }
 
 pub fn profileDir(
@@ -33,5 +33,5 @@ pub fn profileDir(
     defer allocator.free(root);
     const name = try std.fmt.allocPrint(allocator, "ppocrv6-{s}", .{profile});
     defer allocator.free(name);
-    return std.fs.path.join(allocator, &.{ root, name });
+    return std.Io.Dir.path.join(allocator, &.{ root, name });
 }
