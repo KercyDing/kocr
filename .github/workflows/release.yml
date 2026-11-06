@@ -12,7 +12,15 @@ concurrency:
 
 jobs:
   cli:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -30,23 +38,31 @@ jobs:
         run: |
           mkdir -p dist-cli
           cp zig-out/bin/kocr README.md LICENSE dist-cli/
-          tar -C dist-cli -czf kocr-cli-linux-x86_64.tar.gz .
+          tar -C dist-cli -czf kocr-cli-linux-${{ matrix.arch }}.tar.gz .
 
       - name: Inspect CLI
         run: |
           file zig-out/bin/kocr
-          tar -tzf kocr-cli-linux-x86_64.tar.gz
+          tar -tzf kocr-cli-linux-${{ matrix.arch }}.tar.gz
 
       - name: Upload CLI
         uses: actions/upload-artifact@v4
         with:
-          name: kocr-cli-linux-x86_64
-          path: kocr-cli-linux-x86_64.tar.gz
+          name: kocr-cli-linux-${{ matrix.arch }}
+          path: kocr-cli-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
           retention-days: 7
 
   gui:
-    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -69,17 +85,17 @@ jobs:
         run: |
           mkdir -p dist-gui
           cp zig-out/bin/kocr-gui README.md LICENSE dist-gui/
-          tar -C dist-gui -czf kocr-gui-linux-x86_64.tar.gz .
+          tar -C dist-gui -czf kocr-linux-${{ matrix.arch }}.tar.gz .
 
       - name: Inspect GUI
         run: |
           file zig-out/bin/kocr-gui
-          tar -tzf kocr-gui-linux-x86_64.tar.gz
+          tar -tzf kocr-linux-${{ matrix.arch }}.tar.gz
 
       - name: Upload GUI
         uses: actions/upload-artifact@v4
         with:
-          name: kocr-gui-linux-x86_64
-          path: kocr-gui-linux-x86_64.tar.gz
+          name: kocr-linux-${{ matrix.arch }}
+          path: kocr-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
           retention-days: 7
