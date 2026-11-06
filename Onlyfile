@@ -178,7 +178,7 @@ group gui {
 [help] Format all Zig files
 [pass] Formatting complete.
 fmt():
-    zig fmt .
+    zig fmt src build.zig build.zig.zon cli.zon
 
 [help] Clean cache and build output
 [pass] Clean complete.
