@@ -16,14 +16,34 @@ pub fn initProcess() void {
 }
 
 pub fn run(init: std.process.Init) !void {
+    writeLog(init, "starting\n");
+    runInner(init) catch |err| {
+        var buffer: [128]u8 = undefined;
+        const text = std.fmt.bufPrint(&buffer, "failed: {s}\n", .{@errorName(err)}) catch "failed\n";
+        writeLog(init, text);
+        return err;
+    };
+}
+
+fn writeLog(init: std.process.Init, text: []const u8) void {
+    const dir = core.config.dir(init.io, init.gpa, init.environ_map) catch return;
+    defer init.gpa.free(dir);
+    const path = std.Io.Dir.path.join(init.gpa, &.{ dir, "daemon.log" }) catch return;
+    defer init.gpa.free(path);
+    std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = path, .data = text }) catch {};
+}
+
+fn runInner(init: std.process.Init) !void {
     kernel32.SetLastError(foundation.ERROR_SUCCESS);
     const mutex = kernel32.CreateMutexW(null, 0, mutex_name) orelse return DaemonError.ProcessControlUnavailable;
     defer _ = kernel32.CloseHandle(mutex);
     if (kernel32.GetLastError() == foundation.ERROR_ALREADY_EXISTS) return DaemonError.AlreadyRunning;
+    writeLog(init, "mutex\n");
     acquire(init.io, init.gpa, init.environ_map) catch |err| switch (err) {
         error.AlreadyRunning => return,
         else => return err,
     };
+    writeLog(init, "acquired\n");
     defer release(init.io, init.gpa, init.environ_map);
     try native.serve(init);
 }
@@ -141,8 +161,12 @@ pub fn ensureRunning(
         .stderr = .ignore,
     }) catch return DaemonError.ProcessControlUnavailable;
     child.stdin = null;
-    std.Io.sleep(io, .{ .nanoseconds = 500 * std.time.ns_per_ms }, .awake) catch {};
-    if (!try isRunning(io, allocator, environ)) return DaemonError.ProcessControlUnavailable;
+    var waited: u32 = 0;
+    while (waited < 3000) : (waited += 100) {
+        if (try isRunning(io, allocator, environ)) return;
+        std.Io.sleep(io, .{ .nanoseconds = 100 * std.time.ns_per_ms }, .awake) catch {};
+    }
+    return DaemonError.ProcessControlUnavailable;
 }
 
 fn pidPath(

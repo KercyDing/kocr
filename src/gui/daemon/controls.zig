@@ -15,28 +15,29 @@ pub fn updateDaemon(state: *State) bool {
     return true;
 }
 
-pub fn toggleDaemon(state: *State) void {
+pub fn applyDaemon(state: *State) void {
     if (state.daemon_running) {
+        const started = blk: {
+            daemon.ensureRunning(state.io, state.allocator, state.environ) catch |err| switch (err) {
+                error.AlreadyRunning => break :blk false,
+                else => {
+                    var buffer: [256]u8 = undefined;
+                    state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
+                    _ = updateDaemon(state);
+                    return;
+                },
+            };
+            break :blk true;
+        };
+        state.setMainStatus(if (started) "Daemon started" else "Daemon already running");
+    } else {
         daemon.stop(state.io, state.allocator, state.environ) catch |err| {
             var buffer: [256]u8 = undefined;
             state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon stop failed: {s}", .{@errorName(err)}) catch "Daemon stop failed");
+            _ = updateDaemon(state);
             return;
         };
         state.setMainStatus("Daemon stopped");
-    } else {
-        daemon.ensureRunning(state.io, state.allocator, state.environ) catch |err| switch (err) {
-            error.AlreadyRunning => {
-                state.setMainStatus("Daemon already running");
-                _ = updateDaemon(state);
-                return;
-            },
-            else => {
-                var buffer: [256]u8 = undefined;
-                state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
-                return;
-            },
-        };
-        state.setMainStatus("Daemon started");
     }
     _ = updateDaemon(state);
 }

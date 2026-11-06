@@ -94,10 +94,9 @@ pub fn view(state: *State, c: *ui.Context) void {
     {
         ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
         defer ui.end(c);
-        ui.text(c, if (state.daemon_running) "Daemon: running" else "Daemon: stopped", .{ .size = 13, .color = t.muted });
-        if (kit.button(c, if (state.daemon_running) "Stop" else "Start", .{}).clicked) daemon.toggleDaemon(state);
+        if (ui.toggle(c, "Daemon", &state.daemon_running)) daemon.applyDaemon(state);
         ui.spacer(c);
-        if (kit.button(c, "Settings…", .{}).clicked) settings.openSettings(state);
+        if (kit.button(c, "Settings", .{}).clicked) settings.openSettings(state);
     }
 
     actionRow(state, c);

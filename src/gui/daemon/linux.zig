@@ -7,6 +7,23 @@ const core = @import("core");
 const config = core.config;
 
 pub fn run(init: std.process.Init) !void {
+    runInner(init) catch |err| {
+        var buffer: [128]u8 = undefined;
+        const text = std.fmt.bufPrint(&buffer, "failed: {s}\n", .{@errorName(err)}) catch "failed\n";
+        writeLog(init, text);
+        return err;
+    };
+}
+
+fn writeLog(init: std.process.Init, text: []const u8) void {
+    const dir = core.config.dir(init.io, init.gpa, init.environ_map) catch return;
+    defer init.gpa.free(dir);
+    const path = std.Io.Dir.path.join(init.gpa, &.{ dir, "daemon.log" }) catch return;
+    defer init.gpa.free(path);
+    std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = path, .data = text }) catch {};
+}
+
+fn runInner(init: std.process.Init) !void {
     const ignore_pipe = std.posix.Sigaction{
         .handler = .{ .handler = std.posix.SIG.IGN },
         .mask = std.posix.sigemptyset(),
@@ -307,8 +324,12 @@ pub fn ensureRunning(
         .stderr = output,
     }) catch return error.ProcessControlUnavailable;
     _ = &child;
-    std.Io.sleep(io, .{ .nanoseconds = 500 * std.time.ns_per_ms }, .awake) catch {};
-    if (!try isRunning(io, allocator, environ)) return DaemonError.ProcessControlUnavailable;
+    var waited: u32 = 0;
+    while (waited < 3000) : (waited += 100) {
+        if (try isRunning(io, allocator, environ)) return;
+        std.Io.sleep(io, .{ .nanoseconds = 100 * std.time.ns_per_ms }, .awake) catch {};
+    }
+    return DaemonError.ProcessControlUnavailable;
 }
 
 fn pidPath(
