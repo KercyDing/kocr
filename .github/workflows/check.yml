@@ -35,7 +35,7 @@ jobs:
           key: zig-${{ runner.os }}-${{ hashFiles('build.zig.zon') }}
 
       - name: Check formatting
-        run: zig fmt --check build.zig src
+        run: zig fmt --check build.zig build.zig.zon src
 
       - name: Build
-        run: zig build -Doptimize=ReleaseSafe
+        run: zig build -Doptimize=Debug
