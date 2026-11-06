@@ -96,16 +96,14 @@ pub fn stop(
     std.Io.Dir.cwd().deleteFile(io, path) catch {};
 }
 
-/// Starts the sibling `kocr daemon` if the pid file is not live.
+/// Starts the current executable in daemon mode if the pid file is not live.
 pub fn ensureRunning(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !bool {
     if (try isRunning(io, allocator, environ)) return false;
-    const dir = try std.process.executableDirPathAlloc(io, allocator);
-    defer allocator.free(dir);
-    const executable = try std.Io.Dir.path.join(allocator, &.{ dir, "kocr" });
+    const executable = try std.process.executablePathAlloc(io, allocator);
     defer allocator.free(executable);
     const config_dir = try config.dir(io, allocator, environ);
     defer allocator.free(config_dir);
@@ -115,7 +113,7 @@ pub fn ensureRunning(
     defer if (log_file) |file| file.close(io);
     const output: std.process.SpawnOptions.StdIo = if (log_file) |file| .{ .file = file } else .ignore;
     var child = std.process.spawn(io, .{
-        .argv = &.{ "setsid", "-f", executable, "daemon" },
+        .argv = &.{ "setsid", "-f", executable, "--daemon" },
         .stdin = .ignore,
         .stdout = output,
         .stderr = output,

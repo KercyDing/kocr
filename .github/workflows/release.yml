@@ -11,7 +11,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux-x86_64:
+  cli:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: "0.17.1"
+
+      - name: Build CLI
+        run: zig build -Doptimize=fast -Dstrip=true
+
+      - name: Package CLI
+        run: |
+          mkdir -p dist-cli
+          cp zig-out/bin/kocr README.md LICENSE dist-cli/
+          tar -C dist-cli -czf kocr-cli-linux-x86_64.tar.gz .
+
+      - name: Inspect CLI
+        run: |
+          file zig-out/bin/kocr
+          tar -tzf kocr-cli-linux-x86_64.tar.gz
+
+      - name: Upload CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: kocr-cli-linux-x86_64
+          path: kocr-cli-linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  gui:
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     steps:
@@ -28,27 +62,24 @@ jobs:
         with:
           version: "0.17.1"
 
-      - name: Build release
-        run: |
-          zig build -Doptimize=fast -Dstrip=true
-          zig build gui -Doptimize=fast -Dstrip=true
+      - name: Build GUI
+        run: zig build gui -Doptimize=fast -Dstrip=true
 
-      - name: Package
+      - name: Package GUI
         run: |
-          mkdir -p dist
-          cp zig-out/bin/kocr zig-out/bin/kocr-gui README.md LICENSE dist/
-          tar -C dist -czf kocr-linux-x86_64.tar.gz .
+          mkdir -p dist-gui
+          cp zig-out/bin/kocr-gui README.md LICENSE dist-gui/
+          tar -C dist-gui -czf kocr-gui-linux-x86_64.tar.gz .
 
-      - name: Inspect artifacts
+      - name: Inspect GUI
         run: |
-          file zig-out/bin/kocr
           file zig-out/bin/kocr-gui
-          tar -tzf kocr-linux-x86_64.tar.gz
+          tar -tzf kocr-gui-linux-x86_64.tar.gz
 
-      - name: Upload artifact
+      - name: Upload GUI
         uses: actions/upload-artifact@v4
         with:
-          name: kocr-linux-x86_64
-          path: kocr-linux-x86_64.tar.gz
+          name: kocr-gui-linux-x86_64
+          path: kocr-gui-linux-x86_64.tar.gz
           if-no-files-found: error
           retention-days: 7

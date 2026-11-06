@@ -142,6 +142,18 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const daemon_mod = b.addModule("daemon", .{
+        .root_source_file = b.path("src/daemon.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "config", .module = config_mod },
+            .{ .name = "core", .module = core_mod },
+            .{ .name = "kocr", .module = kocr_mod },
+        },
+    });
+
     const kocr_tests = b.addTest(.{
         .name = "kocr-tests",
         .root_module = kocr_mod,
@@ -183,7 +195,7 @@ pub fn build(b: *std.Build) !void {
     run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);
 
-    try addGui(b, target, optimize, strip, kocr_mod, core_mod, config_mod);
+    try addGui(b, target, optimize, strip, kocr_mod, core_mod, config_mod, daemon_mod);
 }
 
 fn addGui(
@@ -194,6 +206,7 @@ fn addGui(
     kocr_mod: *std.Build.Module,
     core_mod: *std.Build.Module,
     config_mod: *std.Build.Module,
+    daemon_mod: *std.Build.Module,
 ) !void {
     const gui_root = switch (target.result.os.tag) {
         .linux => b.path("src/gui/linux.zig"),
@@ -216,6 +229,7 @@ fn addGui(
             .{ .name = "config", .module = config_mod },
             .{ .name = "core", .module = core_mod },
             .{ .name = "kocr", .module = kocr_mod },
+            .{ .name = "daemon", .module = daemon_mod },
         },
     });
     gui_mod.link_libc = true;

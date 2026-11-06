@@ -115,10 +115,5 @@
                 },
             },
         },
-        .{
-            .name = "daemon",
-            .about = "Run global shortcuts in the background",
-            .args = .{},
-        },
     },
 }

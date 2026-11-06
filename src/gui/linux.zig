@@ -1,10 +1,11 @@
-//! Minimal native Qt6 settings window: model management and OCR history.
-//! Capture shortcuts and the daemon are not implemented yet.
+//! Native Qt6 window for model management, OCR history, and the shortcut daemon.
+//! `kocr-gui --daemon` runs the background worker without starting Qt.
 
 const std = @import("std");
 
 const config = @import("config");
 const core = @import("core");
+const daemon = @import("daemon");
 const kocr = @import("kocr");
 const qt6 = @import("libqt6zig");
 
@@ -708,12 +709,7 @@ fn saveSettings(_: QPushButton) callconv(.c) void {
         state.app.status.setText(std.fmt.bufPrint(&message, "Could not save config: {s}", .{@errorName(err)}) catch "Could not save config");
         return;
     };
-    const executable_dir = std.process.executableDirPathAlloc(state.app.io, allocator) catch "";
-    defer if (executable_dir.len != 0) allocator.free(executable_dir);
-    const daemon_executable = if (executable_dir.len != 0)
-        std.Io.Dir.path.join(allocator, &.{ executable_dir, "kocr" }) catch ""
-    else
-        "";
+    const daemon_executable = std.process.executablePathAlloc(state.app.io, allocator) catch "";
     defer if (daemon_executable.len != 0) allocator.free(daemon_executable);
 
     core.autostart.set(
@@ -1042,5 +1038,9 @@ pub fn run(init: std.process.Init) !void {
 }
 
 pub fn main(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    for (args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "--daemon")) return daemon.run(init);
+    }
     try run(init);
 }

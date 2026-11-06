@@ -2,8 +2,6 @@ const std = @import("std");
 
 const cli = @import("cli");
 const config = @import("config");
-const core = @import("core");
-const daemon = @import("daemon.zig");
 const kocr = @import("kocr");
 
 pub fn main(init: std.process.Init) !void {
@@ -14,7 +12,6 @@ pub fn main(init: std.process.Init) !void {
         .use => |args| try runUse(init, args),
         .install => |args| try runInstall(init, args),
         .uninstall => |args| try runUninstall(init, args),
-        .daemon => try daemon.run(init),
     }
 }
 
