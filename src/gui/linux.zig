@@ -14,8 +14,10 @@ const QFileDialog = qt6.QFileDialog;
 const QHBoxLayout = qt6.QHBoxLayout;
 const QLabel = qt6.QLabel;
 const QListWidget = qt6.QListWidget;
+const QListWidgetItem = qt6.QListWidgetItem;
 const QPixmap = qt6.QPixmap;
 const QPushButton = qt6.QPushButton;
+const QSize = qt6.QSize;
 const QTimer = qt6.QTimer;
 const QVBoxLayout = qt6.QVBoxLayout;
 const QWidget = qt6.QWidget;
@@ -181,9 +183,52 @@ const App = struct {
             return;
         };
         for (self.records) |record| {
-            const line = historyLabel(self.allocator, record) catch continue;
-            defer self.allocator.free(line);
-            self.history.addItem(line);
+            const item = QListWidgetItem.new2("");
+            const row = QWidget.new2();
+            const row_layout = QHBoxLayout.new(row);
+            row_layout.setContentsMargins(8, 0, 8, 0);
+            row_layout.setSpacing(8);
+            row.setFixedHeight(48);
+            const time = QLabel.new3(formatTime(record.created_at));
+            time.setFixedWidth(140);
+            time.setAttribute2(qt6.qnamespace_enums.WidgetAttribute.WA_TransparentForMouseEvents, true);
+            row_layout.addWidget(time);
+
+            switch (record.content) {
+                .text => |text| {
+                    const end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
+                    const content = QLabel.new3(text[0..@min(end, 160)]);
+                    content.setAttribute2(qt6.qnamespace_enums.WidgetAttribute.WA_TransparentForMouseEvents, true);
+                    row_layout.addWidget2(content, 1);
+                    item.setToolTip(text);
+                },
+                .image => |path| {
+                    const content = QLabel.new3("");
+                    content.setFixedSize2(36, 36);
+                    content.setAttribute2(qt6.qnamespace_enums.WidgetAttribute.WA_TransparentForMouseEvents, true);
+                    const pixmap = QPixmap.new4(path);
+                    defer pixmap.delete();
+                    if (!pixmap.isNull()) {
+                        const thumbnail = pixmap.scaled4(
+                            36,
+                            36,
+                            qt6.qnamespace_enums.AspectRatioMode.KeepAspectRatio,
+                            qt6.qnamespace_enums.TransformationMode.SmoothTransformation,
+                        );
+                        defer thumbnail.delete();
+                        content.setPixmap(thumbnail);
+                    }
+                    row_layout.addWidget(content);
+                    row_layout.addStretch();
+                    const tooltip = imageTooltip(self.allocator, path) catch path;
+                    defer if (tooltip.ptr != path.ptr) self.allocator.free(tooltip);
+                    item.setToolTip(tooltip);
+                },
+            }
+            row.setAttribute2(qt6.qnamespace_enums.WidgetAttribute.WA_TransparentForMouseEvents, true);
+            self.history.addItem2(item);
+            self.history.setItemWidget(item, row);
+            item.setSizeHint(QSize.new4(0, 48));
         }
         if (self.records.len == 0) {
             self.status.setText("No history yet");
@@ -473,17 +518,12 @@ fn setError(job: *Job, err: anyerror) void {
     job.error_text = std.fmt.allocPrint(job.allocator, "Error: {s}", .{@errorName(err)}) catch null;
 }
 
-fn historyLabel(allocator: std.mem.Allocator, record: kocr.history.Record) ![]u8 {
-    return switch (record.content) {
-        .text => |text| blk: {
-            const end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
-            break :blk std.fmt.allocPrint(allocator, "{s}  {s}", .{ formatTime(record.created_at), text[0..@min(end, 96)] });
-        },
-        .image => |path| std.fmt.allocPrint(allocator, "{s}  [image] {s}", .{
-            formatTime(record.created_at),
-            std.Io.Dir.path.basename(path),
-        }),
-    };
+fn imageTooltip(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "<img src=\"file://{s}\" width=\"320\">",
+        .{path},
+    );
 }
 
 fn formatTime(timestamp: i64) []const u8 {
@@ -660,6 +700,25 @@ pub fn run(init: std.process.Init) !void {
 
     const history = QListWidget.new(root);
     history.setObjectName("historyList");
+    history.setToolTipDuration(10000);
+    history.setUniformItemSizes(true);
+    history.setSpacing(0);
+    history.setStyleSheet(
+        \\QListWidget::item {
+        \\    margin: 0px;
+        \\    padding: 0px;
+        \\    min-height: 48px;
+        \\    max-height: 48px;
+        \\    border-radius: 4px;
+        \\}
+        \\QListWidget::item:hover {
+        \\    background: palette(midlight);
+        \\}
+        \\QListWidget::item:selected {
+        \\    background: palette(highlight);
+        \\    color: palette(highlighted-text);
+        \\}
+    );
     history.onCurrentRowChanged(historySelectionChanged);
 
     const copy = QPushButton.new5("Copy", root);
