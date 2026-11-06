@@ -29,6 +29,11 @@ pub const Query = struct {
     search: ?[]const u8 = null,
 };
 
+pub const Revision = struct {
+    count: i64,
+    max_id: i64,
+};
+
 pub fn historyPath(
     io: std.Io,
     allocator: std.mem.Allocator,
@@ -47,6 +52,20 @@ pub fn imagesDir(
     const root = try model.paths.dataRoot(io, allocator, environ);
     defer allocator.free(root);
     return std.Io.Dir.path.join(allocator, &.{ root, "history" });
+}
+
+pub fn revision(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !Revision {
+    var conn = try open(io, allocator, environ);
+    defer conn.close();
+    if (try conn.row("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM captures", .{})) |row| {
+        defer row.deinit();
+        return .{ .count = row.int(0), .max_id = row.int(1) };
+    }
+    return .{ .count = 0, .max_id = 0 };
 }
 
 pub fn appendText(

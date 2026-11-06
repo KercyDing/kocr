@@ -70,6 +70,8 @@ const App = struct {
     clear: QPushButton,
     status: QLabel,
     timer: QTimer,
+    history_timer: QTimer,
+    history_revision: ?kocr.history.Revision = null,
     records: []kocr.history.Record = &.{},
     job: ?*Job = null,
 
@@ -155,6 +157,12 @@ const App = struct {
     }
 
     fn loadHistory(self: *App) void {
+        const was_empty = self.records.len == 0;
+        const selected_id: ?i64 = blk: {
+            const row = self.history.currentRow();
+            if (row < 0 or row >= self.records.len) break :blk null;
+            break :blk self.records[@intCast(row)].id;
+        };
         kocr.history.freeRecords(self.allocator, self.records);
         self.records = &.{};
         self.history.clear();
@@ -171,10 +179,29 @@ const App = struct {
         }
         if (self.records.len == 0) {
             self.status.setText("No history yet");
-        } else if (self.history.currentRow() < 0) {
-            self.history.setCurrentRow(0);
+        } else {
+            if (was_empty) self.status.setText("Ready");
+            var row: i32 = 0;
+            if (selected_id) |id| {
+                for (self.records, 0..) |record, index| {
+                    if (record.id == id) {
+                        row = @intCast(index);
+                        break;
+                    }
+                }
+            }
+            self.history.setCurrentRow(row);
         }
         self.updateHistoryButtons();
+    }
+
+    fn pollHistory(self: *App) void {
+        const revision = kocr.history.revision(self.io, self.allocator, self.environ) catch return;
+        if (self.history_revision) |current| {
+            if (current.count == revision.count and current.max_id == revision.max_id) return;
+        }
+        self.history_revision = revision;
+        self.loadHistory();
     }
 
     fn start(self: *App, kind: JobKind, output_path: ?[]const u8) void {
@@ -475,6 +502,10 @@ fn pollCallback(_: QTimer) callconv(.c) void {
     if (active_app) |app| app.poll();
 }
 
+fn historyPollCallback(_: QTimer) callconv(.c) void {
+    if (active_app) |app| app.pollHistory();
+}
+
 fn installCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.startModel(.install);
 }
@@ -538,13 +569,10 @@ fn clearCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.clearHistory();
 }
 
-fn refreshHistoryCallback(_: QPushButton) callconv(.c) void {
-    if (active_app) |app| app.loadHistory();
-}
-
 fn closeCallback(_: QWidget, _: qt6.QCloseEvent) callconv(.c) void {
     if (active_app) |app| {
         app.timer.stop();
+        app.history_timer.stop();
         if (app.job) |job| {
             if (job.thread) |thread| thread.join();
             app.job = null;
@@ -641,15 +669,10 @@ pub fn run(init: std.process.Init) !void {
     clear.setObjectName("clearHistoryButton");
     clear.onClicked(clearCallback);
 
-    const refresh_history = QPushButton.new5("Refresh", root);
-    refresh_history.setObjectName("refreshHistoryButton");
-    refresh_history.onClicked(refreshHistoryCallback);
-
     const history_buttons = QHBoxLayout.new2();
     history_buttons.addWidget(copy);
     history_buttons.addWidget(delete_selected);
     history_buttons.addWidget(clear);
-    history_buttons.addWidget(refresh_history);
 
     const status = QLabel.new3("Ready");
     status.setObjectName("statusLabel");
@@ -687,8 +710,12 @@ pub fn run(init: std.process.Init) !void {
         .clear = clear,
         .status = status,
         .timer = QTimer.new2(root),
+        .history_timer = QTimer.new2(root),
     };
     app.timer.onTimeout(pollCallback);
+    app.history_timer.setInterval(1000);
+    app.history_timer.onTimeout(historyPollCallback);
+    app.history_timer.start(1000);
     active_app = &app;
     defer {
         active_app = null;
