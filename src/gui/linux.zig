@@ -3,6 +3,7 @@
 
 const std = @import("std");
 
+const config = @import("config");
 const core = @import("core");
 const kocr = @import("kocr");
 const qt6 = @import("libqt6zig");
@@ -114,6 +115,34 @@ const App = struct {
             self.install.setEnabled(self.job == null);
             self.remove.setEnabled(false);
         }
+    }
+
+    fn loadSelection(self: *App) void {
+        var parsed = config.load(self.allocator, self.io, self.environ) catch |err| {
+            var message: [256]u8 = undefined;
+            self.status.setText(std.fmt.bufPrint(&message, "Config error: {s}", .{@errorName(err)}) catch "Config error");
+            return;
+        };
+        defer parsed.deinit();
+        const selected = parsed.value.models.select orelse return;
+        const index = self.profile.findText(selected);
+        if (index >= 0) self.profile.setCurrentIndex(index);
+    }
+
+    fn saveSelection(self: *App) void {
+        const profile = self.profile.currentText(self.allocator);
+        defer self.allocator.free(profile);
+        var parsed = config.load(self.allocator, self.io, self.environ) catch |err| {
+            var message: [256]u8 = undefined;
+            self.status.setText(std.fmt.bufPrint(&message, "Config error: {s}", .{@errorName(err)}) catch "Config error");
+            return;
+        };
+        defer parsed.deinit();
+        parsed.value.models.select = profile;
+        config.save(self.allocator, self.io, self.environ, parsed.value) catch |err| {
+            var message: [256]u8 = undefined;
+            self.status.setText(std.fmt.bufPrint(&message, "Could not save config: {s}", .{@errorName(err)}) catch "Could not save config");
+        };
     }
 
     fn loadHistory(self: *App) void {
@@ -410,7 +439,10 @@ fn refreshModelCallback(_: QPushButton) callconv(.c) void {
 }
 
 fn profileChanged(_: QComboBox, _: i32) callconv(.c) void {
-    if (active_app) |app| app.updateModelStatus();
+    if (active_app) |app| {
+        app.updateModelStatus();
+        app.saveSelection();
+    }
 }
 
 fn copyImageCallback(_: QPushButton) callconv(.c) void {
@@ -599,6 +631,7 @@ pub fn run(init: std.process.Init) !void {
         kocr.history.freeRecords(init.gpa, app.records);
     }
 
+    app.loadSelection();
     app.updateModelStatus();
     app.loadHistory();
 

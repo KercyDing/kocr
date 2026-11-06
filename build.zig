@@ -30,6 +30,16 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    const config_mod = b.addModule("config", .{
+        .root_source_file = b.path("src/config.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "known_folders", .module = known_folders.module("known-folders") },
+        },
+    });
+
     const core_platform_root = switch (target.result.os.tag) {
         .linux => b.path("src/core/linux/root.zig"),
         .windows => b.path("src/core/windows/root.zig"),
@@ -135,6 +145,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .strip = strip,
         .imports = &.{
+            .{ .name = "config", .module = config_mod },
             .{ .name = "kocr", .module = kocr_mod },
             .{ .name = "cli", .module = cli },
         },
@@ -154,7 +165,7 @@ pub fn build(b: *std.Build) !void {
     run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);
 
-    try addGui(b, target, optimize, strip, kocr_mod, core_mod);
+    try addGui(b, target, optimize, strip, kocr_mod, core_mod, config_mod);
 }
 
 fn addGui(
@@ -164,6 +175,7 @@ fn addGui(
     strip: bool,
     kocr_mod: *std.Build.Module,
     core_mod: *std.Build.Module,
+    config_mod: *std.Build.Module,
 ) !void {
     const gui_root = switch (target.result.os.tag) {
         .linux => b.path("src/gui/linux.zig"),
@@ -183,6 +195,7 @@ fn addGui(
         .optimize = optimize,
         .strip = strip,
         .imports = &.{
+            .{ .name = "config", .module = config_mod },
             .{ .name = "core", .module = core_mod },
             .{ .name = "kocr", .module = kocr_mod },
         },

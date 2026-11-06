@@ -18,7 +18,6 @@
                     .option = .{
                         .id = "profile",
                         .help = "Model profile: tiny, small or medium",
-                        .default = "tiny",
                     },
                 },
                 .{
@@ -62,6 +61,19 @@
                     .flag = .{
                         .id = "line",
                         .help = "Recognize a single text line",
+                    },
+                },
+            },
+        },
+        .{
+            .name = "use",
+            .about = "Select an installed model profile",
+            .args = .{
+                .{
+                    .positional = .{
+                        .id = "profile",
+                        .help = "Model profile: tiny, small or medium",
+                        .required = true,
                     },
                 },
             },

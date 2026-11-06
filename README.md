@@ -21,7 +21,10 @@ Install a model package:
 ```bash
 kocr install tiny
 kocr install small --force
+kocr use small
 ```
+
+`kocr use` persists the selected model in `~/.config/kocr/config.json` (or `$XDG_CONFIG_HOME/kocr/config.json`). `kocr image` uses it unless `--profile` or `--model_dir` is given.
 
 ## GUI
 

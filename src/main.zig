@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const cli = @import("cli");
+const config = @import("config");
 const kocr = @import("kocr");
 
 pub fn main(init: std.process.Init) !void {
@@ -8,6 +9,7 @@ pub fn main(init: std.process.Init) !void {
     switch (result) {
         .image => |args| try runImage(init, args),
         .install => |args| try runInstall(init, args),
+        .use => |args| try runUse(init, args),
     }
 }
 
@@ -17,14 +19,27 @@ fn runInstall(init: std.process.Init, args: cli.Install) !void {
     std.debug.print("installed {s}\n", .{installed});
 }
 
+fn runUse(init: std.process.Init, args: cli.Use) !void {
+    if (!try kocr.downloader.isInstalled(init.io, init.gpa, init.environ_map, args.profile))
+        return error.ModelNotInstalled;
+    var parsed = try config.load(init.gpa, init.io, init.environ_map);
+    defer parsed.deinit();
+    parsed.value.models.select = args.profile;
+    try config.save(init.gpa, init.io, init.environ_map, parsed.value);
+    std.debug.print("using {s}\n", .{args.profile});
+}
+
 fn runImage(init: std.process.Init, args: cli.Image) !void {
     const threads: ?i32 = if (std.mem.eql(u8, args.threads, "auto"))
         null
     else
         std.fmt.parseInt(i32, args.threads, 10) catch return error.InvalidThreads;
 
+    var parsed_config = try config.load(init.gpa, init.io, init.environ_map);
+    defer parsed_config.deinit();
+    const profile = args.profile orelse parsed_config.value.models.select orelse "tiny";
     const model_dir = args.model_dir orelse
-        try kocr.paths.profileDir(init.io, init.gpa, init.environ_map, args.profile);
+        try kocr.paths.profileDir(init.io, init.gpa, init.environ_map, profile);
     defer if (args.model_dir == null) init.gpa.free(model_dir);
 
     const options: kocr.Options = .{
