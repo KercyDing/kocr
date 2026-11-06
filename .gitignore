@@ -1,0 +1,8 @@
+# Build artifacts
+.zig-cache
+zig-out
+zig-pkg
+
+# OS files
+.DS_Store
+Thumbs.db

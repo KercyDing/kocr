@@ -1,0 +1,36 @@
+!version 0.5
+
+[help] Build in debug mode
+[pass] Debug build complete.
+[fail] Debug build failed.
+build():
+    zig build
+
+[help] Run in debug mode
+[fail] Debug run failed.
+run():
+    zig build run
+
+[help] Build in release mode
+[desc] Run `only build-release false` to turn off the strip.
+[pass] Release build complete.
+[fail] Release build failed.
+build-release(strip = "true"):
+    zig build -Doptimize=ReleaseFast -Dstrip={{strip}}
+
+[help] Run in release mode
+[desc] Run `only run-release false` to turn off the strip.
+[fail] Release run failed.
+run-release(strip = "true"):
+    zig build run -Doptimize=ReleaseFast -Dstrip={{strip}}
+
+[help] Format all Zig files
+[pass] Formatting complete.
+fmt():
+    zig fmt .
+
+[help] Clean cache and build output
+[pass] Clean complete.
+[fail] Clean failed.
+clean():
+    rm -rf .zig-cache zig-out zig-pkg
