@@ -31,6 +31,16 @@ jobs:
         with:
           version: "0.17.1"
 
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            .zig-cache
+            ~/.cache/zig
+          key: zig-release-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
+          restore-keys: |
+            zig-release-${{ runner.os }}-${{ matrix.arch }}-
+
       - name: Build CLI
         run: zig build -Doptimize=fast -Dstrip=true
 
@@ -77,6 +87,16 @@ jobs:
         uses: mlugg/setup-zig@v2
         with:
           version: "0.17.1"
+
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            .zig-cache
+            ~/.cache/zig
+          key: zig-release-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
+          restore-keys: |
+            zig-release-${{ runner.os }}-${{ matrix.arch }}-
 
       - name: Build GUI
         run: zig build gui -Doptimize=fast -Dstrip=true
