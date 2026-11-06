@@ -110,61 +110,21 @@ pub fn recognizeBoxes(
     rec: *model.rec.Rec,
 ) ![]Line {
     std.mem.sort(model.det.TextBox, boxes, {}, boxLessThan);
-    var groups = try buildGroups(allocator, boxes);
-    defer freeGroups(allocator, &groups);
 
     var lines: std.ArrayList(Line) = .empty;
     errdefer freeLines(allocator, lines.items);
-    for (groups.items) |*group| {
-        std.mem.sort(usize, group.boxes.items, boxes, boxIndexLessThan);
-        const indices = group.boxes.items;
-
-        var prefix_text: ?[]u8 = null;
-        const prefix_index = if (indices.len > 1) separatedPrefix(boxes, indices) else null;
-        if (prefix_index) |index| {
-            var crop = try cropBox(io, allocator, image, boxes[index]);
-            defer crop.deinit(allocator);
-            const result = try rec.recognizeImage(io, crop);
-            if (result.text.len != 0) prefix_text = result.text;
-        }
-
-        var text: []u8 = undefined;
-        var score: f32 = 0;
-        if (indices.len == 1) {
-            var crop = try cropBox(io, allocator, image, boxes[indices[0]]);
-            defer crop.deinit(allocator);
-            const result = try rec.recognizeImage(io, crop);
-            text = result.text;
-            score = result.score;
-        } else {
-            var crop = try cropLine(io, allocator, image, boxes, indices);
-            defer crop.deinit(allocator);
-            const result = try rec.recognizeImage(io, crop);
-            score = result.score;
-            if (prefix_text) |prefix| {
-                text = try preserveGap(allocator, result.text, prefix);
-                allocator.free(result.text);
-                allocator.free(prefix);
-                prefix_text = null;
-            } else {
-                text = result.text;
-            }
-        }
-        if (prefix_text) |prefix| allocator.free(prefix);
-
-        if (text.len == 0) {
-            allocator.free(text);
+    for (boxes) |box| {
+        var crop = try cropBox(io, allocator, image, box);
+        defer crop.deinit(allocator);
+        const result = try rec.recognizeImage(io, crop);
+        if (result.text.len == 0 or result.score < 0.5) {
+            allocator.free(result.text);
             continue;
         }
         try lines.append(allocator, .{
-            .text = text,
-            .score = score,
-            .bounds = .{
-                .left = boxes[indices[0]].bounds.left,
-                .right = boxes[indices[indices.len - 1]].bounds.right,
-                .top = @intFromFloat(@round(group.top)),
-                .bottom = @intFromFloat(@round(group.bottom)),
-            },
+            .text = result.text,
+            .score = result.score,
+            .bounds = box.bounds,
         });
     }
     if (lines.items.len == 0) {
@@ -239,14 +199,6 @@ fn freeGroups(allocator: std.mem.Allocator, groups: *std.ArrayList(LineGroup)) v
     groups.deinit(allocator);
 }
 
-fn separatedPrefix(boxes: []const model.det.TextBox, indices: []const usize) ?usize {
-    const first = boxes[indices[0]].bounds;
-    const second = boxes[indices[1]].bounds;
-    const gap = second.left -| first.right;
-    const height = @max(first.height(), second.height());
-    return if (gap * 4 > height * 3) indices[0] else null;
-}
-
 fn cropLine(
     io: std.Io,
     allocator: std.mem.Allocator,
@@ -301,15 +253,6 @@ fn cropLine(
         return rotated;
     }
     return crop;
-}
-
-fn preserveGap(allocator: std.mem.Allocator, text: []const u8, prefix: []const u8) ![]u8 {
-    if (std.mem.startsWith(u8, text, prefix)) {
-        const rest = text[prefix.len..];
-        if (rest.len == 0 or std.ascii.isWhitespace(rest[0])) return allocator.dupe(u8, text);
-        return std.fmt.allocPrint(allocator, "{s} {s}", .{ prefix, rest });
-    }
-    return allocator.dupe(u8, text);
 }
 
 fn groupCrop(
@@ -394,12 +337,13 @@ fn distance(a: model.det.Point, b: model.det.Point) f32 {
 }
 
 fn boxLessThan(_: void, a: model.det.TextBox, b: model.det.TextBox) bool {
-    if (a.bounds.top == b.bounds.top) return a.bounds.left < b.bounds.left;
+    const tolerance = @max(
+        @max(@as(f32, @floatFromInt(a.bounds.height())), @as(f32, @floatFromInt(b.bounds.height()))) * 0.5,
+        8,
+    );
+    const top_delta = @abs(@as(f32, @floatFromInt(a.bounds.top)) - @as(f32, @floatFromInt(b.bounds.top)));
+    if (top_delta <= tolerance) return a.bounds.left < b.bounds.left;
     return a.bounds.top < b.bounds.top;
-}
-
-fn boxIndexLessThan(boxes: []const model.det.TextBox, a: usize, b: usize) bool {
-    return boxes[a].bounds.left < boxes[b].bounds.left;
 }
 
 fn groupLessThan(_: void, a: LineGroup, b: LineGroup) bool {
