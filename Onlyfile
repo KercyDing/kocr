@@ -35,7 +35,7 @@ group cli {
         & build-release
         shell~=pwsh
     :
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
         | $installPath = Join-Path $installDir "kocr.exe"
         | $stagedPath = Join-Path $env:TEMP "kocr-install-staged.exe"
         | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
@@ -64,7 +64,7 @@ group cli {
     [pass] Uninstalled kocr.
     [fail] Uninstallation failed.
     uninstall() ? @os("windows") shell~=pwsh:
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
         | Remove-Item (Join-Path $installDir "kocr.exe") -Force -ErrorAction SilentlyContinue
         | Remove-Item $installDir -Force -ErrorAction SilentlyContinue
 
@@ -108,7 +108,7 @@ group gui {
         & build-release
         shell~=pwsh
     :
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
         | $installPath = Join-Path $installDir "kocr-gui.exe"
         | $stagedPath = Join-Path $env:TEMP "kocr-gui-install-staged.exe"
         | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
@@ -137,7 +137,7 @@ group gui {
     [pass] Uninstalled kocr-gui.
     [fail] Uninstallation failed.
     uninstall() ? @os("windows") shell~=pwsh:
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\kocr"
+        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
         | Remove-Item (Join-Path $installDir "kocr-gui.exe") -Force -ErrorAction SilentlyContinue
 
     [desc] Remove ~/.local/bin/kocr-gui.
