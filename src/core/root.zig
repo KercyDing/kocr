@@ -1,22 +1,39 @@
 //! Platform-independent capture, shortcut, and daemon entry points.
-//! Platform-specific rules live below `<platform>/` and are selected at compile time.
+//! Platform implementations live under `<capability>/<os>.zig`.
 
 const std = @import("std");
 
-pub const daemon = @import("daemon.zig");
+const keyboard = @import("keyboard/root.zig");
+const screenshot = @import("screenshot/root.zig");
 
-const platform = @import("core_platform");
-pub const types = @import("core_types");
+const library = @import("lib.zig");
+
+pub const config = @import("config.zig");
+pub const types = @import("types.zig");
+
+pub const model = library.model;
+pub const paths = library.paths;
+pub const downloader = library.downloader;
+pub const history = library.history;
+pub const Image = library.Image;
+pub const Line = library.Line;
+pub const TextBox = library.TextBox;
+pub const Options = library.Options;
+pub const recognizeFile = library.recognizeFile;
+pub const recognizeImage = library.recognizeImage;
+pub const detectFile = library.detectFile;
+pub const recognizeLine = library.recognizeLine;
+pub const freeLines = library.freeLines;
+pub const linesToText = library.linesToText;
 
 pub const Action = types.Action;
 pub const Binding = types.Binding;
 
-pub const Capture = platform.Capture;
-pub const Screenshot = platform.screenshot;
-pub const Keyboard = platform.keyboard;
-pub const autostart = platform.autostart;
-pub const clipboard = platform.clipboard;
-pub const daemon_process = platform.daemon_process;
+pub const Capture = screenshot.Capture;
+pub const Screenshot = screenshot;
+pub const Keyboard = keyboard;
+pub const autostart = @import("autostart/root.zig");
+pub const clipboard = @import("clipboard/root.zig");
 
 pub const CaptureError = Screenshot.CaptureError;
 pub const KeyboardError = Keyboard.KeyboardError;
@@ -54,7 +71,6 @@ pub fn listenConfigured(
 
 test {
     std.testing.refAllDecls(@This());
-    std.testing.refAllDecls(daemon);
     std.testing.refAllDecls(Keyboard);
     std.testing.refAllDecls(Screenshot);
 }

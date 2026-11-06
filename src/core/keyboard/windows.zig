@@ -2,8 +2,8 @@
 
 const std = @import("std");
 
-const config = @import("config");
-const types = @import("core_types");
+const config = @import("../config.zig");
+const types = @import("../types.zig");
 const win32 = @import("win32");
 
 const user32 = win32.user32;

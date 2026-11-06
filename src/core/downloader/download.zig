@@ -4,7 +4,7 @@ const std = @import("std");
 
 pub const catalog = @import("catalog.zig");
 
-const model = @import("model").paths;
+const model = @import("../model/model.zig").paths;
 
 pub const Progress = struct {
     context: *anyopaque,

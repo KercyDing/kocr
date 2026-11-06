@@ -2,12 +2,11 @@
 
 const std = @import("std");
 
-const config = @import("config");
 const core = @import("core");
-const kocr = @import("kocr");
 
 const state_mod = @import("state.zig");
 
+const config = core.config;
 const State = state_mod.State;
 
 pub const profiles = [_][]const u8{ "tiny", "small", "medium" };
@@ -19,7 +18,7 @@ pub fn selectedProfile(state: *State) []const u8 {
 pub fn updateModelStatus(state: *State) bool {
     if (state.job != null) return false;
     const profile = selectedProfile(state);
-    const installed = kocr.downloader.isInstalled(state.io, state.allocator, state.environ, profile) catch |err| {
+    const installed = core.downloader.isInstalled(state.io, state.allocator, state.environ, profile) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Model status error: {s}", .{@errorName(err)}) catch "Model status error");
         return false;

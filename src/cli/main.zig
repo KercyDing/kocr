@@ -1,8 +1,10 @@
 const std = @import("std");
 
 const cli = @import("cli");
-const config = @import("config");
-const kocr = @import("kocr");
+const core = @import("core");
+
+const config = core.config;
+const kocr = core;
 
 const profiles = kocr.downloader.catalog.profiles;
 

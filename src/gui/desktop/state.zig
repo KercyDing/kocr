@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const kocr = @import("kocr");
+const core = @import("core");
 const nui = @import("nanoui");
 
 const jobs = @import("jobs.zig");
@@ -30,9 +30,9 @@ pub const State = struct {
     autostart: bool = false,
     main_status: []u8,
     settings_status: []u8,
-    records: []kocr.history.Record = &.{},
+    records: []core.history.Record = &.{},
     rows: []Row = &.{},
-    history_revision: ?kocr.history.Revision = null,
+    history_revision: ?core.history.Revision = null,
     shortcuts: [4]?[]u8 = .{ null, null, null, null },
 
     pub fn init(process_init: std.process.Init) !State {
@@ -76,7 +76,7 @@ pub const State = struct {
     }
 
     pub fn freeHistory(self: *State) void {
-        kocr.history.freeRecords(self.allocator, self.records);
+        core.history.freeRecords(self.allocator, self.records);
         self.records = &.{};
         for (self.rows) |row| {
             self.allocator.free(row.time);

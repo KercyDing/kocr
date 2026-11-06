@@ -3,7 +3,7 @@
 const std = @import("std");
 
 const zignal = @import("zignal");
-const model = @import("model");
+const model = @import("model/model.zig");
 
 const crop_padding_x: f32 = 0.06;
 const crop_padding_y: f32 = 0.05;

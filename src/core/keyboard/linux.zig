@@ -3,9 +3,9 @@
 
 const std = @import("std");
 
-const config = @import("config");
+const config = @import("../config.zig");
 const goose = @import("goose");
-const types = @import("core_types");
+const types = @import("../types.zig");
 
 const GStr = goose.core.value.GStr;
 const GPath = goose.core.value.GPath;

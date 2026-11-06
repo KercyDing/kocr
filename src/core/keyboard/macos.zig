@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const types = @import("core_types");
+const types = @import("../types.zig");
 
 pub const KeyboardError = error{UnsupportedPlatform};
 

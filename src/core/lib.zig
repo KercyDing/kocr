@@ -7,9 +7,9 @@ const ocr = @import("ocr.zig");
 pub const history = @import("history.zig");
 
 const zignal = @import("zignal");
-pub const model = @import("model");
+pub const model = @import("model/model.zig");
 pub const paths = model.paths;
-pub const downloader = @import("downloader");
+pub const downloader = @import("downloader/download.zig");
 
 pub const Image = zignal.Image(zignal.Rgb(u8));
 pub const Line = ocr.Line;

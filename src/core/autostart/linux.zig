@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const config = @import("config");
+const config = @import("../config.zig");
 
 const file_name = "kocr-daemon.desktop";
 

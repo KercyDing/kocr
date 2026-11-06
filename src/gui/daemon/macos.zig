@@ -1,4 +1,19 @@
-//! macOS daemon: the same nanoui-based loop as Windows; the macOS platform
-//! layer still stubs capture, shortcuts, and clipboard.
+//! macOS daemon: the shared desktop loop; process control is stubbed.
 
-pub const run = @import("windows.zig").run;
+const std = @import("std");
+
+const native = @import("native.zig");
+
+pub const run = native.serve;
+
+pub fn isRunning(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !bool {
+    return false;
+}
+
+pub fn ensureRunning(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !bool {
+    return error.UnsupportedPlatform;
+}
+
+pub fn stop(_: std.Io, _: std.mem.Allocator, _: *const std.process.Environ.Map) !void {
+    return error.UnsupportedPlatform;
+}

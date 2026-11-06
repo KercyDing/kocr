@@ -4,7 +4,7 @@ const std = @import("std");
 
 const nui = @import("nanoui");
 
-const daemon = @import("daemon.zig");
+const daemon = @import("../daemon/controls.zig");
 const history = @import("history.zig");
 const main = @import("main.zig");
 const model = @import("model.zig");

@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const model = @import("model");
+const model = @import("model/model.zig");
 const zqlite = @import("zqlite");
 
 pub const Kind = enum {

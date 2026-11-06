@@ -3,7 +3,6 @@
 const std = @import("std");
 
 const core = @import("core");
-const kocr = @import("kocr");
 const nui = @import("nanoui");
 
 const history = @import("history.zig");
@@ -28,7 +27,7 @@ pub const Job = struct {
     kind: JobKind,
     profile: []u8,
     output_path: ?[]u8 = null,
-    lines: ?[]kocr.Line = null,
+    lines: ?[]core.Line = null,
     cancelled: bool = false,
     done: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     progress: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
@@ -37,7 +36,7 @@ pub const Job = struct {
     thread: ?std.Thread = null,
 
     pub fn deinit(self: *Job) void {
-        if (self.lines) |lines| kocr.freeLines(self.allocator, lines);
+        if (self.lines) |lines| core.freeLines(self.allocator, lines);
         if (self.error_text) |text| self.allocator.free(text);
         self.allocator.free(self.profile);
         if (self.output_path) |path| self.allocator.free(path);
@@ -48,7 +47,7 @@ pub const Job = struct {
 pub fn worker(job: *Job) void {
     switch (job.kind) {
         .install => {
-            _ = kocr.downloader.install(job.io, job.allocator, job.environ, job.profile, .{
+            _ = core.downloader.install(job.io, job.allocator, job.environ, job.profile, .{
                 .force = false,
                 .progress = .{ .context = job, .report = reportProgress },
             }) catch |err| {
@@ -57,7 +56,7 @@ pub fn worker(job: *Job) void {
             };
         },
         .remove => {
-            kocr.downloader.remove(job.io, job.allocator, job.environ, job.profile) catch |err| {
+            core.downloader.remove(job.io, job.allocator, job.environ, job.profile) catch |err| {
                 finishError(job, err);
                 return;
             };
@@ -77,12 +76,12 @@ pub fn worker(job: *Job) void {
                 return;
             }
             if (job.kind == .extract or job.kind == .extract_oneline) {
-                const model_dir = kocr.paths.profileDir(job.io, job.allocator, job.environ, job.profile) catch |err| {
+                const model_dir = core.paths.profileDir(job.io, job.allocator, job.environ, job.profile) catch |err| {
                     finishError(job, err);
                     return;
                 };
                 defer job.allocator.free(model_dir);
-                job.lines = kocr.recognizeFile(job.allocator, job.io, path, .{ .model_dir = model_dir }) catch |err| {
+                job.lines = core.recognizeFile(job.allocator, job.io, path, .{ .model_dir = model_dir }) catch |err| {
                     finishError(job, err);
                     return;
                 };
@@ -230,7 +229,7 @@ fn finalizeJob(state: *State) void {
         .copy_image => {
             if (output_path) |path| {
                 core.clipboard.copyImage(state.allocator, state.io, state.environ, path) catch {};
-                kocr.history.appendImage(state.io, state.allocator, state.environ, path) catch {};
+                core.history.appendImage(state.io, state.allocator, state.environ, path) catch {};
                 history.loadHistory(state);
                 state.setMainStatus("Screenshot copied");
                 _ = std.Io.Dir.cwd().deleteFile(state.io, path) catch {};
@@ -240,7 +239,7 @@ fn finalizeJob(state: *State) void {
             if (output_path) |temporary| {
                 const destination = nui.dialog.save(state.allocator, .{
                     .title = "Save screenshot",
-                    .name = "kocr.png",
+                    .name = "core.png",
                     .extensions = &.{"png"},
                 }) catch null;
                 if (destination) |path| {
@@ -252,7 +251,7 @@ fn finalizeJob(state: *State) void {
                         saved = false;
                     };
                     if (saved) {
-                        kocr.history.appendImage(state.io, state.allocator, state.environ, path) catch {};
+                        core.history.appendImage(state.io, state.allocator, state.environ, path) catch {};
                         history.loadHistory(state);
                         state.setMainStatus("Screenshot saved");
                     }
@@ -264,25 +263,25 @@ fn finalizeJob(state: *State) void {
         },
         .extract, .extract_oneline => {
             if (lines) |recognized| {
-                const text = kocr.linesToText(state.allocator, recognized, kind == .extract_oneline) catch null;
+                const text = core.linesToText(state.allocator, recognized, kind == .extract_oneline) catch null;
                 if (text) |result| {
                     defer state.allocator.free(result);
                     core.clipboard.copyText(state.allocator, state.io, state.environ, result) catch {};
                     if (result.len != 0) {
-                        kocr.history.appendText(state.io, state.allocator, state.environ, result) catch {};
+                        core.history.appendText(state.io, state.allocator, state.environ, result) catch {};
                     }
                     history.loadHistory(state);
                     state.setMainStatus(if (result.len == 0) "No text found" else "Text copied");
                 } else {
                     state.setMainStatus("Error: unable to format text");
                 }
-                kocr.freeLines(state.allocator, recognized);
+                core.freeLines(state.allocator, recognized);
             }
             if (output_path) |path| _ = std.Io.Dir.cwd().deleteFile(state.io, path) catch {};
         },
     }
     if (lines != null and kind != .extract and kind != .extract_oneline) {
-        kocr.freeLines(state.allocator, lines.?);
+        core.freeLines(state.allocator, lines.?);
     }
     if (output_path) |path| state.allocator.free(path);
     job.deinit();

@@ -2,13 +2,14 @@
 
 const std = @import("std");
 
-const config = @import("config");
 const core = @import("core");
 const nui = @import("nanoui");
 
 const jobs = @import("jobs.zig");
 const model = @import("model.zig");
 const state_mod = @import("state.zig");
+
+const config = core.config;
 
 const ui = nui.ui;
 const kit = nui.kit;

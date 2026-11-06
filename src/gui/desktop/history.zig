@@ -3,7 +3,6 @@
 const std = @import("std");
 
 const core = @import("core");
-const kocr = @import("kocr");
 
 const state_mod = @import("state.zig");
 
@@ -18,7 +17,7 @@ pub fn loadHistory(state: *State) void {
         if (index < state.records.len) selected_id = state.records[index].id;
     }
     state.freeHistory();
-    state.records = kocr.history.recent(state.io, state.allocator, state.environ, 200) catch |err| {
+    state.records = core.history.recent(state.io, state.allocator, state.environ, 200) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setMainStatus(std.fmt.bufPrint(&buffer, "History error: {s}", .{@errorName(err)}) catch "History error");
         return;
@@ -61,7 +60,7 @@ pub fn loadHistory(state: *State) void {
 }
 
 pub fn pollHistory(state: *State) bool {
-    const revision = kocr.history.revision(state.io, state.allocator, state.environ) catch return false;
+    const revision = core.history.revision(state.io, state.allocator, state.environ) catch return false;
     if (state.history_revision) |current| {
         if (current.count == revision.count and current.max_id == revision.max_id) return false;
     }
@@ -95,7 +94,7 @@ pub fn deleteSelected(state: *State) void {
     };
     if (index >= state.records.len) return;
     const id = state.records[index].id;
-    kocr.history.delete(state.io, state.allocator, state.environ, id) catch |err| {
+    core.history.delete(state.io, state.allocator, state.environ, id) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setMainStatus(std.fmt.bufPrint(&buffer, "Delete failed: {s}", .{@errorName(err)}) catch "Delete failed");
         return;
@@ -105,7 +104,7 @@ pub fn deleteSelected(state: *State) void {
 }
 
 pub fn clearHistory(state: *State) void {
-    kocr.history.clear(state.io, state.allocator, state.environ) catch |err| {
+    core.history.clear(state.io, state.allocator, state.environ) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setMainStatus(std.fmt.bufPrint(&buffer, "Clear failed: {s}", .{@errorName(err)}) catch "Clear failed");
         return;
