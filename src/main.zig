@@ -61,11 +61,18 @@ pub fn main(init: std.process.Init) !void {
         try model.paths.profileDir(init.io, init.gpa, init.environ_map, profile);
     defer init.gpa.free(model_dir);
 
-    const rec_param = try resolve(init.gpa, rec_param_arg, model_dir, "rec.param");
+    var manifest = try model.loadManifest(init.gpa, init.io, model_dir);
+    defer if (manifest) |*parsed| parsed.deinit();
+
+    const rec_param_name = if (manifest) |parsed| parsed.value.rec.param else "rec.param";
+    const rec_bin_name = if (manifest) |parsed| parsed.value.rec.bin else "rec.bin";
+    const keys_name = if (manifest) |parsed| parsed.value.keys else "keys.txt";
+
+    const rec_param = try resolve(init.gpa, rec_param_arg, model_dir, rec_param_name);
     defer init.gpa.free(rec_param);
-    const rec_bin = try resolve(init.gpa, rec_bin_arg, model_dir, "rec.bin");
+    const rec_bin = try resolve(init.gpa, rec_bin_arg, model_dir, rec_bin_name);
     defer init.gpa.free(rec_bin);
-    const keys = try resolve(init.gpa, keys_arg, model_dir, "keys.txt");
+    const keys = try resolve(init.gpa, keys_arg, model_dir, keys_name);
     defer init.gpa.free(keys);
 
     var rec = try model.rec.Rec.init(init.gpa, init.io, .{
