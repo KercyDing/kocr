@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const zommand = @import("zommand");
+const qt6_build = @import("qt6");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -90,7 +91,110 @@ pub fn build(b: *std.Build) !void {
     run_cmd.step.dependOn(b.getInstallStep());
     run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);
+
+    try addGui(b, target, optimize, strip, kocr_mod);
 }
+
+fn addGui(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    strip: bool,
+    kocr_mod: *std.Build.Module,
+) !void {
+    const gui_root = switch (target.result.os.tag) {
+        .linux => b.path("src/gui/linux.zig"),
+        .windows => b.path("src/gui/windows.zig"),
+        .macos => b.path("src/gui/macos.zig"),
+        else => {
+            const fail = b.addFail("kocr-gui supports Linux, Windows, and macOS only");
+            const gui_step = b.step("gui", "Build the native GUI");
+            gui_step.dependOn(&fail.step);
+            return;
+        },
+    };
+
+    const gui_mod = b.createModule(.{
+        .root_source_file = gui_root,
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "kocr", .module = kocr_mod },
+        },
+    });
+    gui_mod.link_libc = true;
+
+    const gui = b.addExecutable(.{
+        .name = "kocr-gui",
+        .root_module = gui_mod,
+    });
+
+    switch (target.result.os.tag) {
+        .linux => {
+            const qt6 = b.dependency("qt6", .{
+                .target = target,
+                .optimize = optimize,
+            });
+            gui_mod.addImport("libqt6zig", qt6.module("libqt6zig"));
+            for (qt_libs) |lib| gui.root_module.linkLibrary(qt6.artifact(lib));
+            try qt6_build.configureQtExeRootModule(b, gui, .{});
+
+            const install_gui = b.addInstallArtifact(gui, .{});
+            const gui_step = b.step("gui", "Build the Linux Qt6 GUI");
+            gui_step.dependOn(&install_gui.step);
+
+            const gui_cmd = b.addRunArtifact(gui);
+            gui_cmd.step.dependOn(&install_gui.step);
+            gui_cmd.addPassthruArgs();
+            const gui_run = b.step("run-gui", "Run the Linux Qt6 GUI");
+            gui_run.dependOn(&gui_cmd.step);
+        },
+        .windows => {
+            const win32 = b.dependency("win32", .{});
+            gui_mod.addImport("win32", win32.module("win32"));
+            gui.subsystem = .windows;
+            addGuiStep(b, gui);
+        },
+        .macos => {
+            const objc = b.dependency("objc", .{
+                .target = target,
+                .optimize = optimize,
+            });
+            gui_mod.addImport("objc", objc.module("objc"));
+            addGuiStep(b, gui);
+        },
+        else => unreachable,
+    }
+}
+
+fn addGuiStep(b: *std.Build, gui: *std.Build.Step.Compile) void {
+    const gui_step = b.step("gui", "Build the native GUI");
+    gui_step.dependOn(&b.addInstallArtifact(gui, .{}).step);
+}
+
+const qt_libs = [_][]const u8{
+    "qabstractbutton",
+    "qapplication",
+    "qguiapplication",
+    "qboxlayout",
+    "qclipboard",
+    "qcombobox",
+    "qfiledialog",
+    "qobject",
+    "qkeysequence",
+    "qlabel",
+    "qabstractitemview",
+    "qlineedit",
+    "qlistview",
+    "qlistwidget",
+    "qplaintextedit",
+    "qpushbutton",
+    "qpixmap",
+    "qsplitter",
+    "qtimer",
+    "qwidget",
+};
 
 comptime {
     const minimum = std.SemanticVersion.parse("0.17.1") catch unreachable;

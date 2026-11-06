@@ -20,6 +20,18 @@
             .url = "git+https://github.com/KercyDing/zommand?ref=main#f5149d95fe0154dd8c5b3694336438e3564b392a",
             .hash = "zommand-0.0.1-Ph_F7UyzAADGVM5xDcKmYvy--iV-8Nyrnnh_CnrLfcUo",
         },
+        .qt6 = .{
+            .url = "git+https://github.com/rcalixte/libqt6zig?ref=master#76fbd35d3b4d67721e5ca5cd323c06cd83afeaad",
+            .hash = "libqt6zig-6.8.2-OSXtXJRx4BxEkhok6OWmDklZGRHmnWFVTag8HX66JGuq",
+        },
+        .win32 = .{
+            .url = "git+https://github.com/marlersoft/zigwin32?ref=main#fb2645891520f3e99931db17a7eba04057e87e89",
+            .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
+        },
+        .objc = .{
+            .url = "git+https://github.com/mitchellh/zig-objc?ref=main#bee663fdfaa0c554235dc36b1dce88d136a190ec",
+            .hash = "zig_objc-0.0.0-Ir_Sp_4tAQDXtPi51nW_jD9LOEzBvU9lofwO9Pzi6IB4",
+        },
     },
     .paths = .{
         "build.zig",
