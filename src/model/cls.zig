@@ -1,10 +1,12 @@
 //! PP-LCNet text-line orientation classifier.
 
 const std = @import("std");
+
 const ncnn = @import("ncnn");
 const zignal = @import("zignal");
 
 const Rgb = zignal.Rgb(u8);
+
 const target_w: u32 = 160;
 const target_h: u32 = 80;
 const max_downscale: f32 = 3.0;

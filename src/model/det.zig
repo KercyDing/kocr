@@ -1,10 +1,12 @@
 //! PP-OCRv6 DB text detection.
 
 const std = @import("std");
+
 const ncnn = @import("ncnn");
 const zignal = @import("zignal");
 
 const Rgb = zignal.Rgb(u8);
+
 const max_side: u32 = 960;
 const stride: u32 = 32;
 const bin_threshold: f32 = 0.2;

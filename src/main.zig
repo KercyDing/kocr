@@ -1,7 +1,8 @@
 const std = @import("std");
-const zignal = @import("zignal");
 
+const zignal = @import("zignal");
 const cli = @import("cli");
+
 const model = @import("model/model.zig");
 const ocr = @import("ocr.zig");
 const downloader = @import("downloader/mod.zig");

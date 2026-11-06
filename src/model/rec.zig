@@ -1,10 +1,12 @@
 //! PP-OCRv6 text-line recognition.
 
 const std = @import("std");
+
 const ncnn = @import("ncnn");
 const zignal = @import("zignal");
 
 const Rgb = zignal.Rgb(u8);
+
 const target_h = 48;
 
 pub const Paths = struct {

@@ -1,9 +1,9 @@
+const std = @import("std");
+
+pub const cls = @import("cls.zig");
+pub const det = @import("det.zig");
 pub const paths = @import("paths.zig");
 pub const rec = @import("rec.zig");
-pub const det = @import("det.zig");
-pub const cls = @import("cls.zig");
-
-const std = @import("std");
 
 pub const Manifest = struct {
     profile: []const u8,
