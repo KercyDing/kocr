@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const zommand = @import("zommand");
-const qt6_build = @import("qt6");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -26,7 +25,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    const goose = b.dependency("goose", .{
+    const goose = try b.dependencyLazy("goose", .{
         .target = target,
         .optimize = optimize,
     });
@@ -195,10 +194,12 @@ fn addGui(
 
     switch (target.result.os.tag) {
         .linux => {
-            const qt6 = b.dependency("qt6", .{
+            const qt6 = try b.dependencyLazy("qt6", .{
                 .target = target,
                 .optimize = optimize,
             });
+            const qt6_build = b.lazyImport(@This(), "qt6") orelse
+                return error.LazyDependencyNeeded;
             gui_mod.addImport("libqt6zig", qt6.module("libqt6zig"));
             for (qt_libs) |lib| gui.root_module.linkLibrary(qt6.artifact(lib));
             try qt6_build.configureQtExeRootModule(b, gui, .{});
@@ -214,13 +215,13 @@ fn addGui(
             gui_run.dependOn(&gui_cmd.step);
         },
         .windows => {
-            const win32 = b.dependency("win32", .{});
+            const win32 = try b.dependencyLazy("win32", .{});
             gui_mod.addImport("win32", win32.module("win32"));
             gui.subsystem = .windows;
             addGuiStep(b, gui);
         },
         .macos => {
-            const objc = b.dependency("objc", .{
+            const objc = try b.dependencyLazy("objc", .{
                 .target = target,
                 .optimize = optimize,
             });
