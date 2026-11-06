@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-base-private-dev
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: "0.17.1"
+
+      - name: Build release
+        run: |
+          zig build -Doptimize=fast -Dstrip=true
+          zig build gui -Doptimize=fast -Dstrip=true
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp zig-out/bin/kocr zig-out/bin/kocr-gui README.md LICENSE dist/
+          tar -C dist -czf kocr-linux-x86_64.tar.gz .
+
+      - name: Inspect artifacts
+        run: |
+          file zig-out/bin/kocr
+          file zig-out/bin/kocr-gui
+          tar -tzf kocr-linux-x86_64.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kocr-linux-x86_64
+          path: kocr-linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
