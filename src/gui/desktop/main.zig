@@ -91,6 +91,7 @@ fn textPreviewTooltip(c: *ui.Context, trigger: ui.Interaction, text: []const u8)
 
 fn historyView(state: *State, c: *ui.Context) void {
     const t = c.theme;
+    const empty = state.rows.len == 0;
     ui.scroll(c, .{
         .width = .fill,
         .grow = 1,
@@ -99,12 +100,14 @@ fn historyView(state: *State, c: *ui.Context) void {
         .radius = 10,
         .padding = .all(6),
         .gap = 2,
+        .justify = if (empty) .center else .start,
+        .align_items = if (empty) .center else .start,
         .scrollbar = .{ .overlay = t.muted },
     });
     defer ui.end(c);
 
-    if (state.rows.len == 0) {
-        kit.empty(c, .{ .icon = "clock", .title = "No history yet", .description = "Captures and recognized text appear here." });
+    if (empty) {
+        ui.text(c, "No history yet", .{ .size = 13, .color = t.muted });
         return;
     }
 
