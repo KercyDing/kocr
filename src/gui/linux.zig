@@ -66,6 +66,7 @@ const App = struct {
     extract_oneline: QPushButton,
     history: QListWidget,
     copy: QPushButton,
+    delete_selected: QPushButton,
     clear: QPushButton,
     status: QLabel,
     timer: QTimer,
@@ -81,6 +82,7 @@ const App = struct {
         self.extract.setEnabled(!busy);
         self.extract_oneline.setEnabled(!busy);
         self.copy.setEnabled(!busy);
+        self.delete_selected.setEnabled(!busy);
         self.clear.setEnabled(!busy);
     }
 
@@ -340,6 +342,22 @@ const App = struct {
         }
     }
 
+    fn deleteSelected(self: *App) void {
+        const row = self.history.currentRow();
+        if (row < 0 or row >= self.records.len) {
+            self.status.setText("Select a history entry first");
+            return;
+        }
+        const id = self.records[@intCast(row)].id;
+        kocr.history.delete(self.io, self.allocator, self.environ, id) catch |err| {
+            var message: [256]u8 = undefined;
+            self.status.setText(std.fmt.bufPrint(&message, "Delete failed: {s}", .{@errorName(err)}) catch "Delete failed");
+            return;
+        };
+        self.loadHistory();
+        self.status.setText("History entry deleted");
+    }
+
     fn clearHistory(self: *App) void {
         kocr.history.clear(self.io, self.allocator, self.environ) catch |err| {
             var message: [256]u8 = undefined;
@@ -500,6 +518,10 @@ fn copyCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.copySelected();
 }
 
+fn deleteCallback(_: QPushButton) callconv(.c) void {
+    if (active_app) |app| app.deleteSelected();
+}
+
 fn clearCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.clearHistory();
 }
@@ -598,7 +620,11 @@ pub fn run(init: std.process.Init) !void {
     copy.setObjectName("copyHistoryButton");
     copy.onClicked(copyCallback);
 
-    const clear = QPushButton.new5("Clear", root);
+    const delete_selected = QPushButton.new5("Delete current", root);
+    delete_selected.setObjectName("deleteHistoryButton");
+    delete_selected.onClicked(deleteCallback);
+
+    const clear = QPushButton.new5("Clear all", root);
     clear.setObjectName("clearHistoryButton");
     clear.onClicked(clearCallback);
 
@@ -608,6 +634,7 @@ pub fn run(init: std.process.Init) !void {
 
     const history_buttons = QHBoxLayout.new2();
     history_buttons.addWidget(copy);
+    history_buttons.addWidget(delete_selected);
     history_buttons.addWidget(clear);
     history_buttons.addWidget(refresh_history);
 
@@ -643,6 +670,7 @@ pub fn run(init: std.process.Init) !void {
         .extract_oneline = extract_oneline,
         .history = history,
         .copy = copy,
+        .delete_selected = delete_selected,
         .clear = clear,
         .status = status,
         .timer = QTimer.new2(root),
