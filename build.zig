@@ -1,8 +1,9 @@
 const std = @import("std");
-const zommand = @import("zommand");
 const builtin = @import("builtin");
 
-pub fn build(b: *std.Build) void {
+const zommand = @import("zommand");
+
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
@@ -25,6 +26,40 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const model_mod = b.addModule("model", .{
+        .root_source_file = b.path("src/model/model.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "ncnn", .module = ncnn.module("ncnn") },
+            .{ .name = "zignal", .module = zignal.module("zignal") },
+            .{ .name = "known_folders", .module = known_folders.module("known-folders") },
+        },
+    });
+
+    const downloader_mod = b.addModule("downloader", .{
+        .root_source_file = b.path("src/downloader/download.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "model", .module = model_mod },
+        },
+    });
+
+    const kocr_mod = b.addModule("kocr", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .imports = &.{
+            .{ .name = "model", .module = model_mod },
+            .{ .name = "downloader", .module = downloader_mod },
+            .{ .name = "zignal", .module = zignal.module("zignal") },
+        },
+    });
+
     const cli = zommand.createCli(b, .{
         .target = target,
         .optimize = optimize,
@@ -37,9 +72,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .strip = strip,
         .imports = &.{
-            .{ .name = "ncnn", .module = ncnn.module("ncnn") },
-            .{ .name = "zignal", .module = zignal.module("zignal") },
-            .{ .name = "known_folders", .module = known_folders.module("known-folders") },
+            .{ .name = "kocr", .module = kocr_mod },
             .{ .name = "cli", .module = cli },
         },
     });
@@ -54,7 +87,6 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run kocr");
 
     const run_cmd = b.addRunArtifact(exe);
-
     run_cmd.step.dependOn(b.getInstallStep());
     run_cmd.addPassthruArgs();
     run_step.dependOn(&run_cmd.step);

@@ -13,7 +13,7 @@ fn dataFolder() known_folders.KnownFolder {
     };
 }
 
-pub fn modelsRoot(
+pub fn dataRoot(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
@@ -21,7 +21,17 @@ pub fn modelsRoot(
     const base = try known_folders.getPath(io, allocator, environ, dataFolder()) orelse
         return error.DataDirUnavailable;
     defer allocator.free(base);
-    return std.Io.Dir.path.join(allocator, &.{ base, "kocr", "models" });
+    return std.Io.Dir.path.join(allocator, &.{ base, "kocr" });
+}
+
+pub fn modelsRoot(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) ![]u8 {
+    const root = try dataRoot(io, allocator, environ);
+    defer allocator.free(root);
+    return std.Io.Dir.path.join(allocator, &.{ root, "models" });
 }
 
 pub fn profileDir(

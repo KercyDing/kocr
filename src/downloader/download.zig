@@ -4,6 +4,8 @@ const std = @import("std");
 
 pub const catalog = @import("catalog.zig");
 
+const model = @import("model").paths;
+
 pub const InstallOptions = struct {
     force: bool = false,
 };
@@ -11,6 +13,7 @@ pub const InstallOptions = struct {
 pub const InstallError = error{
     UnknownProfile,
     AlreadyInstalled,
+    NotInstalled,
     DownloadFailed,
     HashMismatch,
     InvalidArchive,
@@ -62,6 +65,33 @@ pub fn install(
     try extract(io, archive, staging);
     try std.Io.Dir.renameAbsolute(staging, target, io);
     return target;
+}
+
+pub fn isInstalled(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+    profile: []const u8,
+) !bool {
+    const target = try model.profileDir(io, allocator, environ, profile);
+    defer allocator.free(target);
+    var dir = std.Io.Dir.cwd().openDir(io, target, .{}) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => return err,
+    };
+    dir.close(io);
+    return true;
+}
+
+pub fn remove(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+    profile: []const u8,
+) !void {
+    const target = try model.profileDir(io, allocator, environ, profile);
+    defer allocator.free(target);
+    try std.Io.Dir.cwd().deleteTree(io, target);
 }
 
 fn cleanup(io: std.Io, path: []const u8) void {
@@ -124,5 +154,3 @@ fn extract(io: std.Io, archive: []const u8, destination: []const u8) !void {
     defer dir.close(io);
     std.zip.extract(dir, &reader, .{}) catch return InstallError.InvalidArchive;
 }
-
-const model = @import("../model/paths.zig");
