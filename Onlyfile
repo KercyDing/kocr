@@ -41,6 +41,14 @@ group cli {
         | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
         | $shellPath = (Get-Process -Id $PID).Path
         |
+        | $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        | $entries = @($userPath -split ';' | Where-Object { $_ })
+        | $pathAdded = $false
+        | if (-not ($entries | Where-Object { $_.TrimEnd('\') -ieq $installDir })) {
+        |     [Environment]::SetEnvironmentVariable("Path", (@($entries) + $installDir) -join ';', "User")
+        |     $pathAdded = $true
+        | }
+        |
         | New-Item -ItemType Directory -Force -Path $installDir | Out-Null
         | Copy-Item zig-out\bin\kocr.exe -Destination $stagedPath -Force
         | $script = "Wait-Process -Id $parentPid; Copy-Item -LiteralPath '$stagedPath' -Destination '$installPath' -Force; Remove-Item -LiteralPath '$stagedPath' -Force"
@@ -48,6 +56,7 @@ group cli {
         | Start-Process -WindowStyle Hidden -FilePath $shellPath -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
         | $size = (Get-Item $stagedPath).Length / 1MB
         | Write-Output ("installed kocr ({0:N2} MB)" -f $size)
+        | if ($pathAdded) { Write-Output "added $installDir to PATH; restart your shell" }
 
     [desc] Install to ~/.local/bin/kocr.
     install() & build-release:
@@ -66,7 +75,12 @@ group cli {
     uninstall() ? @os("windows") shell~=pwsh:
         | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
         | Remove-Item (Join-Path $installDir "kocr.exe") -Force -ErrorAction SilentlyContinue
-        | Remove-Item $installDir -Force -ErrorAction SilentlyContinue
+        | if (-not (Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue)) {
+        |     Remove-Item -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
+        |     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        |     $newPath = (@($userPath -split ';' | Where-Object { $_ -and ($_.TrimEnd('\') -ine $installDir) }) -join ';')
+        |     if ($newPath -ne $userPath) { [Environment]::SetEnvironmentVariable("Path", $newPath, "User") }
+        | }
 
     [desc] Remove ~/.local/bin/kocr.
     uninstall():
@@ -114,6 +128,14 @@ group gui {
         | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
         | $shellPath = (Get-Process -Id $PID).Path
         |
+        | $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        | $entries = @($userPath -split ';' | Where-Object { $_ })
+        | $pathAdded = $false
+        | if (-not ($entries | Where-Object { $_.TrimEnd('\') -ieq $installDir })) {
+        |     [Environment]::SetEnvironmentVariable("Path", (@($entries) + $installDir) -join ';', "User")
+        |     $pathAdded = $true
+        | }
+        |
         | New-Item -ItemType Directory -Force -Path $installDir | Out-Null
         | Copy-Item zig-out\bin\kocr-gui.exe -Destination $stagedPath -Force
         | $script = "Wait-Process -Id $parentPid; Copy-Item -LiteralPath '$stagedPath' -Destination '$installPath' -Force; Remove-Item -LiteralPath '$stagedPath' -Force"
@@ -121,6 +143,7 @@ group gui {
         | Start-Process -WindowStyle Hidden -FilePath $shellPath -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
         | $size = (Get-Item $stagedPath).Length / 1MB
         | Write-Output ("installed kocr-gui ({0:N2} MB)" -f $size)
+        | if ($pathAdded) { Write-Output "added $installDir to PATH; restart your shell" }
 
     [desc] Install to ~/.local/bin/kocr-gui.
     install() & build-release:
@@ -139,6 +162,12 @@ group gui {
     uninstall() ? @os("windows") shell~=pwsh:
         | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
         | Remove-Item (Join-Path $installDir "kocr-gui.exe") -Force -ErrorAction SilentlyContinue
+        | if (-not (Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue)) {
+        |     Remove-Item -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
+        |     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        |     $newPath = (@($userPath -split ';' | Where-Object { $_ -and ($_.TrimEnd('\') -ine $installDir) }) -join ';')
+        |     if ($newPath -ne $userPath) { [Environment]::SetEnvironmentVariable("Path", $newPath, "User") }
+        | }
 
     [desc] Remove ~/.local/bin/kocr-gui.
     uninstall():
