@@ -3,6 +3,11 @@ name: Check
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "src/**"
+      - "build.zig"
+      - "build.zig.zon"
+      - ".github/workflows/check.yml"
   workflow_dispatch:
 
 permissions:
