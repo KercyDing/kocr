@@ -86,6 +86,13 @@ const App = struct {
         self.updateHistoryButtons();
     }
 
+    fn clearHistorySelection(self: *App) void {
+        self.history.clearSelection();
+        self.history.setCurrentRow(-1);
+        self.history.clearFocus();
+        self.updateHistoryButtons();
+    }
+
     fn updateHistoryButtons(self: *App) void {
         const row = self.history.currentRow();
         const selected = row >= 0 and row < self.records.len;
@@ -181,16 +188,14 @@ const App = struct {
             self.status.setText("No history yet");
         } else {
             if (was_empty) self.status.setText("Ready");
-            var row: i32 = 0;
             if (selected_id) |id| {
                 for (self.records, 0..) |record, index| {
                     if (record.id == id) {
-                        row = @intCast(index);
+                        self.history.setCurrentRow(@intCast(index));
                         break;
                     }
                 }
             }
-            self.history.setCurrentRow(row);
         }
         self.updateHistoryButtons();
     }
@@ -506,6 +511,10 @@ fn historyPollCallback(_: QTimer) callconv(.c) void {
     if (active_app) |app| app.pollHistory();
 }
 
+fn rootMousePressed(_: QWidget, _: qt6.QMouseEvent) callconv(.c) void {
+    if (active_app) |app| app.clearHistorySelection();
+}
+
 fn installCallback(_: QPushButton) callconv(.c) void {
     if (active_app) |app| app.startModel(.install);
 }
@@ -594,6 +603,7 @@ pub fn run(init: std.process.Init) !void {
     root.setWindowTitle("kocr");
     root.resize(760, 560);
     root.onCloseEvent(closeCallback);
+    root.onMousePressEvent(rootMousePressed);
 
     const title = QLabel.new3("kocr settings");
     title.setObjectName("titleLabel");
