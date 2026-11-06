@@ -19,6 +19,7 @@ zig build run -- image image.png
 Install a model package:
 
 ```bash
+kocr list
 kocr install tiny
 kocr install small --force
 kocr uninstall small

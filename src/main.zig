@@ -10,9 +10,10 @@ pub fn main(init: std.process.Init) !void {
     const result = try cli.parse(init.io, init.arena.allocator(), init.minimal.args);
     switch (result) {
         .image => |args| try runImage(init, args),
+        .list => try runList(init),
+        .use => |args| try runUse(init, args),
         .install => |args| try runInstall(init, args),
         .uninstall => |args| try runUninstall(init, args),
-        .use => |args| try runUse(init, args),
         .daemon => try daemon.run(init),
     }
 }
@@ -21,6 +22,24 @@ fn runInstall(init: std.process.Init, args: cli.Install) !void {
     const installed = try kocr.downloader.install(init.io, init.gpa, init.environ_map, args.profile, .{ .force = args.force });
     defer init.gpa.free(installed);
     std.debug.print("installed {s}\n", .{installed});
+}
+
+fn runList(init: std.process.Init) !void {
+    var parsed = try config.load(init.gpa, init.io, init.environ_map);
+    defer parsed.deinit();
+    const selected = parsed.value.models.select;
+
+    var found = false;
+    for (kocr.downloader.catalog.profiles) |profile| {
+        if (!try kocr.downloader.isInstalled(init.io, init.gpa, init.environ_map, profile)) continue;
+        found = true;
+        const suffix = if (selected) |name|
+            if (std.mem.eql(u8, name, profile)) " (selected)" else ""
+        else
+            "";
+        std.debug.print("{s}{s}\n", .{ profile, suffix });
+    }
+    if (!found) std.debug.print("no models installed\n", .{});
 }
 
 fn runUninstall(init: std.process.Init, args: cli.Uninstall) !void {

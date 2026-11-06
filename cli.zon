@@ -66,6 +66,11 @@
             },
         },
         .{
+            .name = "list",
+            .about = "List installed model packages",
+            .args = .{},
+        },
+        .{
             .name = "use",
             .about = "Select an installed model profile",
             .args = .{
@@ -77,11 +82,6 @@
                     },
                 },
             },
-        },
-        .{
-            .name = "daemon",
-            .about = "Run global shortcuts in the background",
-            .args = .{},
         },
         .{
             .name = "install",
@@ -114,6 +114,11 @@
                     },
                 },
             },
+        },
+        .{
+            .name = "daemon",
+            .about = "Run global shortcuts in the background",
+            .args = .{},
         },
     },
 }

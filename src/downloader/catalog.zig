@@ -30,6 +30,8 @@ pub const medium = Package{
     .sha256 = "2dd4bac64db833c5e7f89e05120c69528d304d12c3e8df08ed4f7c8e246090a4",
 };
 
+pub const profiles = [_][]const u8{ "tiny", "small", "medium" };
+
 pub fn find(profile: []const u8) ?Package {
     if (std.mem.eql(u8, profile, "tiny")) return tiny;
     if (std.mem.eql(u8, profile, "small")) return small;
