@@ -26,7 +26,7 @@ kocr uninstall small
 kocr use small
 ```
 
-`kocr use` persists the selected model in `~/.config/kocr/config.json` (or `$XDG_CONFIG_HOME/kocr/config.json`). `kocr image` uses it unless `--profile` or `--model_dir` is given.
+`kocr list` shows every profile with its status and path. `kocr install` selects the profile it installs. `kocr use` persists the selected model in `~/.config/kocr/config.json` (or `$XDG_CONFIG_HOME/kocr/config.json`). `kocr image` uses it unless `--profile` or `--model_dir` is given, and prints the available installs when no model is installed.
 
 ## GUI
 
