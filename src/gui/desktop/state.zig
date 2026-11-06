@@ -12,6 +12,7 @@ const Job = jobs.Job;
 pub const Row = struct {
     time: []u8,
     label: []u8,
+    detail: ?[]u8,
     image: ?[]u8,
 };
 
@@ -33,6 +34,7 @@ pub const State = struct {
     records: []core.history.Record = &.{},
     rows: []Row = &.{},
     history_revision: ?core.history.Revision = null,
+    title_bar_dark: ?bool = null,
     shortcuts: [4]?[]u8 = .{ null, null, null, null },
 
     pub fn init(process_init: std.process.Init) !State {
@@ -81,6 +83,7 @@ pub const State = struct {
         for (self.rows) |row| {
             self.allocator.free(row.time);
             self.allocator.free(row.label);
+            if (row.detail) |text| self.allocator.free(text);
             if (row.image) |bytes| self.allocator.free(bytes);
         }
         if (self.rows.len != 0) self.allocator.free(self.rows);

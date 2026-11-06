@@ -9,11 +9,18 @@ const history = @import("history.zig");
 const main = @import("main.zig");
 const model = @import("model.zig");
 const state_mod = @import("state.zig");
+const titlebar = @import("titlebar.zig");
 
 const State = state_mod.State;
 
 fn refreshTimer(context: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(context.?));
+    const dark = nui.isDark();
+    if (state.title_bar_dark != dark) {
+        state.title_bar_dark = dark;
+        if (state.main_window) |window| titlebar.apply(window);
+        if (state.settings_window) |window| titlebar.apply(window);
+    }
     var changed = history.pollHistory(state);
     if (daemon.updateDaemon(state)) changed = true;
     const changed_model = model.updateModelStatus(state);
@@ -43,6 +50,8 @@ pub fn run(init: std.process.Init) !void {
         .content = .{ .view = .init(&state, main.view) },
     });
     state.main_window = window;
+    titlebar.apply(window);
+    state.title_bar_dark = nui.isDark();
 
     model.loadSelection(&state);
     _ = model.updateModelStatus(&state);

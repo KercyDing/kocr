@@ -161,7 +161,7 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn linkWindowsLibraries(artifact: *std.Build.Step.Compile) void {
-    for ([_][]const u8{ "user32", "gdi32", "comctl32", "comdlg32", "advapi32" }) |lib| {
+    for ([_][]const u8{ "user32", "gdi32", "comctl32", "comdlg32", "advapi32", "dwmapi" }) |lib| {
         artifact.root_module.linkSystemLibrary(lib, .{});
     }
 }

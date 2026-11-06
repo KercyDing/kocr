@@ -32,11 +32,13 @@ pub fn loadHistory(state: *State) void {
         var stamp_scratch: [64]u8 = undefined;
         const stamp = std.fmt.bufPrint(&stamp_scratch, "{s}", .{formatTime(record.created_at)}) catch "";
         var image: ?[]u8 = null;
+        var detail: ?[]u8 = null;
         var label: []u8 = undefined;
         switch (record.content) {
             .text => |text| {
                 const end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
                 label = state.allocator.dupe(u8, text[0..@min(end, 200)]) catch &.{};
+                detail = state.allocator.dupe(u8, text) catch null;
             },
             .image => |path| {
                 label = state.allocator.dupe(u8, path) catch &.{};
@@ -46,6 +48,7 @@ pub fn loadHistory(state: *State) void {
         state.rows[index] = .{
             .time = state.allocator.dupe(u8, stamp) catch &.{},
             .label = label,
+            .detail = detail,
             .image = image,
         };
     }
@@ -69,11 +72,7 @@ pub fn pollHistory(state: *State) bool {
     return true;
 }
 
-pub fn copySelected(state: *State) void {
-    const index = state.selected orelse {
-        state.setMainStatus("Select a history entry first");
-        return;
-    };
+pub fn copyRecord(state: *State, index: usize) void {
     if (index >= state.records.len) return;
     switch (state.records[index].content) {
         .text => |text| {
@@ -87,11 +86,7 @@ pub fn copySelected(state: *State) void {
     }
 }
 
-pub fn deleteSelected(state: *State) void {
-    const index = state.selected orelse {
-        state.setMainStatus("Select a history entry first");
-        return;
-    };
+pub fn deleteRecord(state: *State, index: usize) void {
     if (index >= state.records.len) return;
     const id = state.records[index].id;
     core.history.delete(state.io, state.allocator, state.environ, id) catch |err| {
