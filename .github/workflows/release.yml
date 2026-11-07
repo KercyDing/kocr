@@ -14,6 +14,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   validate:
@@ -244,3 +245,9 @@ jobs:
             Arch Linux: the AUR package consumes the Linux GUI and CLI tarballs.
           files: |
             artifacts/*
+
+      - name: Publish the AUR packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: gh workflow run aur.yml --repo "$GITHUB_REPOSITORY" --ref main -f "tag=$TAG"
