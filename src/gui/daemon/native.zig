@@ -1,6 +1,7 @@
 //! Shared desktop daemon loop for Windows and macOS.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const core = @import("core");
 const nui = @import("nanoui");
@@ -57,13 +58,7 @@ fn handle(context: *anyopaque, action: core.Action) !bool {
 fn workerLoop(daemon: *Daemon) void {
     while (daemon.running.load(.acquire)) {
         if (daemon.queue.pop()) |action| {
-            runAction(daemon, action) catch |err| {
-                _ = nui.dialog.message(.{
-                    .title = "kocr action failed",
-                    .detail = @errorName(err),
-                    .kind = .critical,
-                });
-            };
+            runAction(daemon, action) catch |err| reportActionFailure(daemon, err);
         } else {
             std.Io.sleep(daemon.io, .{ .nanoseconds = 20 * std.time.ns_per_ms }, .awake) catch {};
         }
@@ -136,11 +131,36 @@ pub fn serve(init: std.process.Init) !void {
     defer daemon.stopWorker();
 
     core.listenConfigured(init.gpa, init.io, init.environ_map, &daemon, handle) catch |err| {
+        if (builtin.os.tag != .macos) {
+            _ = nui.dialog.message(.{
+                .title = "kocr daemon failed",
+                .detail = @errorName(err),
+                .kind = .critical,
+            });
+        }
+        return err;
+    };
+}
+
+/// The macOS daemon has no windows; showing a dialog would register it as a
+/// foreground app and conflict with the GUI instance.
+fn reportActionFailure(daemon: *Daemon, err: anyerror) void {
+    if (builtin.os.tag != .macos) {
         _ = nui.dialog.message(.{
-            .title = "kocr daemon failed",
+            .title = "kocr action failed",
             .detail = @errorName(err),
             .kind = .critical,
         });
-        return err;
-    };
+        return;
+    }
+    const dir = core.config.dir(daemon.io, daemon.allocator, daemon.environ) catch return;
+    defer daemon.allocator.free(dir);
+    const path = std.Io.Dir.path.join(daemon.allocator, &.{ dir, "daemon.log" }) catch return;
+    defer daemon.allocator.free(path);
+    var buffer: [128]u8 = undefined;
+    const text = std.fmt.bufPrint(&buffer, "action failed: {s}\n", .{@errorName(err)}) catch return;
+    const file = std.Io.Dir.cwd().createFile(daemon.io, path, .{ .truncate = false }) catch return;
+    defer file.close(daemon.io);
+    const size = (file.stat(daemon.io) catch return).size;
+    file.writePositionalAll(daemon.io, text, size) catch {};
 }
