@@ -15,6 +15,7 @@ pub const DaemonError = error{
 pub fn initProcess() void {}
 
 pub fn run(init: std.process.Init) !void {
+    hideDockIcon();
     writeLog(init, "starting\n");
     runInner(init) catch |err| {
         var buffer: [128]u8 = undefined;
@@ -22,6 +23,25 @@ pub fn run(init: std.process.Init) !void {
         writeLog(init, text);
         return err;
     };
+}
+
+const carbon = struct {
+    const ProcessSerialNumber = extern struct {
+        high: u32,
+        low: u32,
+    };
+
+    extern fn GetCurrentProcess(psn: *ProcessSerialNumber) i32;
+    extern fn TransformProcessType(psn: *const ProcessSerialNumber, state: u32) i32;
+};
+
+/// The daemon shares the app bundle with the GUI. Without this it registers
+/// as a regular app and shows a Dock icon. A UI element keeps the Dock clean
+/// while still allowing a save panel from the save action.
+fn hideDockIcon() void {
+    var psn: carbon.ProcessSerialNumber = undefined;
+    if (carbon.GetCurrentProcess(&psn) != 0) return;
+    _ = carbon.TransformProcessType(&psn, 4); // kProcessTransformToUIElementApplication
 }
 
 fn writeLog(init: std.process.Init, text: []const u8) void {
