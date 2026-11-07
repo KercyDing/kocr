@@ -39,7 +39,7 @@ fn loadSettings(state: *State) void {
     state.autostart = core.autostart.enabled(state.io, state.allocator, state.environ) catch false;
 }
 
-fn saveSettings(state: *State) void {
+fn persistSettings(state: *State, apply_autostart: bool, apply_tray: bool) void {
     var parsed = config.load(state.allocator, state.io, state.environ) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Config error: {s}", .{@errorName(err)}) catch "Config error");
@@ -56,27 +56,31 @@ fn saveSettings(state: *State) void {
         state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Could not save config: {s}", .{@errorName(err)}) catch "Could not save config");
         return;
     };
-    tray.sync(state);
     core.reloadHotkeys();
-    const executable = std.process.executablePathAlloc(state.io, state.allocator) catch null;
-    defer if (executable) |path| state.allocator.free(path);
-    core.autostart.set(state.io, state.allocator, state.environ, state.autostart, executable orelse "") catch |err| {
-        var buffer: [256]u8 = undefined;
-        state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Could not update autostart: {s}", .{@errorName(err)}) catch "Could not update autostart");
-        return;
-    };
-    state.setSettingsStatus("Settings saved");
+    if (apply_tray) tray.sync(state);
+    if (apply_autostart) {
+        const executable = std.process.executablePathAlloc(state.io, state.allocator) catch null;
+        defer if (executable) |path| state.allocator.free(path);
+        core.autostart.set(state.io, state.allocator, state.environ, state.autostart, executable orelse "") catch |err| {
+            var buffer: [256]u8 = undefined;
+            state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Could not update autostart: {s}", .{@errorName(err)}) catch "Could not update autostart");
+            return;
+        };
+    }
+    state.setSettingsStatus("Saved");
 }
 
 fn setShortcut(state: *State, index: usize, text: []const u8) void {
     const copy = state.allocator.dupe(u8, text) catch return;
     if (state.shortcuts[index]) |old| state.allocator.free(old);
     state.shortcuts[index] = copy;
+    persistSettings(state, false, false);
 }
 
 fn clearShortcut(state: *State, index: usize) void {
     if (state.shortcuts[index]) |old| state.allocator.free(old);
     state.shortcuts[index] = null;
+    persistSettings(state, false, false);
 }
 
 fn buildShortcut(state: *State, index: usize, ctrl: bool, alt: bool, shift: bool, meta: bool, name: []const u8) void {
@@ -240,20 +244,14 @@ fn shortcutRow(state: *State, c: *ui.Context, index: usize, label: []const u8) v
     }
 }
 
-fn progressIndicator(state: *State, c: *ui.Context) void {
+fn installProgress(state: *State, c: *ui.Context) void {
     const job = state.job orelse return;
-    if (job.kind != .install) return;
-    const t = c.theme;
+    if (job.kind != .install or job.done.load(.acquire)) return;
     const known = job.progress_known.load(.acquire);
     const value: ?f32 = if (known)
         @as(f32, @floatFromInt(job.progress.load(.acquire))) / 1000.0
     else
         null;
-    const bar = ui.div(c).row().w(220).gap(8).itemsCenter();
-    defer bar.end();
-    if (value) |fraction| {
-        ui.text(c, c.print("{d:.0}%", .{fraction * 100}), .{ .size = 11, .color = t.muted, .tabular = true });
-    }
     kit.progress(c, value, .{ .width = .fill, .height = 6 });
 }
 
@@ -261,8 +259,6 @@ fn settingsClosed(context: *anyopaque, window: *nui.Window) void {
     _ = window;
     const state: *State = @ptrCast(@alignCast(context));
     state.settings_window = null;
-    loadSettings(state);
-    tray.sync(state);
 }
 
 pub fn openSettings(state: *State) void {
@@ -284,10 +280,6 @@ pub fn openSettings(state: *State) void {
     state.settings_window = window;
     titlebar.apply(window);
     theme.apply(state, window);
-}
-
-fn closeSettings(state: *State) void {
-    if (state.settings_window) |window| window.close();
 }
 
 fn settingsView(state: *State, c: *ui.Context) void {
@@ -312,32 +304,16 @@ fn settingsView(state: *State, c: *ui.Context) void {
             if (kit.button(c, "Install", .{ .disabled = state.job != null }).clicked) jobs.startModel(state, .install);
         }
     }
+    installProgress(state, c);
+    ui.div(c).wFull().h(20).end();
 
     ui.text(c, "Shortcuts", .{ .size = 14, .weight = .semibold });
     for (0..state.shortcuts.len) |index| shortcutRow(state, c, index, shortcut_labels[index]);
     ui.spacer(c);
-    _ = ui.checkbox(c, if (agent) "Launch at login" else "Start daemon at login", &state.autostart);
+    if (ui.checkbox(c, if (agent) "Launch at login" else "Start daemon at login", &state.autostart)) {
+        persistSettings(state, true, false);
+    }
     if (agent) {
-        _ = ui.checkbox(c, "Show menu bar icon", &state.show_tray);
-    }
-
-    {
-        ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
-        defer ui.end(c);
-        ui.text(c, state.settings_status, .{ .size = 12, .color = t.muted, .truncate = .ellipsis });
-        progressIndicator(state, c);
-    }
-
-    {
-        ui.row(c, .{ .width = .fill, .gap = 8, .justify = .end });
-        defer ui.end(c);
-        if (kit.button(c, "Cancel", .{}).clicked) {
-            loadSettings(state);
-            closeSettings(state);
-        }
-        if (kit.button(c, "Save", .{ .variant = .primary }).clicked) {
-            saveSettings(state);
-            closeSettings(state);
-        }
+        if (ui.checkbox(c, "Show menu bar icon", &state.show_tray)) persistSettings(state, false, true);
     }
 }
