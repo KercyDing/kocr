@@ -1,24 +1,99 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
-
-permissions:
-  contents: read
+    inputs:
+      tag:
+        description: Existing release tag to build, for example v0.1.0
+        required: true
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  cli:
+  validate:
+    name: Validate tag
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        env:
+          REQUESTED_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="$REQUESTED_TAG"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
+            exit 1
+          fi
+          if ! git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            git fetch origin "refs/tags/$tag:refs/tags/$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check the tag is on main
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          if ! git merge-base --is-ancestor "refs/tags/$TAG" origin/main; then
+            echo "Release tag $TAG is not a commit on main" >&2
+            exit 1
+          fi
+
+      - name: Validate version
+        id: meta
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          declared="$(git show "$TAG:build.zig.zon" | sed -n 's/^ *\.version = "\([^"]*\)".*/\1/p' | head -n 1)"
+          if [[ -z "$declared" ]]; then
+            echo "Could not read .version from build.zig.zon" >&2
+            exit 1
+          fi
+          if [[ "$version" != "$declared" ]]; then
+            echo "Tag version $version does not match build.zig.zon version $declared" >&2
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$TAG" == *-* ]]; then
+            prerelease=true
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.os }} ${{ matrix.arch }}
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-22.04
             os: linux
-            arch: x86_64
+            arch: amd64
           - runner: ubuntu-22.04-arm
             os: linux
             arch: arm64
@@ -35,10 +110,12 @@ jobs:
             os: macos
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2.2.1
@@ -53,166 +130,85 @@ jobs:
             ~/.cache/zig
             ~/AppData/Local/zig
             ~/Library/Caches/zig
-          key: zig-release-cli-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
+          key: zig-release-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
           restore-keys: |
-            zig-release-cli-${{ matrix.os }}-${{ matrix.arch }}-
+            zig-release-${{ matrix.os }}-${{ matrix.arch }}-
 
-      - name: Build CLI
-        run: zig build -Doptimize=fast -Dstrip=true
-
-      - name: Package CLI (Linux)
-        if: runner.os == 'Linux'
+      - name: Build
         run: |
-          mkdir -p dist-cli
-          cp zig-out/bin/kocr README.md LICENSE dist-cli/
-          tar -C dist-cli -czf kocr-cli-linux-${{ matrix.arch }}.tar.gz .
-          file zig-out/bin/kocr
-          tar -tzf kocr-cli-linux-${{ matrix.arch }}.tar.gz
+          zig build -Doptimize=fast -Dstrip=true
+          zig build gui -Doptimize=fast -Dstrip=true
 
-      - name: Package CLI (Windows)
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: packaging/linux/package.sh "${{ matrix.arch }}"
+
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        run: choco install innosetup --no-progress -y
+
+      - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          Compress-Archive -Path zig-out/bin/kocr.exe, README.md, LICENSE -DestinationPath kocr-cli-windows-${{ matrix.arch }}.zip
-          Get-Item zig-out/bin/kocr.exe | Select-Object Name, Length
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: packaging/windows/package.ps1 -Version $env:VERSION -Arch $env:ARCH
 
-      - name: Package CLI (macOS)
+      - name: Package (macOS)
         if: runner.os == 'macOS'
-        run: |
-          mkdir -p dist-cli
-          cp zig-out/bin/kocr README.md LICENSE dist-cli/
-          tar -C dist-cli -czf kocr-cli-macos-${{ matrix.arch }}.tar.gz .
-          file zig-out/bin/kocr
-          tar -tzf kocr-cli-macos-${{ matrix.arch }}.tar.gz
+        run: packaging/macos/package.sh "${{ matrix.arch }}"
 
-      - name: Upload CLI (Linux)
-        if: runner.os == 'Linux'
+      - name: Upload release assets
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: kocr-cli-linux-${{ matrix.arch }}
-          path: kocr-cli-linux-${{ matrix.arch }}.tar.gz
+          name: release-${{ matrix.os }}-${{ matrix.arch }}
+          path: zig-out/bundle/${{ matrix.os }}/*
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload CLI (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: kocr-cli-windows-${{ matrix.arch }}
-          path: kocr-cli-windows-${{ matrix.arch }}.zip
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload CLI (macOS)
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: kocr-cli-macos-${{ matrix.arch }}
-          path: kocr-cli-macos-${{ matrix.arch }}.tar.gz
-          if-no-files-found: error
-          retention-days: 7
-
-  gui:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-22.04
-            os: linux
-            arch: x86_64
-          - runner: ubuntu-22.04-arm
-            os: linux
-            arch: arm64
-          - runner: windows-2022
-            os: windows
-            arch: x86_64
-          - runner: windows-11-arm
-            os: windows
-            arch: arm64
-          - runner: macos-15-intel
-            os: macos
-            arch: x86_64
-          - runner: macos-15
-            os: macos
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+  release:
+    name: Publish release
+    needs: [validate, build]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.1
-
-      - name: Install Zig
-        uses: mlugg/setup-zig@v2.2.1
+      - name: Download release assets
+        uses: actions/download-artifact@v7.0.0
         with:
-          version: "0.17.1"
+          pattern: release-*
+          path: artifacts
+          merge-multiple: true
 
-      - name: Cache Zig
-        uses: actions/cache@v6.1.0
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2.6.2
         with:
-          path: |
-            .zig-cache
-            ~/.cache/zig
-            ~/AppData/Local/zig
-            ~/Library/Caches/zig
-          key: zig-release-gui-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
-          restore-keys: |
-            zig-release-gui-${{ matrix.os }}-${{ matrix.arch }}-
+          name: kocr v${{ needs.validate.outputs.version }}
+          tag_name: ${{ needs.validate.outputs.tag }}
+          draft: false
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          body: |
+            ## Installation
 
-      - name: Build GUI
-        run: zig build gui -Doptimize=fast -Dstrip=true
+            | Platform | x86_64 | ARM64 |
+            | --- | --- | --- |
+            | Linux | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-linux-amd64.tar.gz) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-linux-arm64.tar.gz) |
+            | Windows | [setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-windows-x86_64-setup.exe) | [setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-windows-arm64-setup.exe) |
+            | macOS | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-macos-x86_64.dmg) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-macos-arm64.dmg) |
 
-      - name: Package GUI (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p dist-gui/bin
-          cp zig-out/bin/kocr-gui dist-gui/bin/
-          cp README.md LICENSE dist-gui/
-          install -D -m 0644 packaging/linux/kocr-gui.desktop dist-gui/share/applications/kocr-gui.desktop
-          install -D -m 0644 src/gui/icons/linux/16.png dist-gui/share/icons/hicolor/16x16/apps/kocr.png
-          install -D -m 0644 src/gui/icons/linux/32.png dist-gui/share/icons/hicolor/32x32/apps/kocr.png
-          install -D -m 0644 src/gui/icons/linux/128.png dist-gui/share/icons/hicolor/128x128/apps/kocr.png
-          install -D -m 0644 src/gui/icons/linux/256.png dist-gui/share/icons/hicolor/256x256/apps/kocr.png
-          install -D -m 0644 src/gui/icons/linux/512.png dist-gui/share/icons/hicolor/512x512/apps/kocr.png
-          tar -C dist-gui -czf kocr-gui-linux-${{ matrix.arch }}.tar.gz .
-          file zig-out/bin/kocr-gui
-          tar -tzf kocr-gui-linux-${{ matrix.arch }}.tar.gz
+            Linux:
 
-      - name: Package GUI (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Compress-Archive -Path zig-out/bin/kocr-gui.exe, README.md, LICENSE -DestinationPath kocr-gui-windows-${{ matrix.arch }}.zip
-          Get-Item zig-out/bin/kocr-gui.exe | Select-Object Name, Length
+            ```sh
+            tar -xzf kocr-${{ needs.validate.outputs.version }}-linux-amd64.tar.gz
+            cd kocr-${{ needs.validate.outputs.version }}
+            ./setup.sh
+            ```
 
-      - name: Package GUI (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          packaging/macos/package.sh "${{ matrix.arch }}" dist-gui
-          ls -la dist-gui
+            Windows: run the installer.
 
-      - name: Upload GUI (Linux)
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: kocr-gui-linux-${{ matrix.arch }}
-          path: kocr-gui-linux-${{ matrix.arch }}.tar.gz
-          if-no-files-found: error
-          retention-days: 7
+            macOS: open the dmg, then drag `kocr.app` to Applications.
 
-      - name: Upload GUI (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: kocr-gui-windows-${{ matrix.arch }}
-          path: kocr-gui-windows-${{ matrix.arch }}.zip
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload GUI (macOS)
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: kocr-gui-macos-${{ matrix.arch }}
-          path: dist-gui/kocr-gui-macos-${{ matrix.arch }}.zip
-          if-no-files-found: error
-          retention-days: 7
+            Arch Linux: the AUR package consumes the Linux tarball.
+          files: |
+            artifacts/*
