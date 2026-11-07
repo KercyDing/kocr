@@ -11,10 +11,10 @@ zig build
 Run:
 
 ```bash
-zig build run -- image assets/1.png
+zig build run -- image images/1.png
 ```
 
-`kocr image assets/1.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
+`kocr image images/1.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
 
 Install a model package:
 
@@ -53,7 +53,7 @@ If [Only](https://github.com/onlyjs/only) is installed, the same workflow is ava
 
 ```bash
 only cli build
-only cli run image assets/1.png
+only cli run image images/1.png
 only gui build
 only gui run
 only gui install

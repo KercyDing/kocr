@@ -50,7 +50,7 @@
         "build.zig",
         "build.zig.zon",
         "src",
-        "assets",
+        "images",
         "cli.zon",
         "LICENSE",
         "README.md",
