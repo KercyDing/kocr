@@ -7,6 +7,11 @@ const known_folders = @import("known_folders");
 pub const Config = struct {
     models: Models = .{},
     shortcuts: Shortcuts = .{},
+    ui: Ui = .{},
+
+    pub const Ui = struct {
+        tray: bool = true,
+    };
 
     pub const Models = struct {
         select: ?[]const u8 = null,

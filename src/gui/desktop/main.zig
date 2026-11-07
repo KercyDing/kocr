@@ -1,6 +1,7 @@
 //! Main window: daemon header, capture actions, and history.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const nui = @import("nanoui");
 
@@ -171,7 +172,9 @@ pub fn view(state: *State, c: *ui.Context) void {
     {
         ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
         defer ui.end(c);
-        if (ui.toggle(c, "Daemon", &state.daemon_running)) daemon.applyDaemon(state);
+        if (builtin.os.tag != .macos) {
+            if (ui.toggle(c, "Daemon", &state.daemon_running)) daemon.applyDaemon(state);
+        }
         ui.spacer(c);
         if (kit.button(c, "Settings", .{}).clicked) settings.openSettings(state);
     }

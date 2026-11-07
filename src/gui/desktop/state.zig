@@ -29,6 +29,8 @@ pub const State = struct {
     job: ?*Job = null,
     selected: ?usize = null,
     autostart: bool = false,
+    show_tray: bool = true,
+    tray: ?*nui.Tray = null,
     main_status: []u8,
     settings_status: []u8,
     records: []core.history.Record = &.{},
@@ -52,6 +54,7 @@ pub const State = struct {
     }
 
     pub fn deinit(self: *State) void {
+        self.tray = null; // owned by the app
         self.freeHistory();
         self.allocator.free(self.main_status);
         self.allocator.free(self.settings_status);

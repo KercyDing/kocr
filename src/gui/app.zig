@@ -2,6 +2,7 @@
 //! the shared nanoui desktop UI.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const daemon = @import("daemon/root.zig");
 
@@ -9,7 +10,10 @@ pub fn main(init: std.process.Init) !void {
     daemon.initProcess();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     for (args[1..]) |arg| {
-        if (std.mem.eql(u8, arg, "--daemon")) return daemon.run(init);
+        if (std.mem.eql(u8, arg, "--daemon")) {
+            if (builtin.os.tag == .macos) continue;
+            return daemon.run(init);
+        }
     }
     try @import("desktop/root.zig").run(init);
 }

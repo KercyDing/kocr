@@ -1,6 +1,7 @@
 //! Settings window: model, shortcuts, autostart, and saving.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const core = @import("core");
 const nui = @import("nanoui");
@@ -10,6 +11,7 @@ const model = @import("model.zig");
 const state_mod = @import("state.zig");
 const theme = @import("theme.zig");
 const titlebar = @import("titlebar.zig");
+const tray = @import("tray.zig");
 
 const config = core.config;
 
@@ -32,6 +34,7 @@ fn loadSettings(state: *State) void {
         if (state.shortcuts[index]) |old| state.allocator.free(old);
         state.shortcuts[index] = if (value) |text| state.allocator.dupe(u8, text) catch null else null;
     }
+    state.show_tray = parsed.value.ui.tray;
     state.autostart = core.autostart.enabled(state.io, state.allocator, state.environ) catch false;
 }
 
@@ -46,11 +49,14 @@ fn saveSettings(state: *State) void {
     parsed.value.shortcuts.save = state.shortcuts[1];
     parsed.value.shortcuts.ocr = state.shortcuts[2];
     parsed.value.shortcuts.oneline = state.shortcuts[3];
+    parsed.value.ui.tray = state.show_tray;
     config.save(state.allocator, state.io, state.environ, parsed.value) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Could not save config: {s}", .{@errorName(err)}) catch "Could not save config");
         return;
     };
+    tray.sync(state);
+    core.reloadHotkeys();
     const executable = std.process.executablePathAlloc(state.io, state.allocator) catch null;
     defer if (executable) |path| state.allocator.free(path);
     core.autostart.set(state.io, state.allocator, state.environ, state.autostart, executable orelse "") catch |err| {
@@ -255,6 +261,7 @@ fn settingsClosed(context: *anyopaque, window: *nui.Window) void {
     const state: *State = @ptrCast(@alignCast(context));
     state.settings_window = null;
     loadSettings(state);
+    tray.sync(state);
 }
 
 pub fn openSettings(state: *State) void {
@@ -308,7 +315,10 @@ fn settingsView(state: *State, c: *ui.Context) void {
     ui.text(c, "Shortcuts", .{ .size = 14, .weight = .semibold });
     for (0..state.shortcuts.len) |index| shortcutRow(state, c, index, shortcut_labels[index]);
     ui.spacer(c);
-    _ = ui.checkbox(c, "Start daemon at login", &state.autostart);
+    _ = ui.checkbox(c, if (builtin.os.tag == .macos) "Launch at login" else "Start daemon at login", &state.autostart);
+    if (builtin.os.tag == .macos) {
+        _ = ui.checkbox(c, "Show menu bar icon", &state.show_tray);
+    }
 
     {
         ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
