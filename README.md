@@ -1,63 +1,113 @@
 # kocr
 
-Offline OCR for images.
+Offline OCR for images and screen captures.
 
-## Build
+No account, no server, no uploads.
 
-```bash
-zig build
+The GUI is the way in; the CLI exists for scripts and agents.
+
+## What you get
+
+- **Local recognition.** [PP-OCRv6](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/OCR.html) model packs run on [ncnn.zig](https://github.com/kercyding/ncnn.zig); images never leave the machine.
+- **A small native GUI.** Capture a region, copy the image, or pull out its text. Drawn with [nanoui](https://github.com/justrach/nanoui).
+- **History that persists.** Texts and captures are kept in SQLite, with image copies beside it.
+- **Shortcuts when you want them.** Served by `kocr-gui --daemon`.
+- **A CLI for automation.** One image in, text out — for scripts, pipelines, and agents, not the everyday path.
+
+## Install
+
+Everything is on [Releases](https://github.com/KercyDing/kocr/releases).
+
+### GUI
+
+**Linux**
+
+```sh
+tar -xzf kocr-<version>-linux-amd64.tar.gz
+cd kocr-<version>
+./setup.sh
 ```
 
-Run:
+On Arch:
 
-```bash
-zig build run -- image images/1.png
+```sh
+paru -S kocr-gui-bin
 ```
 
-`kocr image images/1.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
+**macOS** — open the `.dmg`, drag `kocr.app` to Applications, and allow it in **System Settings → Privacy & Security**: the app is unsigned.
 
-Install a model package:
+**Windows** — run the `setup.exe` installer.
 
-```bash
-kocr list
-kocr install tiny
-kocr install small --force
-kocr uninstall small
-kocr use small
-```
+### CLI
 
-`kocr list` shows every profile with its status and path. `kocr install` selects the profile it installs. `kocr use` persists the selected model in `~/.config/kocr/config.json` (or `$XDG_CONFIG_HOME/kocr/config.json`) on Linux and in `~/Library/Preferences/kocr/config.json` on macOS. `kocr image` uses it unless `--profile` or `--model_dir` is given, and prints the available installs when no model is installed.
+The CLI on its own, for automation:
+
+- Linux: `kocr-cli-<version>-linux-<arch>.tar.gz`
+- macOS: `kocr-cli-<version>-macos-<arch>.tar.gz`
+- Windows: `kocr-cli-<version>-windows-<arch>.zip`
+
+On Arch, `paru -S kocr-bin` installs the CLI alone.
 
 ## GUI
 
-The GUI is shared across Linux, Windows, and macOS and drawn with [nanoui](https://github.com/justrach/nanoui): D3D11 on Windows, Metal on macOS, GTK on Linux.
-
-```bash
-zig build gui
-./zig-out/bin/kocr-gui
-```
-
-Or:
-
-```bash
+```sh
 zig build run-gui
 ```
 
-On Linux the GUI ships as `kocr-<version>-linux-<arch>.tar.gz`: extract it and run `./setup.sh` to install the binary, desktop entry, and icons into `~/.local` (`PREFIX=/usr ./setup.sh` for a system install). The CLI ships separately as `kocr-cli-<version>-linux-<arch>.tar.gz`.
+Four actions, one click each:
 
-The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon` (platform code in `src/gui/daemon/`), so the GUI does not need to stay open.
+| Action | What it does |
+| --- | --- |
+| Copy image | capture a region, copy the PNG |
+| Save image | capture, choose a path, save, copy |
+| Extract text | capture, recognize, copy the text |
+| One line | same, with the text joined into a single line |
 
-Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop` on Linux and the system login item (SMAppService) on macOS. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
+History keeps every text and capture; hover an image row for a preview. Settings covers the model, shortcuts, login autostart, and the tray icon.
+
+Shortcuts are served by `kocr-gui --daemon`, so closing the window does not cost you the hotkeys.
+
+## CLI
+
+For scripts and agents; the GUI covers everyday use.
+
+```sh
+kocr install tiny            # download a model pack: tiny, small or medium
+kocr use tiny                # make it the default
+kocr list                    # what is installed, and where
+
+kocr image images/1.png      # print the recognized text
+kocr image shot.png --line   # one cropped line of text
+kocr image shot.png --detect # print the detected boxes too
+```
+
+`kocr list` prints each profile's status and path. `kocr image` uses the selected profile unless `--profile` or `--model_dir` says otherwise. Model packs download on demand and are checked against their SHA-256.
+
+## Build from source
+
+Needs Zig 0.17.1; the GUI needs GTK on Linux at run time.
+
+```sh
+zig build            # both
+zig build gui        # GUI
+zig build cli        # CLI
+zig build test       # tests
+zig build run-cli -- image images/1.png
+```
 
 ## Using Only
 
-If [Only](https://github.com/onlyjs/only) is installed, the same workflow is available through the project `Onlyfile`:
+With [Only](https://github.com/onlyjs/only) installed, the project `Onlyfile` mirrors the common workflows:
 
 ```bash
-only cli build
-only cli run image images/1.png
-only gui build
+only build               # build the CLI and the GUI
+only build-release       # same, optimized and stripped
 only gui run
-only package
-only clean
+only cli build
+only cli install         # install the CLI
+only package             # build release and package this platform
 ```
+
+## License
+
+[MIT](LICENSE)
