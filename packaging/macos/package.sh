@@ -3,23 +3,28 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 <arch> <out-dir>" >&2
+    echo "usage: $0 <arch>" >&2
     exit 2
 }
 
-[[ $# -eq 2 ]] || usage
+[[ $# -eq 1 ]] || usage
 
 arch=$1
-out_dir=$2
-version=$(sed -n 's/^ *\.version = "\([^"]*\)".*/\1/p' build.zig.zon | head -1)
-app_name="kocr.app"
-app_dir="${out_dir}/${app_name}"
 
-rm -rf "$app_dir"
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(cd -- "$script_dir/../.." && pwd)
+out_dir="$repo_dir/zig-out/bundle/macos"
+version=$(sed -n 's/^ *\.version = "\([^"]*\)".*/\1/p' "$repo_dir/build.zig.zon" | head -1)
+package="kocr-$version"
+package_dir="${out_dir}/${package}"
+app_dir="${package_dir}/kocr.app"
+
+mkdir -p "$out_dir"
+rm -rf "$package_dir"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
-install -m 0755 zig-out/bin/kocr-gui "$app_dir/Contents/MacOS/kocr-gui"
-install -m 0644 README.md LICENSE "$app_dir/Contents/Resources/"
-install -m 0644 src/gui/icons/kocr.icns "$app_dir/Contents/Resources/AppIcon.icns"
+install -m 0755 "$repo_dir/zig-out/bin/kocr-gui" "$app_dir/Contents/MacOS/kocr-gui"
+install -m 0644 "$repo_dir/README.md" "$repo_dir/LICENSE" "$app_dir/Contents/Resources/"
+install -m 0644 "$repo_dir/src/gui/icons/kocr.icns" "$app_dir/Contents/Resources/AppIcon.icns"
 
 cat > "$app_dir/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -101,9 +106,12 @@ else
     echo "         set CODESIGN_IDENTITY to a stable certificate for TCC to persist across builds" >&2
 fi
 
-mkdir -p "$out_dir"
-archive="kocr-gui-macos-${arch}.zip"
+install -m 0755 "$repo_dir/zig-out/bin/kocr" "$package_dir/kocr"
+install -m 0644 "$repo_dir/README.md" "$repo_dir/LICENSE" "$package_dir/"
+ln -s /Applications "$package_dir/Applications"
+
+archive="kocr-$version-macos-${arch}.dmg"
 rm -f "${out_dir}/${archive}"
-ditto -c -k --norsrc --noextattr --keepParent "$app_dir" "${out_dir}/${archive}"
-shasum -a 256 "${out_dir}/${archive}" > "${out_dir}/${archive}.sha256"
-rm -rf "$app_dir"
+hdiutil create -volname "kocr" -srcfolder "$package_dir" -ov -format UDZO "${out_dir}/${archive}"
+( cd "$out_dir" && shasum -a 256 "$archive" > "$archive.sha256" )
+rm -rf "$package_dir"
