@@ -19,6 +19,7 @@ rm -rf "$app_dir"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 install -m 0755 zig-out/bin/kocr-gui "$app_dir/Contents/MacOS/kocr-gui"
 install -m 0644 README.md LICENSE "$app_dir/Contents/Resources/"
+install -m 0644 src/gui/icons/kocr.icns "$app_dir/Contents/Resources/AppIcon.icns"
 
 cat > "$app_dir/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -29,6 +30,8 @@ cat > "$app_dir/Contents/Info.plist" <<EOF
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>kocr-gui</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>io.github.KercyDing.kocr</string>
     <key>CFBundleName</key>

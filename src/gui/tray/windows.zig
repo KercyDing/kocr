@@ -13,7 +13,7 @@ const foundation = win32.foundation;
 const kernel32 = win32.kernel32;
 const threading = win32.system.threading;
 
-const icon: perch.Icon = .{ .bytes = @embedFile("kocr.ico") };
+const icon: perch.Icon = .{ .bytes = @embedFile("../icons/kocr.ico") };
 
 const Win = struct {
     var tray: ?*perch.Tray = null;

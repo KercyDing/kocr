@@ -6,6 +6,8 @@ const state_mod = @import("../desktop/state.zig");
 const windows = @import("../desktop/windows.zig");
 
 const State = state_mod.State;
+const icon_size = 40;
+const template = @embedFile("../icons/kocr-tray.bgra");
 
 fn onOpen(state: *State, _: *nui.menu.Item) void {
     windows.showMain(state);
@@ -30,6 +32,7 @@ pub fn sync(state: *State) void {
             .tooltip = "kocr",
             .menu = &items,
         }) catch null;
+        if (state.tray) |tray| tray.setImage(template[0..], icon_size, icon_size, 2.0, true);
     }
 
     const tray = state.tray orelse return;

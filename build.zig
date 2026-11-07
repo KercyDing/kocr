@@ -125,7 +125,13 @@ pub fn build(b: *std.Build) !void {
         .name = "kocr",
         .root_module = exe_mod,
     });
-    if (target.result.os.tag == .windows) linkWindowsLibraries(exe);
+    if (target.result.os.tag == .windows) {
+        linkWindowsLibraries(exe);
+        exe_mod.addWin32ResourceFile(.{
+            .file = b.path("src/gui/icons/kocr.rc"),
+            .include_paths = &.{b.path("src/gui/icons")},
+        });
+    }
 
     b.installArtifact(exe);
 
@@ -161,6 +167,10 @@ pub fn build(b: *std.Build) !void {
     if (target.result.os.tag == .windows) {
         linkWindowsLibraries(gui);
         gui.subsystem = .windows;
+        gui_mod.addWin32ResourceFile(.{
+            .file = b.path("src/gui/icons/kocr.rc"),
+            .include_paths = &.{b.path("src/gui/icons")},
+        });
     }
 
     const install_gui = b.addInstallArtifact(gui, .{});
