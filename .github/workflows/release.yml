@@ -28,6 +28,12 @@ jobs:
           - runner: windows-11-arm
             os: windows
             arch: arm64
+          - runner: macos-15-intel
+            os: macos
+            arch: x86_64
+          - runner: macos-15
+            os: macos
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
@@ -46,6 +52,7 @@ jobs:
             .zig-cache
             ~/.cache/zig
             ~/AppData/Local/zig
+            ~/Library/Caches/zig
           key: zig-release-cli-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
           restore-keys: |
             zig-release-cli-${{ matrix.os }}-${{ matrix.arch }}-
@@ -69,6 +76,15 @@ jobs:
           Compress-Archive -Path zig-out/bin/kocr.exe, README.md, LICENSE -DestinationPath kocr-cli-windows-${{ matrix.arch }}.zip
           Get-Item zig-out/bin/kocr.exe | Select-Object Name, Length
 
+      - name: Package CLI (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist-cli
+          cp zig-out/bin/kocr README.md LICENSE dist-cli/
+          tar -C dist-cli -czf kocr-cli-macos-${{ matrix.arch }}.tar.gz .
+          file zig-out/bin/kocr
+          tar -tzf kocr-cli-macos-${{ matrix.arch }}.tar.gz
+
       - name: Upload CLI (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7.0.2
@@ -84,6 +100,15 @@ jobs:
         with:
           name: kocr-cli-windows-${{ matrix.arch }}
           path: kocr-cli-windows-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload CLI (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: kocr-cli-macos-${{ matrix.arch }}
+          path: kocr-cli-macos-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
           retention-days: 7
 
@@ -104,6 +129,12 @@ jobs:
           - runner: windows-11-arm
             os: windows
             arch: arm64
+          - runner: macos-15-intel
+            os: macos
+            arch: x86_64
+          - runner: macos-15
+            os: macos
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
@@ -122,6 +153,7 @@ jobs:
             .zig-cache
             ~/.cache/zig
             ~/AppData/Local/zig
+            ~/Library/Caches/zig
           key: zig-release-gui-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
           restore-keys: |
             zig-release-gui-${{ matrix.os }}-${{ matrix.arch }}-
@@ -145,6 +177,12 @@ jobs:
           Compress-Archive -Path zig-out/bin/kocr-gui.exe, README.md, LICENSE -DestinationPath kocr-gui-windows-${{ matrix.arch }}.zip
           Get-Item zig-out/bin/kocr-gui.exe | Select-Object Name, Length
 
+      - name: Package GUI (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          packaging/macos/package.sh "${{ matrix.arch }}" dist-gui
+          ls -la dist-gui
+
       - name: Upload GUI (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7.0.2
@@ -160,5 +198,14 @@ jobs:
         with:
           name: kocr-gui-windows-${{ matrix.arch }}
           path: kocr-gui-windows-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload GUI (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: kocr-gui-macos-${{ matrix.arch }}
+          path: dist-gui/kocr-gui-macos-${{ matrix.arch }}.zip
           if-no-files-found: error
           retention-days: 7
