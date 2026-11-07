@@ -83,7 +83,10 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    if (target.result.os.tag == .macos) core_mod.linkFramework("Carbon", .{});
+    if (target.result.os.tag == .macos) {
+        core_mod.linkFramework("Carbon", .{});
+        core_mod.linkFramework("ServiceManagement", .{});
+    }
 
     const core_tests = b.addTest(.{
         .name = "core-tests",
