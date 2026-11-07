@@ -113,6 +113,15 @@ group gui {
     run-release():
         zig build run-gui -Doptimize=fast -Dstrip=true
 
+    [help] Package the GUI as a macOS app
+    [desc] Build release and package kocr.app into zig-out/bundle.
+    [pass] Packaged the macOS app.
+    [fail] Packaging failed.
+    package() ? @os("macos") & build-release:
+        | arch="$(uname -m)"
+        | bash packaging/macos/package.sh "$arch" zig-out/bundle
+        | ls -lh zig-out/bundle/*.zip
+
     [help] Install kocr-gui
     [desc] Build release and install kocr-gui.
     [pass] Installed kocr-gui.
