@@ -1,6 +1,6 @@
 name: AUR
 
-# Publishes kocr-bin to the AUR once a release is out.
+# Publishes kocr-bin (CLI) and kocr-gui-bin (GUI) once a release is out.
 #
 # Needs the repository secret AUR_SSH_PRIVATE_KEY: an SSH key registered with
 # the AUR account that owns kocr-bin.
@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish kocr-bin
+    name: Publish the AUR packages
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -73,15 +73,7 @@ jobs:
             exit 1
           done
 
-      - name: Set the version
-        env:
-          VERSION: ${{ steps.meta.outputs.version }}
-        run: |
-          set -euo pipefail
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/linux/PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/linux/PKGBUILD
-
-      - name: Fill the checksums
+      - name: Set the version and checksums
         env:
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
@@ -97,24 +89,37 @@ jobs:
             fi
             printf '%s' "$hash"
           }
-          x_cli="$(sum "kocr-cli-${VERSION}-linux-amd64.tar.gz")"
-          x_gui="$(sum "kocr-${VERSION}-linux-amd64.tar.gz")"
-          a_cli="$(sum "kocr-cli-${VERSION}-linux-arm64.tar.gz")"
-          a_gui="$(sum "kocr-${VERSION}-linux-arm64.tar.gz")"
-          sed -i "s|^sha256sums_x86_64=.*|sha256sums_x86_64=('${x_cli}' '${x_gui}')|" packaging/linux/PKGBUILD
-          sed -i "s|^sha256sums_aarch64=.*|sha256sums_aarch64=('${a_cli}' '${a_gui}')|" packaging/linux/PKGBUILD
+          for pkg in kocr-bin kocr-gui-bin; do
+            case "$pkg" in
+              kocr-bin)
+                amd64="kocr-cli-${VERSION}-linux-amd64.tar.gz"
+                arm64="kocr-cli-${VERSION}-linux-arm64.tar.gz"
+                ;;
+              kocr-gui-bin)
+                amd64="kocr-${VERSION}-linux-amd64.tar.gz"
+                arm64="kocr-${VERSION}-linux-arm64.tar.gz"
+                ;;
+            esac
+            dir="packaging/linux/${pkg}"
+            sed -i "s/^pkgver=.*/pkgver=${VERSION}/" "$dir/PKGBUILD"
+            sed -i "s/^pkgrel=.*/pkgrel=1/" "$dir/PKGBUILD"
+            sed -i "s|^sha256sums_x86_64=.*|sha256sums_x86_64=('$(sum "$amd64")')|" "$dir/PKGBUILD"
+            sed -i "s|^sha256sums_aarch64=.*|sha256sums_aarch64=('$(sum "$arm64")')|" "$dir/PKGBUILD"
+          done
 
       - name: Write .SRCINFO
         run: |
           set -euo pipefail
           docker run --rm \
-            -v "$PWD/packaging/linux:/pkg" \
-            -w /pkg \
+            -v "$PWD/packaging/linux:/pkgs" \
+            -w /pkgs \
             archlinux:base-devel \
             bash -euc '
               useradd -m builder
-              chown -R builder /pkg
-              su builder -c "makepkg --printsrcinfo > .SRCINFO"
+              chown -R builder /pkgs
+              for dir in kocr-bin kocr-gui-bin; do
+                su builder -c "cd /pkgs/$dir && makepkg --printsrcinfo > .SRCINFO"
+              done
             '
 
       - name: Push to the AUR
@@ -132,16 +137,21 @@ jobs:
           chmod 600 ~/.ssh/aur
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes"
-          clone=$(mktemp -d)
-          git clone ssh://aur@aur.archlinux.org/kocr-bin.git "$clone"
-          cp packaging/linux/PKGBUILD packaging/linux/.SRCINFO "$clone/"
-          cd "$clone"
-          git config user.name "${GITHUB_ACTOR}"
-          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git add PKGBUILD .SRCINFO
-          if git diff --cached --quiet; then
-            echo "The AUR package is already at ${TAG}."
-            exit 0
-          fi
-          git commit -m "update to ${TAG}"
-          git push origin master
+          for pkg in kocr-bin kocr-gui-bin; do
+            dir="packaging/linux/${pkg}"
+            clone="$(mktemp -d)"
+            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "$clone"
+            cp "$dir/PKGBUILD" "$dir/.SRCINFO" "$clone/"
+            (
+              cd "$clone"
+              git config user.name "${GITHUB_ACTOR}"
+              git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+              git add PKGBUILD .SRCINFO
+              if git diff --cached --quiet; then
+                echo "${pkg} is already at ${TAG}."
+              else
+                git commit -m "update to ${TAG}"
+                git push origin master
+              fi
+            )
+          done
