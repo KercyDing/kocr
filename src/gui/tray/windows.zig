@@ -33,6 +33,18 @@ fn onActivate(context: ?*anyopaque, _: *perch.Tray, id: perch.MenuItem.Id) void 
     }
 }
 
+fn onClick(context: ?*anyopaque, _: *perch.Tray, event: perch.ClickEvent) void {
+    switch (event.button) {
+        .left => {
+            const state: *State = @ptrCast(@alignCast(context.?));
+            windows.showMain(state);
+        },
+        // Right clicks open the menu; perch pops it after this callback returns,
+        // so popping it here too would show it twice. Middle clicks are unused.
+        .right, .middle => {},
+    }
+}
+
 fn create(state: *State) void {
     Win.menu = perch.Menu.init(state.allocator);
     Win.menu_ready = true;
@@ -45,7 +57,8 @@ fn create(state: *State) void {
         .tooltip = "kocr",
         .icon = icon,
         .menu = &Win.menu,
-        .handler = .{ .ctx = state, .on_activate = onActivate },
+        .left_click = .activate,
+        .handler = .{ .ctx = state, .on_activate = onActivate, .on_click = onClick },
     }) catch null;
 }
 
