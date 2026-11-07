@@ -9,8 +9,8 @@
             .hash = "ncnn_zig-0.0.1-nXBvajgqAgDSc47mxmqXH_znhms_O_Iuw8aG8Z1FFIvA",
         },
         .nanoui = .{
-            .url = "git+https://github.com/justrach/nanoui?ref=main#e26765e8422f0a719e3bb90d9d97067d92d495b7",
-            .hash = "nanoui-0.12.0-we0KMbp2JQDpk0V0TsRtnyfRjh3MzkJUpBCekoD2YdOc",
+            .url = "git+https://github.com/KercyDing/nanoui?ref=fix/window-icon#d134d71bf2296853713ef41db767b03adb569fc7",
+            .hash = "nanoui-0.12.0-we0KMaGLJQBE-NZnT_i0OPzqO3MPs8aXaSPsJdXNNDRc",
         },
         .zignal = .{
             .url = "git+https://github.com/arrufat/zignal#6a14fedfb3249b597883e79adc6ec3d7ffd2cc10",

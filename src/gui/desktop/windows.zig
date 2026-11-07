@@ -12,6 +12,16 @@ const titlebar = @import("titlebar.zig");
 
 const State = state_mod.State;
 
+/// The window icon, in the container the platform loads: ICO on Windows,
+/// ICNS on macOS, PNG on Linux.
+pub fn windowIcon() []const u8 {
+    return switch (builtin.os.tag) {
+        .windows => @embedFile("../icons/kocr.ico"),
+        .macos => @embedFile("../icons/kocr.icns"),
+        else => @embedFile("../icons/linux/256.png"),
+    };
+}
+
 fn activate() void {
     if (comptime builtin.os.tag == .macos) {
         const app = nui.objc.msg(nui.objc.Object, nui.objc.class("NSApplication"), "sharedApplication", .{});
@@ -39,6 +49,7 @@ pub fn showMain(state: *State) void {
         .height = 620,
         .min_width = 640,
         .min_height = 520,
+        .icon = windowIcon(),
         .content = .{ .view = .init(state, main.view) },
         .on_close = .{ .ctx = state, .func = mainClosed },
     }) catch return;

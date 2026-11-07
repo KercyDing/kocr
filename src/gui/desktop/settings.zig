@@ -12,6 +12,7 @@ const state_mod = @import("state.zig");
 const theme = @import("theme.zig");
 const titlebar = @import("titlebar.zig");
 const tray = @import("../tray/root.zig");
+const windows = @import("windows.zig");
 
 const config = core.config;
 const agent = builtin.os.tag == .macos or builtin.os.tag == .windows;
@@ -274,6 +275,7 @@ pub fn openSettings(state: *State) void {
         .height = 620,
         .min_width = 480,
         .min_height = 520,
+        .icon = windows.windowIcon(),
         .content = .{ .view = .init(state, settingsView) },
         .on_close = .{ .ctx = state, .func = settingsClosed },
     }) catch return;
