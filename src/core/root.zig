@@ -9,6 +9,7 @@ const screenshot = @import("screenshot/root.zig");
 const library = @import("lib.zig");
 
 pub const config = @import("config.zig");
+pub const timestamp = @import("timestamp.zig");
 pub const types = @import("types.zig");
 
 pub const model = library.model;

@@ -244,9 +244,10 @@ fn finalizeJob(state: *State) void {
         },
         .save_image => {
             if (output_path) |temporary| {
+                var name_buffer: [64]u8 = undefined;
                 const destination = nui.dialog.save(state.allocator, .{
                     .title = "Save screenshot",
-                    .name = "core.png",
+                    .name = core.timestamp.fileName(state.io, &name_buffer, "kocr", "png"),
                     .extensions = &.{"png"},
                 }) catch null;
                 if (destination) |path| {

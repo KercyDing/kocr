@@ -4,6 +4,7 @@
 const std = @import("std");
 
 const model = @import("model/model.zig");
+const timestamp_name = @import("timestamp.zig");
 const zqlite = @import("zqlite");
 
 pub const Kind = enum {
@@ -97,11 +98,9 @@ pub fn appendImage(
     defer allocator.free(directory);
     try std.Io.Dir.cwd().createDirPath(io, directory);
 
-    const now = std.Io.Clock.real.now(io);
-    const destination = try std.fmt.allocPrint(allocator, "{s}/{d}.png", .{
-        directory,
-        now.nanoseconds,
-    });
+    var name_buffer: [80]u8 = undefined;
+    const name = timestamp_name.fileName(io, &name_buffer, "kocr", "png");
+    const destination = try std.Io.Dir.path.join(allocator, &.{ directory, name });
     defer allocator.free(destination);
     try std.Io.Dir.copyFileAbsolute(source_path, destination, io, .{});
     errdefer std.Io.Dir.cwd().deleteFile(io, destination) catch {};
