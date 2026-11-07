@@ -122,6 +122,15 @@ group gui {
         | bash packaging/macos/package.sh "$arch"
         | ls -lh zig-out/bundle/macos/*.dmg
 
+    [help] Package the GUI as a Windows installer
+    [desc] Build release and run the Inno Setup packaging.
+    [pass] Packaged the Windows installer.
+    [fail] Packaging failed.
+    package() ? @os("windows") & build-release shell~=pwsh:
+        | zig build -Doptimize=fast -Dstrip=true
+        | ./packaging/windows/package.ps1
+        | Get-ChildItem zig-out/bundle/windows
+
     [help] Install kocr-gui
     [desc] Build release and install kocr-gui.
     [pass] Installed kocr-gui.
