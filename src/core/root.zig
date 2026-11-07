@@ -59,6 +59,22 @@ pub fn listen(
     return Keyboard.listen(allocator, io, environ, bindings, context, handler);
 }
 
+/// macOS only: registers shortcuts in the app's own run loop and returns.
+pub fn startHotkeys(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    return Keyboard.startConfigured(allocator, io, environ, context, handler);
+}
+
+/// Re-reads shortcuts from the configuration file.
+pub fn reloadHotkeys() void {
+    Keyboard.reloadConfigured();
+}
+
 pub fn listenConfigured(
     allocator: std.mem.Allocator,
     io: std.Io,

@@ -1,6 +1,5 @@
-//! macOS global shortcuts through Carbon hot keys. Carbon hot keys, unlike
-//! event taps, need no accessibility permission. Virtual key codes follow
-//! Carbon's `Events.h` table.
+//! macOS global shortcuts through Carbon hot keys, registered in the app's
+//! own run loop. Virtual key codes follow Carbon's `Events.h` table.
 
 const std = @import("std");
 
@@ -18,7 +17,6 @@ const event_hot_key_pressed: u32 = 5;
 const event_param_direct_object: u32 = 0x2D2D2D2D; // '----'
 const type_event_hot_key_id: u32 = 0x686B6964; // 'hkid'
 const event_not_handled: i32 = -9874;
-const event_loop_timed_out: i32 = -9875;
 
 const carbon = struct {
     const OSStatus = i32;
@@ -48,7 +46,6 @@ const carbon = struct {
         user_data: ?*anyopaque,
         out_ref: *?EventHandlerRef,
     ) OSStatus;
-    extern fn RemoveEventHandler(ref: EventHandlerRef) OSStatus;
     extern fn RegisterEventHotKey(
         key_code: u32,
         modifiers: u32,
@@ -67,15 +64,6 @@ const carbon = struct {
         actual_size: ?*usize,
         data: ?*anyopaque,
     ) OSStatus;
-    extern fn ReceiveNextEvent(
-        num_types: u32,
-        types: *const EventTypeSpec,
-        timeout: f64,
-        wake_up: u8,
-        out_event: *?EventRef,
-    ) OSStatus;
-    extern fn SendEventToEventTarget(event: EventRef, target: EventTargetRef) OSStatus;
-    extern fn ReleaseEvent(event: EventRef) OSStatus;
 };
 
 pub const KeyboardError = error{
@@ -94,14 +82,11 @@ const Listener = struct {
     io: std.Io,
     environ: *const std.process.Environ.Map,
     bindings: []const types.Binding,
-    owned: bool,
-    reload_from_config: bool,
     context: *anyopaque,
     handler: types.Handler,
     target: ?carbon.EventTargetRef = null,
     handler_ref: ?carbon.EventHandlerRef = null,
     hot_keys: std.ArrayList(?carbon.EventHotKeyRef) = .empty,
-    stop: bool = false,
 
     fn unregisterAll(self: *Listener) void {
         for (self.hot_keys.items) |ref| {
@@ -149,8 +134,7 @@ fn onHotKey(
     );
     if (status != 0 or id.signature != signature) return event_not_handled;
     if (id.id == 0 or id.id > state.bindings.len) return event_not_handled;
-    const keep = state.handler(state.context, state.bindings[id.id - 1].action) catch false;
-    if (!keep) state.stop = true;
+    _ = state.handler(state.context, state.bindings[id.id - 1].action) catch false;
     return 0;
 }
 
@@ -172,96 +156,47 @@ fn install(self: *Listener) !void {
     if (status != 0) return error.KeyboardUnavailable;
 }
 
-fn uninstall(self: *Listener) void {
-    if (self.handler_ref) |ref| _ = carbon.RemoveEventHandler(ref);
-    self.handler_ref = null;
-}
-
 fn reload(state: *Listener) void {
     const next = loadBindings(state.allocator, state.io, state.environ) catch return;
     if (sameBindings(state.bindings, next)) {
         freeBindings(state.allocator, next);
         return;
     }
-    if (state.owned) freeBindings(state.allocator, state.bindings);
+    freeBindings(state.allocator, state.bindings);
     state.bindings = next;
-    state.owned = true;
     state.registerAll() catch {};
 }
 
-fn run(state: *Listener) !void {
-    listener = state;
-    defer listener = null;
-
-    try install(state);
-    defer uninstall(state);
-    defer state.unregisterAll();
-    try state.registerAll();
-
-    var event_type = carbon.EventTypeSpec{
-        .event_class = event_class_keyboard,
-        .event_kind = event_hot_key_pressed,
-    };
-    var reload_counter: u8 = 0;
-    while (!state.stop) {
-        var event: ?carbon.EventRef = null;
-        const status = carbon.ReceiveNextEvent(1, &event_type, 0.05, 1, &event);
-        if (status == 0) {
-            _ = carbon.SendEventToEventTarget(event.?, state.target.?);
-            _ = carbon.ReleaseEvent(event.?);
-        } else if (status != event_loop_timed_out) {
-            return error.KeyboardUnavailable;
-        }
-        if (state.reload_from_config) {
-            reload_counter +%= 1;
-            if (reload_counter % 10 == 0) reload(state);
-        }
-    }
-}
-
-pub fn listen(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    environ: *const std.process.Environ.Map,
-    bindings: []const types.Binding,
-    context: *anyopaque,
-    handler: types.Handler,
-) !void {
-    var state = Listener{
-        .allocator = allocator,
-        .io = io,
-        .environ = environ,
-        .bindings = bindings,
-        .owned = false,
-        .reload_from_config = false,
-        .context = context,
-        .handler = handler,
-    };
-    defer state.hot_keys.deinit(allocator);
-    try run(&state);
-}
-
-pub fn listenConfigured(
+/// Registers the configured shortcuts in the app's running NSApplication and
+/// returns; nanoui owns the event loop.
+pub fn startConfigured(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: *const std.process.Environ.Map,
     context: *anyopaque,
     handler: types.Handler,
 ) !void {
+    const state = try allocator.create(Listener);
+    errdefer allocator.destroy(state);
     const bindings = try loadBindings(allocator, io, environ);
-    var state = Listener{
+    errdefer freeBindings(allocator, bindings);
+    state.* = .{
         .allocator = allocator,
         .io = io,
         .environ = environ,
         .bindings = bindings,
-        .owned = true,
-        .reload_from_config = true,
         .context = context,
         .handler = handler,
     };
-    defer state.hot_keys.deinit(allocator);
-    defer freeBindings(allocator, state.bindings);
-    try run(&state);
+    try install(state);
+    try state.registerAll();
+    listener = state;
+}
+
+/// Picks up shortcut edits from the configuration file.
+pub fn reloadConfigured() void {
+    const state = listener orelse return;
+    reload(state);
 }
 
 fn loadBindings(

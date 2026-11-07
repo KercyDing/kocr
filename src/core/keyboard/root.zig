@@ -1,6 +1,9 @@
 //! Global shortcuts, per platform.
 
+const std = @import("std");
 const builtin = @import("builtin");
+
+const types = @import("../types.zig");
 
 const platform = switch (builtin.os.tag) {
     .linux => @import("linux.zig"),
@@ -10,5 +13,49 @@ const platform = switch (builtin.os.tag) {
 };
 
 pub const KeyboardError = platform.KeyboardError;
-pub const listen = platform.listen;
-pub const listenConfigured = platform.listenConfigured;
+
+pub fn listen(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    bindings: []const types.Binding,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    if (builtin.os.tag == .macos) {
+        return error.UnsupportedPlatform;
+    } else {
+        return platform.listen(allocator, io, environ, bindings, context, handler);
+    }
+}
+
+pub fn listenConfigured(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    if (builtin.os.tag == .macos) {
+        return error.UnsupportedPlatform;
+    } else {
+        return platform.listenConfigured(allocator, io, environ, context, handler);
+    }
+}
+
+pub fn startConfigured(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    if (builtin.os.tag == .macos) {
+        return platform.startConfigured(allocator, io, environ, context, handler);
+    }
+    return error.UnsupportedPlatform;
+}
+
+pub fn reloadConfigured() void {
+    if (builtin.os.tag == .macos) platform.reloadConfigured();
+}
