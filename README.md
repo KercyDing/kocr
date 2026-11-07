@@ -6,6 +6,8 @@ No account, no server, no uploads.
 
 The GUI is the way in; the CLI exists for scripts and agents.
 
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/f823db07-39fd-419c-b5b4-63c54bebf2e6" />
+
 ## What you get
 
 - **Local recognition.** [PP-OCRv6](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/OCR.html) model packs run on [ncnn.zig](https://github.com/kercyding/ncnn.zig); images never leave the machine.
