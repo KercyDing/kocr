@@ -30,14 +30,6 @@ jobs:
         with:
           version: "0.17.1"
 
-      - name: Cache Zig
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            .zig-cache
-            ~/.cache/zig
-          key: zig-${{ runner.os }}-${{ hashFiles('build.zig.zon') }}
-
       - name: Check formatting
         run: zig fmt --check build.zig build.zig.zon src
 
@@ -55,14 +47,6 @@ jobs:
         uses: mlugg/setup-zig@v2.2.1
         with:
           version: "0.17.1"
-
-      - name: Cache Zig
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            .zig-cache
-            ~/Library/Caches/zig
-          key: zig-macos-${{ hashFiles('build.zig.zon') }}
 
       - name: Check formatting
         run: zig fmt --check build.zig build.zig.zon src
