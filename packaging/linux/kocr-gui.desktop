@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=kocr
+GenericName=OCR
+Comment=Offline OCR for images
+Exec=kocr-gui
+TryExec=kocr-gui
+Icon=kocr
+Terminal=false
+Categories=Utility;Graphics;
+StartupNotify=true
+StartupWMClass=kocr-gui

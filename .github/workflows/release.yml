@@ -164,8 +164,15 @@ jobs:
       - name: Package GUI (Linux)
         if: runner.os == 'Linux'
         run: |
-          mkdir -p dist-gui
-          cp zig-out/bin/kocr-gui README.md LICENSE dist-gui/
+          mkdir -p dist-gui/bin
+          cp zig-out/bin/kocr-gui dist-gui/bin/
+          cp README.md LICENSE dist-gui/
+          install -D -m 0644 packaging/linux/kocr-gui.desktop dist-gui/share/applications/kocr-gui.desktop
+          install -D -m 0644 src/gui/icons/linux/16.png dist-gui/share/icons/hicolor/16x16/apps/kocr.png
+          install -D -m 0644 src/gui/icons/linux/32.png dist-gui/share/icons/hicolor/32x32/apps/kocr.png
+          install -D -m 0644 src/gui/icons/linux/128.png dist-gui/share/icons/hicolor/128x128/apps/kocr.png
+          install -D -m 0644 src/gui/icons/linux/256.png dist-gui/share/icons/hicolor/256x256/apps/kocr.png
+          install -D -m 0644 src/gui/icons/linux/512.png dist-gui/share/icons/hicolor/512x512/apps/kocr.png
           tar -C dist-gui -czf kocr-gui-linux-${{ matrix.arch }}.tar.gz .
           file zig-out/bin/kocr-gui
           tar -tzf kocr-gui-linux-${{ matrix.arch }}.tar.gz

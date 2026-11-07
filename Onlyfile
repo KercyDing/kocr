@@ -163,6 +163,16 @@ group gui {
         | chmod +x "$staged_path"
         | mv "$staged_path" "$install_dir/kocr-gui"
         | du -sh "$install_dir/kocr-gui"
+        | if [ "$(uname -s)" = "Linux" ]; then
+        |     data_dir="$HOME/.local/share"
+        |     install -Dm644 packaging/linux/kocr-gui.desktop "$data_dir/applications/kocr-gui.desktop"
+        |     install -Dm644 src/gui/icons/linux/16.png "$data_dir/icons/hicolor/16x16/apps/kocr.png"
+        |     install -Dm644 src/gui/icons/linux/32.png "$data_dir/icons/hicolor/32x32/apps/kocr.png"
+        |     install -Dm644 src/gui/icons/linux/128.png "$data_dir/icons/hicolor/128x128/apps/kocr.png"
+        |     install -Dm644 src/gui/icons/linux/256.png "$data_dir/icons/hicolor/256x256/apps/kocr.png"
+        |     install -Dm644 src/gui/icons/linux/512.png "$data_dir/icons/hicolor/512x512/apps/kocr.png"
+        |     update-desktop-database "$data_dir/applications" >/dev/null 2>&1 || true
+        | fi
 
     [help] Uninstall kocr-gui
     [desc] Remove the installed kocr-gui binary.

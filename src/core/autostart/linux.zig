@@ -42,6 +42,7 @@ pub fn set(
         \\Type=Application
         \\Name=kocr daemon
         \\Comment=Global shortcuts and OCR daemon
+        \\Icon=kocr
         \\Exec="{s}" --daemon
         \\Terminal=false
         \\X-GNOME-Autostart-enabled=true
