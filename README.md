@@ -45,7 +45,7 @@ zig build run-gui
 
 The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon` (platform code in `src/gui/daemon/`), so the GUI does not need to stay open.
 
-Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop` on Linux and `~/Library/LaunchAgents/io.github.KercyDing.kocr.daemon.plist` on macOS. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
+Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop` on Linux and the system login item (SMAppService) on macOS. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
 
 ## Using Only
 
