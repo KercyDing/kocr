@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Show or update the version in build.zig.zon."""
+"""Show or update the version in build.zig.zon and cli.zon."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ZON = ROOT / "build.zig.zon"
+FILES = (ROOT / "build.zig.zon", ROOT / "cli.zon")
 VERSION = re.compile(r'^(\s*)\.version\s*=\s*"([^"]*)"', re.MULTILINE)
 SEMVER = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -19,18 +19,19 @@ SEMVER = re.compile(
 
 
 def read_version() -> str:
-    match = VERSION.search(ZON.read_text(encoding="utf-8"))
+    match = VERSION.search(FILES[0].read_text(encoding="utf-8"))
     if match is None:
-        raise ValueError("missing .version in build.zig.zon")
+        raise ValueError(f"missing .version in {FILES[0].name}")
     return match.group(2)
 
 
 def write_version(version: str) -> None:
-    source = ZON.read_text(encoding="utf-8")
-    updated, count = VERSION.subn(lambda m: f'{m.group(1)}.version = "{version}"', source, count=1)
-    if count != 1:
-        raise ValueError("expected one .version in build.zig.zon")
-    ZON.write_text(updated, encoding="utf-8")
+    for path in FILES:
+        source = path.read_text(encoding="utf-8")
+        updated, count = VERSION.subn(lambda m: f'{m.group(1)}.version = "{version}"', source, count=1)
+        if count != 1:
+            raise ValueError(f"expected one .version in {path.name}")
+        path.write_text(updated, encoding="utf-8")
 
 
 def main() -> None:

@@ -42,7 +42,7 @@ jobs:
         run: zig fmt --check build.zig build.zig.zon src
 
       - name: Build
-        run: zig build -Doptimize=debug
+        run: zig build install -Doptimize=debug
 
   macos:
     runs-on: macos-15
@@ -68,10 +68,10 @@ jobs:
         run: zig fmt --check build.zig build.zig.zon src
 
       - name: Test
-        run: zig build test-core
+        run: zig build test
 
       - name: Build CLI
-        run: zig build -Doptimize=debug
+        run: zig build cli -Doptimize=debug
 
       - name: Build GUI
         run: zig build gui -Doptimize=debug

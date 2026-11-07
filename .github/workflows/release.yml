@@ -76,6 +76,15 @@ jobs:
             echo "Tag version $version does not match build.zig.zon version $declared" >&2
             exit 1
           fi
+          cli="$(git show "$TAG:cli.zon" | sed -n 's/^ *\.version = "\([^"]*\)".*/\1/p' | head -n 1)"
+          if [[ -z "$cli" ]]; then
+            echo "Could not read .version from cli.zon" >&2
+            exit 1
+          fi
+          if [[ "$cli" != "$declared" ]]; then
+            echo "cli.zon version $cli does not match build.zig.zon version $declared" >&2
+            exit 1
+          fi
           prerelease=false
           if [[ "$TAG" == *-* ]]; then
             prerelease=true
@@ -135,9 +144,7 @@ jobs:
             zig-release-${{ matrix.os }}-${{ matrix.arch }}-
 
       - name: Build
-        run: |
-          zig build -Doptimize=fast -Dstrip=true
-          zig build gui -Doptimize=fast -Dstrip=true
+        run: zig build install -Doptimize=fast -Dstrip=true
 
       - name: Package CLI (Linux)
         if: runner.os == 'Linux'

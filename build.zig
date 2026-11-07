@@ -101,7 +101,7 @@ pub fn build(b: *std.Build) !void {
         .root_module = core_mod,
     });
     const run_core_tests = b.addRunArtifact(core_tests);
-    const core_test_step = b.step("test-core", "Run core tests");
+    const core_test_step = b.step("test", "Run tests");
     core_test_step.dependOn(&run_core_tests.step);
 
     const cli = zommand.createCli(b, .{
@@ -133,13 +133,15 @@ pub fn build(b: *std.Build) !void {
         });
     }
 
-    b.installArtifact(exe);
-
-    const run_step = b.step("run", "Run kocr");
+    const cli_install = b.addInstallArtifact(exe, .{});
+    b.getInstallStep().dependOn(&cli_install.step);
+    const cli_step = b.step("cli", "Build the CLI");
+    cli_step.dependOn(&cli_install.step);
 
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
+    run_cmd.step.dependOn(&cli_install.step);
     run_cmd.addPassthruArgs();
+    const run_step = b.step("run-cli", "Run the CLI");
     run_step.dependOn(&run_cmd.step);
 
     const gui_mod = b.createModule(.{
@@ -174,6 +176,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     const install_gui = b.addInstallArtifact(gui, .{});
+    b.getInstallStep().dependOn(&install_gui.step);
     const gui_step = b.step("gui", "Build the native GUI");
     gui_step.dependOn(&install_gui.step);
 

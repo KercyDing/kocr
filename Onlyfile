@@ -1,5 +1,35 @@
 !version 0.5
 
+# =============== Common ===============
+[help] Build the CLI and GUI
+[pass] Build complete.
+[fail] Build failed.
+build():
+    zig build
+
+[help] Build the CLI and GUI in release mode
+[pass] Release build complete.
+[fail] Release build failed.
+build-release():
+    zig build -Doptimize=fast -Dstrip=true
+
+[help] Package the CLI and GUI
+[desc] Build release and package both the CLI and the GUI for this platform.
+[pass] Packaged the CLI and GUI.
+[fail] Packaging failed.
+package() & cli.package & gui.package
+
+[help] Format all Zig files
+[pass] Formatting complete.
+fmt():
+    zig fmt src build.zig build.zig.zon cli.zon
+
+[help] Clean cache and build output
+[pass] Clean complete.
+[fail] Clean failed.
+clean():
+    rm -rf .zig-cache zig-out zig-pkg
+
 # =============== CLI ===============
 [help] CLI development tasks
 group cli {
@@ -8,23 +38,23 @@ group cli {
     [pass] CLI build complete.
     [fail] CLI build failed.
     build():
-        zig build
+        zig build cli
 
     [help] Run the CLI with arguments
     [fail] CLI run failed.
     run(args..):
-        zig build run -- {{args}}
+        zig build run-cli -- {{args}}
 
     [help] Build the CLI in release mode
     [pass] CLI release build complete.
     [fail] CLI release build failed.
     build-release():
-        zig build -Doptimize=fast -Dstrip=true
+        zig build cli -Doptimize=fast -Dstrip=true
 
     [help] Run the CLI in release mode with arguments
     [fail] CLI release run failed.
     run-release(args..):
-        zig build run -Doptimize=fast -Dstrip=true -- {{args}}
+        zig build run-cli -Doptimize=fast -Dstrip=true -- {{args}}
 
     [help] Package the CLI as a macOS tarball
     [desc] Build release and package kocr into zig-out/bundle/macos.
@@ -55,66 +85,6 @@ group cli {
     :
         | ./packaging/windows/package-cli.ps1
         | Get-ChildItem zig-out/bundle/windows
-
-    [help] Install kocr
-    [desc] Build release and install kocr.
-    [pass] Installed kocr.
-    [fail] Installation failed.
-    install()
-        ? @os("windows")
-        & build-release
-        shell~=pwsh
-    :
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
-        | $installPath = Join-Path $installDir "kocr.exe"
-        | $stagedPath = Join-Path $env:TEMP "kocr-install-staged.exe"
-        | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
-        | $shellPath = (Get-Process -Id $PID).Path
-        |
-        | $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        | $entries = @($userPath -split ';' | Where-Object { $_ })
-        | $pathAdded = $false
-        | if (-not ($entries | Where-Object { $_.TrimEnd('\') -ieq $installDir })) {
-        |     [Environment]::SetEnvironmentVariable("Path", (@($entries) + $installDir) -join ';', "User")
-        |     $pathAdded = $true
-        | }
-        |
-        | New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-        | Copy-Item zig-out\bin\kocr.exe -Destination $stagedPath -Force
-        | $script = "Wait-Process -Id $parentPid; Copy-Item -LiteralPath '$stagedPath' -Destination '$installPath' -Force; Remove-Item -LiteralPath '$stagedPath' -Force"
-        | $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
-        | Start-Process -WindowStyle Hidden -FilePath $shellPath -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
-        | $size = (Get-Item $stagedPath).Length / 1MB
-        | Write-Output ("installed kocr ({0:N2} MB)" -f $size)
-        | if ($pathAdded) { Write-Output "added $installDir to PATH; restart your shell" }
-
-    [desc] Install to ~/.local/bin/kocr.
-    install() & build-release:
-        | install_dir="$HOME/.local/bin"
-        | staged_path="$install_dir/.kocr-install"
-        | mkdir -p "$install_dir"
-        | cp zig-out/bin/kocr "$staged_path"
-        | chmod +x "$staged_path"
-        | mv "$staged_path" "$install_dir/kocr"
-        | du -sh "$install_dir/kocr"
-
-    [help] Uninstall kocr
-    [desc] Remove the installed kocr binary.
-    [pass] Uninstalled kocr.
-    [fail] Uninstallation failed.
-    uninstall() ? @os("windows") shell~=pwsh:
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
-        | Remove-Item (Join-Path $installDir "kocr.exe") -Force -ErrorAction SilentlyContinue
-        | if (-not (Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue)) {
-        |     Remove-Item -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
-        |     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        |     $newPath = (@($userPath -split ';' | Where-Object { $_ -and ($_.TrimEnd('\') -ine $installDir) }) -join ';')
-        |     if ($newPath -ne $userPath) { [Environment]::SetEnvironmentVariable("Path", $newPath, "User") }
-        | }
-
-    [desc] Remove ~/.local/bin/kocr.
-    uninstall():
-        rm -f "$HOME/.local/bin/kocr"
 }
 
 # =============== GUI ===============
@@ -172,85 +142,7 @@ group gui {
     :
         | ./packaging/windows/package.ps1
         | Get-ChildItem zig-out/bundle/windows
-
-    [help] Install kocr-gui
-    [desc] Build release and install kocr-gui.
-    [pass] Installed kocr-gui.
-    [fail] Installation failed.
-    install()
-        ? @os("windows")
-        & build-release
-        shell~=pwsh
-    :
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
-        | $installPath = Join-Path $installDir "kocr-gui.exe"
-        | $stagedPath = Join-Path $env:TEMP "kocr-gui-install-staged.exe"
-        | $parentPid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
-        | $shellPath = (Get-Process -Id $PID).Path
-        |
-        | $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        | $entries = @($userPath -split ';' | Where-Object { $_ })
-        | $pathAdded = $false
-        | if (-not ($entries | Where-Object { $_.TrimEnd('\') -ieq $installDir })) {
-        |     [Environment]::SetEnvironmentVariable("Path", (@($entries) + $installDir) -join ';', "User")
-        |     $pathAdded = $true
-        | }
-        |
-        | New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-        | Copy-Item zig-out\bin\kocr-gui.exe -Destination $stagedPath -Force
-        | $script = "Wait-Process -Id $parentPid; Copy-Item -LiteralPath '$stagedPath' -Destination '$installPath' -Force; Remove-Item -LiteralPath '$stagedPath' -Force"
-        | $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
-        | Start-Process -WindowStyle Hidden -FilePath $shellPath -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
-        | $size = (Get-Item $stagedPath).Length / 1MB
-        | Write-Output ("installed kocr-gui ({0:N2} MB)" -f $size)
-        | if ($pathAdded) { Write-Output "added $installDir to PATH; restart your shell" }
-
-    [desc] Install to ~/.local/bin/kocr-gui.
-    install() & build-release:
-        | install_dir="$HOME/.local/bin"
-        | staged_path="$install_dir/.kocr-gui-install"
-        | mkdir -p "$install_dir"
-        | cp zig-out/bin/kocr-gui "$staged_path"
-        | chmod +x "$staged_path"
-        | mv "$staged_path" "$install_dir/kocr-gui"
-        | du -sh "$install_dir/kocr-gui"
-
-    [help] Uninstall kocr-gui
-    [desc] Remove the installed kocr-gui binary.
-    [pass] Uninstalled kocr-gui.
-    [fail] Uninstallation failed.
-    uninstall() ? @os("windows") shell~=pwsh:
-        | $installDir = Join-Path $env:LOCALAPPDATA "Programs\Kocr"
-        | Remove-Item (Join-Path $installDir "kocr-gui.exe") -Force -ErrorAction SilentlyContinue
-        | if (-not (Get-ChildItem -LiteralPath $installDir -Force -ErrorAction SilentlyContinue)) {
-        |     Remove-Item -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
-        |     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        |     $newPath = (@($userPath -split ';' | Where-Object { $_ -and ($_.TrimEnd('\') -ine $installDir) }) -join ';')
-        |     if ($newPath -ne $userPath) { [Environment]::SetEnvironmentVariable("Path", $newPath, "User") }
-        | }
-
-    [desc] Remove ~/.local/bin/kocr-gui.
-    uninstall():
-        rm -f "$HOME/.local/bin/kocr-gui"
 }
-
-# =============== Common ===============
-[help] Package the CLI and GUI
-[desc] Build release and package both the CLI and the GUI for this platform.
-[pass] Packaged the CLI and GUI.
-[fail] Packaging failed.
-package() & cli.package & gui.package
-
-[help] Format all Zig files
-[pass] Formatting complete.
-fmt():
-    zig fmt src build.zig build.zig.zon cli.zon
-
-[help] Clean cache and build output
-[pass] Clean complete.
-[fail] Clean failed.
-clean():
-    rm -rf .zig-cache zig-out zig-pkg
 
 # =============== Version ===============
 [help] Versioning tasks
@@ -269,8 +161,7 @@ group version {
         test -z "$(git status --porcelain)"
         python3 scripts/version.py change {{version}}
         zig build -Doptimize=fast -Dstrip=true
-        zig build gui -Doptimize=fast -Dstrip=true
-        git add -- build.zig.zon
+        git add build.zig.zon cli.zon
         git commit -m "update to {{version}}"
         git tag {{version}}
         git push --atomic origin HEAD {{version}}
