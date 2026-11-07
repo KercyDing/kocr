@@ -9,8 +9,6 @@ const nui = @import("nanoui");
 const jobs = @import("jobs.zig");
 const model = @import("model.zig");
 const state_mod = @import("state.zig");
-const theme = @import("theme.zig");
-const titlebar = @import("titlebar.zig");
 const tray = @import("../tray/root.zig");
 const windows = @import("windows.zig");
 
@@ -280,8 +278,6 @@ pub fn openSettings(state: *State) void {
         .on_close = .{ .ctx = state, .func = settingsClosed },
     }) catch return;
     state.settings_window = window;
-    titlebar.apply(window);
-    theme.apply(state, window);
 }
 
 fn settingsView(state: *State, c: *ui.Context) void {

@@ -7,8 +7,6 @@ const nui = @import("nanoui");
 
 const main = @import("main.zig");
 const state_mod = @import("state.zig");
-const theme = @import("theme.zig");
-const titlebar = @import("titlebar.zig");
 
 const State = state_mod.State;
 
@@ -54,9 +52,6 @@ pub fn showMain(state: *State) void {
         .on_close = .{ .ctx = state, .func = mainClosed },
     }) catch return;
     state.main_window = window;
-    state.title_bar_dark = nui.isDark();
-    titlebar.apply(window);
-    theme.apply(state, window);
     window.show();
     window.focus();
     activate();

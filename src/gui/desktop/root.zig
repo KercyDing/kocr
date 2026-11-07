@@ -11,7 +11,6 @@ const history = @import("history.zig");
 const jobs = @import("jobs.zig");
 const model = @import("model.zig");
 const state_mod = @import("state.zig");
-const theme = @import("theme.zig");
 const tray = @import("../tray/root.zig");
 const windows = @import("windows.zig");
 
@@ -22,13 +21,6 @@ const agent = macos or win;
 
 fn refreshTimer(context: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(context.?));
-    theme.sync(state);
-    const dark = nui.isDark();
-    if (state.title_bar_dark != dark) {
-        state.title_bar_dark = dark;
-        if (state.main_window) |window| @import("titlebar.zig").apply(window);
-        if (state.settings_window) |window| @import("titlebar.zig").apply(window);
-    }
     var changed = history.pollHistory(state);
     if (!agent and daemon.updateDaemon(state)) changed = true;
     const changed_model = model.updateModelStatus(state);
