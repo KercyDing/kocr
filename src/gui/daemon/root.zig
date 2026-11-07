@@ -5,7 +5,7 @@ const builtin = @import("builtin");
 const platform = switch (builtin.os.tag) {
     .linux => @import("linux.zig"),
     .windows => @import("windows.zig"),
-    .macos => @import("macos.zig"),
+    .macos => @import("unsupported.zig"),
     else => @compileError("kocr daemon supports Linux, Windows, and macOS only"),
 };
 
