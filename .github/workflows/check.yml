@@ -42,4 +42,36 @@ jobs:
         run: zig fmt --check build.zig build.zig.zon src
 
       - name: Build
-        run: zig build -Doptimize=Debug
+        run: zig build -Doptimize=debug
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2.2.1
+        with:
+          version: "0.17.1"
+
+      - name: Cache Zig
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            .zig-cache
+            ~/Library/Caches/zig
+          key: zig-macos-${{ hashFiles('build.zig.zon') }}
+
+      - name: Check formatting
+        run: zig fmt --check build.zig build.zig.zon src
+
+      - name: Test
+        run: zig build test-core
+
+      - name: Build CLI
+        run: zig build -Doptimize=debug
+
+      - name: Build GUI
+        run: zig build gui -Doptimize=debug
