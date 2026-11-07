@@ -3,13 +3,17 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 <amd64|arm64>" >&2
+    echo "usage: $0 <amd64|x86_64|arm64|aarch64>" >&2
     exit 2
 }
 
 [[ $# -eq 1 ]] || usage
 
-arch=$1
+case $1 in
+    amd64|x86_64) arch=amd64 ;;
+    arm64|aarch64) arch=arm64 ;;
+    *) usage ;;
+esac
 
 script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(cd -- "$script_dir/../.." && pwd)
@@ -25,7 +29,6 @@ stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT
 root="$stage/$package"
 
-install -Dm755 "$repo_dir/zig-out/bin/kocr" "$root/bin/kocr"
 install -Dm755 "$repo_dir/zig-out/bin/kocr-gui" "$root/bin/kocr-gui"
 install -Dm755 "$script_dir/setup.sh" "$root/setup.sh"
 install -Dm644 "$script_dir/kocr-gui.desktop" "$root/share/applications/kocr-gui.desktop"

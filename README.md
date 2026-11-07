@@ -43,7 +43,7 @@ Or:
 zig build run-gui
 ```
 
-On Linux the release tarball uses the `~/.local` layout: extract it there (`tar -C ~/.local -xzf kocr-gui-linux-<arch>.tar.gz`) to install the binary, desktop entry, and icons.
+On Linux the GUI ships as `kocr-<version>-linux-<arch>.tar.gz`: extract it and run `./setup.sh` to install the binary, desktop entry, and icons into `~/.local` (`PREFIX=/usr ./setup.sh` for a system install). The CLI ships separately as `kocr-cli-<version>-linux-<arch>.tar.gz`.
 
 The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon` (platform code in `src/gui/daemon/`), so the GUI does not need to stay open.
 
@@ -58,7 +58,6 @@ only cli build
 only cli run image images/1.png
 only gui build
 only gui run
-only gui install
-only gui uninstall
+only package
 only clean
 ```

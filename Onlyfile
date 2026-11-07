@@ -26,6 +26,36 @@ group cli {
     run-release(args..):
         zig build run -Doptimize=fast -Dstrip=true -- {{args}}
 
+    [help] Package the CLI as a macOS tarball
+    [desc] Build release and package kocr into zig-out/bundle/macos.
+    [pass] Packaged the macOS CLI.
+    [fail] Packaging failed.
+    package() ? @os("macos") & build-release:
+        | arch="$(uname -m)"
+        | bash packaging/macos/package-cli.sh "$arch"
+        | ls -lh zig-out/bundle/macos/*.tar.gz zig-out/bundle/macos/*.sha256
+
+    [help] Package the CLI as a Linux tarball
+    [desc] Build release and package kocr into zig-out/bundle/linux.
+    [pass] Packaged the Linux CLI.
+    [fail] Packaging failed.
+    package() ? @os("linux") & build-release:
+        | arch="$(uname -m)"
+        | bash packaging/linux/package-cli.sh "$arch"
+        | ls -lh zig-out/bundle/linux/*.tar.gz zig-out/bundle/linux/*.sha256
+
+    [help] Package the CLI as a Windows zip
+    [desc] Build release and package kocr.exe into zig-out/bundle/windows.
+    [pass] Packaged the Windows CLI.
+    [fail] Packaging failed.
+    package()
+        ? @os("windows")
+        & build-release
+        shell~=pwsh
+    :
+        | ./packaging/windows/package-cli.ps1
+        | Get-ChildItem zig-out/bundle/windows
+
     [help] Install kocr
     [desc] Build release and install kocr.
     [pass] Installed kocr.
@@ -114,7 +144,7 @@ group gui {
         zig build run-gui -Doptimize=fast -Dstrip=true
 
     [help] Package the GUI as a macOS app
-    [desc] Build release and package kocr.dmg into zig-out/bundle/macos.
+    [desc] Build release and package kocr.app into zig-out/bundle/macos.
     [pass] Packaged the macOS app.
     [fail] Packaging failed.
     package() ? @os("macos") & build-release:
@@ -122,12 +152,24 @@ group gui {
         | bash packaging/macos/package.sh "$arch"
         | ls -lh zig-out/bundle/macos/*.dmg
 
+    [help] Package the GUI as a Linux tarball
+    [desc] Build release and package the kocr-gui tarball into zig-out/bundle/linux.
+    [pass] Packaged the Linux bundle.
+    [fail] Packaging failed.
+    package() ? @os("linux") & build-release:
+        | arch="$(uname -m)"
+        | bash packaging/linux/package.sh "$arch"
+        | ls -lh zig-out/bundle/linux/*.tar.gz zig-out/bundle/linux/*.sha256
+
     [help] Package the GUI as a Windows installer
     [desc] Build release and run the Inno Setup packaging.
     [pass] Packaged the Windows installer.
     [fail] Packaging failed.
-    package() ? @os("windows") & build-release shell~=pwsh:
-        | zig build -Doptimize=fast -Dstrip=true
+    package()
+        ? @os("windows")
+        & build-release
+        shell~=pwsh
+    :
         | ./packaging/windows/package.ps1
         | Get-ChildItem zig-out/bundle/windows
 
@@ -163,24 +205,6 @@ group gui {
         | Write-Output ("installed kocr-gui ({0:N2} MB)" -f $size)
         | if ($pathAdded) { Write-Output "added $installDir to PATH; restart your shell" }
 
-    [desc] Install to ~/.local/bin/kocr-gui with desktop entry.
-    install() ? @os("linux") & build-release:
-        | install_dir="$HOME/.local/bin"
-        | staged_path="$install_dir/.kocr-gui-install"
-        | mkdir -p "$install_dir"
-        | cp zig-out/bin/kocr-gui "$staged_path"
-        | chmod +x "$staged_path"
-        | mv "$staged_path" "$install_dir/kocr-gui"
-        | du -sh "$install_dir/kocr-gui"
-        | data_dir="$HOME/.local/share"
-        | install -Dm644 packaging/linux/kocr-gui.desktop "$data_dir/applications/kocr-gui.desktop"
-        | install -Dm644 src/gui/icons/linux/16.png "$data_dir/icons/hicolor/16x16/apps/kocr.png"
-        | install -Dm644 src/gui/icons/linux/32.png "$data_dir/icons/hicolor/32x32/apps/kocr.png"
-        | install -Dm644 src/gui/icons/linux/128.png "$data_dir/icons/hicolor/128x128/apps/kocr.png"
-        | install -Dm644 src/gui/icons/linux/256.png "$data_dir/icons/hicolor/256x256/apps/kocr.png"
-        | install -Dm644 src/gui/icons/linux/512.png "$data_dir/icons/hicolor/512x512/apps/kocr.png"
-        | update-desktop-database "$data_dir/applications" &>/dev/null || true
-
     [desc] Install to ~/.local/bin/kocr-gui.
     install() & build-release:
         | install_dir="$HOME/.local/bin"
@@ -211,6 +235,12 @@ group gui {
 }
 
 # =============== Common ===============
+[help] Package the CLI and GUI
+[desc] Build release and package both the CLI and the GUI for this platform.
+[pass] Packaged the CLI and GUI.
+[fail] Packaging failed.
+package() & cli.package & gui.package
+
 [help] Format all Zig files
 [pass] Formatting complete.
 fmt():

@@ -34,7 +34,6 @@ $stage_root = Join-Path $repo "zig-out\stage"
 $stage = Join-Path $stage_root "windows"
 if (Test-Path $stage_root) { Remove-Item -Recurse -Force $stage_root }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-Copy-Item (Join-Path $repo "zig-out\bin\kocr.exe") $stage
 Copy-Item (Join-Path $repo "zig-out\bin\kocr-gui.exe") $stage
 Copy-Item (Join-Path $repo "README.md") $stage
 Copy-Item (Join-Path $repo "LICENSE") $stage

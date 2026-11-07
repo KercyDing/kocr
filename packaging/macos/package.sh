@@ -106,12 +106,11 @@ else
     echo "         set CODESIGN_IDENTITY to a stable certificate for TCC to persist across builds" >&2
 fi
 
-install -m 0755 "$repo_dir/zig-out/bin/kocr" "$package_dir/kocr"
 install -m 0644 "$repo_dir/README.md" "$repo_dir/LICENSE" "$package_dir/"
 ln -s /Applications "$package_dir/Applications"
 
 archive="kocr-$version-macos-${arch}.dmg"
-rm -f "${out_dir}/${archive}"
+rm -f "${out_dir}/${archive}" "${out_dir}/${archive}.sha256"
 hdiutil create -volname "kocr" -srcfolder "$package_dir" -ov -format UDZO "${out_dir}/${archive}"
 ( cd "$out_dir" && shasum -a 256 "$archive" > "$archive.sha256" )
 rm -rf "$package_dir"

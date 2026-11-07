@@ -28,7 +28,6 @@ PrivilegesRequired=admin
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Files]
-Source: "{#StageDir}\kocr.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\kocr-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
