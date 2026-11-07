@@ -11,10 +11,10 @@ zig build
 Run:
 
 ```bash
-zig build run -- image image.png
+zig build run -- image assets/1.png
 ```
 
-`kocr image image.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
+`kocr image assets/1.png` detects and recognizes all text. Use `--line` for a single cropped text line, or `--detect` to print detected boxes.
 
 Install a model package:
 
@@ -26,7 +26,7 @@ kocr uninstall small
 kocr use small
 ```
 
-`kocr list` shows every profile with its status and path. `kocr install` selects the profile it installs. `kocr use` persists the selected model in `~/.config/kocr/config.json` (or `$XDG_CONFIG_HOME/kocr/config.json`). `kocr image` uses it unless `--profile` or `--model_dir` is given, and prints the available installs when no model is installed.
+`kocr list` shows every profile with its status and path. `kocr install` selects the profile it installs. `kocr use` persists the selected model in `~/.config/kocr/config.json` (or `$XDG_CONFIG_HOME/kocr/config.json`) on Linux and in `~/Library/Preferences/kocr/config.json` on macOS. `kocr image` uses it unless `--profile` or `--model_dir` is given, and prints the available installs when no model is installed.
 
 ## GUI
 
@@ -43,9 +43,9 @@ Or:
 zig build run-gui
 ```
 
-The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon` (platform code in `src/gui/daemon/`), so the GUI does not need to stay open. Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop` on Linux. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
+The GUI provides one-shot capture actions, model management, text/image history, and a Settings dialog for shortcuts and daemon autostart. Shortcuts are executed by `kocr-gui --daemon` (platform code in `src/gui/daemon/`), so the GUI does not need to stay open.
 
-On macOS, the platform layer under `src/core/platforms/macos` still stubs capture, clipboard, and shortcuts; the UI runs but those actions report `UnsupportedPlatform`.
+Saving settings starts the daemon immediately; enabling autostart writes `~/.config/autostart/kocr-daemon.desktop` on Linux and `~/Library/LaunchAgents/io.github.KercyDing.kocr.daemon.plist` on macOS. History is stored in `kocr/history.sqlite3`, with image copies in `kocr/history/`.
 
 ## Using Only
 
@@ -53,7 +53,7 @@ If [Only](https://github.com/onlyjs/only) is installed, the same workflow is ava
 
 ```bash
 only cli build
-only cli run image image.png
+only cli run image assets/1.png
 only gui build
 only gui run
 only gui install
