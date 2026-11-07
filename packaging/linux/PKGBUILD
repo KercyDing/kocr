@@ -1,0 +1,43 @@
+# Maintainer: Kercy <kercyding@users.noreply.github.com>
+
+pkgname=kocr-bin
+pkgver=0.5.0
+pkgrel=1
+pkgdesc='Offline OCR for images: the CLI and the native GUI (prebuilt)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/KercyDing/kocr'
+license=('MIT')
+depends=('glibc' 'gtk4')
+optdepends=('gtk3: fallback when GTK 4 is not installed')
+provides=('kocr')
+conflicts=('kocr')
+
+source_x86_64=(
+    "kocr-cli-${pkgver}-linux-amd64.tar.gz::${url}/releases/download/v${pkgver}/kocr-cli-${pkgver}-linux-amd64.tar.gz"
+    "kocr-${pkgver}-linux-amd64.tar.gz::${url}/releases/download/v${pkgver}/kocr-${pkgver}-linux-amd64.tar.gz"
+)
+source_aarch64=(
+    "kocr-cli-${pkgver}-linux-arm64.tar.gz::${url}/releases/download/v${pkgver}/kocr-cli-${pkgver}-linux-arm64.tar.gz"
+    "kocr-${pkgver}-linux-arm64.tar.gz::${url}/releases/download/v${pkgver}/kocr-${pkgver}-linux-arm64.tar.gz"
+)
+# The release workflow fills these from the release's .sha256 files.
+sha256sums_x86_64=('SKIP' 'SKIP')
+sha256sums_aarch64=('SKIP' 'SKIP')
+
+package() {
+    local cli="kocr-cli-${pkgver}"
+    local gui="kocr-${pkgver}"
+
+    install -Dm755 "${srcdir}/${cli}/bin/kocr" "${pkgdir}/usr/bin/kocr"
+    install -Dm755 "${srcdir}/${gui}/bin/kocr-gui" "${pkgdir}/usr/bin/kocr-gui"
+
+    install -Dm644 "${srcdir}/${gui}/share/applications/kocr-gui.desktop" \
+        "${pkgdir}/usr/share/applications/kocr-gui.desktop"
+    for size in 16 32 128 256 512; do
+        install -Dm644 "${srcdir}/${gui}/share/icons/hicolor/${size}x${size}/apps/kocr.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/kocr.png"
+    done
+
+    install -Dm644 "${srcdir}/${cli}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 "${srcdir}/${cli}/README.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

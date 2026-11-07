@@ -1,0 +1,147 @@
+name: AUR
+
+# Publishes kocr-bin to the AUR once a release is out.
+#
+# Needs the repository secret AUR_SSH_PRIVATE_KEY: an SSH key registered with
+# the AUR account that owns kocr-bin.
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, for example v0.5.0
+        required: true
+        type: string
+
+concurrency:
+  group: aur
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish kocr-bin
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Resolve the release tag
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="$EVENT_TAG"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Could not resolve a release tag (got '$tag')" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Wait for the release assets
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          for name in \
+            "kocr-cli-${VERSION}-linux-amd64.tar.gz" \
+            "kocr-${VERSION}-linux-amd64.tar.gz" \
+            "kocr-cli-${VERSION}-linux-arm64.tar.gz" \
+            "kocr-${VERSION}-linux-arm64.tar.gz"; do
+            for _ in $(seq 1 30); do
+              curl -fsSIL -o /dev/null "$base/$name" && continue 2
+              sleep 10
+            done
+            echo "Missing release asset: $name" >&2
+            exit 1
+          done
+
+      - name: Set the version
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/linux/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/linux/PKGBUILD
+
+      - name: Fill the checksums
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          sum() {
+            local hash
+            hash="$(curl -fsSL "$base/$1.sha256" | awk '{ print $1 }')"
+            if [[ ! "$hash" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "No checksum for $1" >&2
+              exit 1
+            fi
+            printf '%s' "$hash"
+          }
+          x_cli="$(sum "kocr-cli-${VERSION}-linux-amd64.tar.gz")"
+          x_gui="$(sum "kocr-${VERSION}-linux-amd64.tar.gz")"
+          a_cli="$(sum "kocr-cli-${VERSION}-linux-arm64.tar.gz")"
+          a_gui="$(sum "kocr-${VERSION}-linux-arm64.tar.gz")"
+          sed -i "s|^sha256sums_x86_64=.*|sha256sums_x86_64=('${x_cli}' '${x_gui}')|" packaging/linux/PKGBUILD
+          sed -i "s|^sha256sums_aarch64=.*|sha256sums_aarch64=('${a_cli}' '${a_gui}')|" packaging/linux/PKGBUILD
+
+      - name: Write .SRCINFO
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD/packaging/linux:/pkg" \
+            -w /pkg \
+            archlinux:base-devel \
+            bash -euc '
+              useradd -m builder
+              chown -R builder /pkg
+              su builder -c "makepkg --printsrcinfo > .SRCINFO"
+            '
+
+      - name: Push to the AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AUR_SSH_KEY:-}" ]]; then
+            echo "AUR_SSH_PRIVATE_KEY is not set" >&2
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes"
+          clone=$(mktemp -d)
+          git clone ssh://aur@aur.archlinux.org/kocr-bin.git "$clone"
+          cp packaging/linux/PKGBUILD packaging/linux/.SRCINFO "$clone/"
+          cd "$clone"
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "The AUR package is already at ${TAG}."
+            exit 0
+          fi
+          git commit -m "update to ${TAG}"
+          git push origin master
