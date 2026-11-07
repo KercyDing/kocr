@@ -83,6 +83,8 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    if (target.result.os.tag == .macos) core_mod.linkFramework("Carbon", .{});
+
     const core_tests = b.addTest(.{
         .name = "core-tests",
         .root_module = core_mod,
