@@ -42,7 +42,11 @@ cat > "$app_dir/Contents/Info.plist" <<EOF
     <key>CFBundleVersion</key>
     <string>${version}</string>
     <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSScreenCaptureUsageDescription</key>
@@ -52,6 +56,47 @@ cat > "$app_dir/Contents/Info.plist" <<EOF
 EOF
 
 xattr -cr "$app_dir" 2>/dev/null || true
+
+identities() {
+    security find-identity -v -p codesigning 2>/dev/null |
+        sed -n 's/^[[:space:]]*[0-9]*) [0-9A-F]* "\(.*\)"$/\1/p'
+}
+
+pick_identity() {
+    identities | grep -m1 -F "$1" || true
+}
+
+if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
+    CODESIGN_IDENTITY=$(pick_identity "Developer ID Application")
+    [[ -n "${CODESIGN_IDENTITY}" ]] || CODESIGN_IDENTITY=$(pick_identity "Apple Development")
+    [[ -n "${CODESIGN_IDENTITY}" ]] || CODESIGN_IDENTITY=$(pick_identity "Mac Developer")
+    if [[ -z "${CODESIGN_IDENTITY}" ]]; then
+        found=()
+        while IFS= read -r name; do
+            found+=("$name")
+        done < <(identities)
+        if [[ ${#found[@]} -eq 1 ]]; then
+            CODESIGN_IDENTITY="${found[0]}"
+        elif [[ ${#found[@]} -gt 1 ]]; then
+            echo "multiple signing identities; set CODESIGN_IDENTITY to one of:" >&2
+            printf '  %s\n' "${found[@]}" >&2
+        else
+            echo "no valid signing identity; available (including invalid):" >&2
+            security find-identity -p codesigning 2>&1 | sed 's/^/  /' >&2
+        fi
+    fi
+fi
+
+if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+    codesign --force --deep --sign "$CODESIGN_IDENTITY" "$app_dir"
+    codesign --verify --deep --strict "$app_dir"
+    echo "signed with ${CODESIGN_IDENTITY}"
+else
+    codesign --force --deep --sign - "$app_dir"
+    codesign --verify --deep --strict "$app_dir"
+    echo "warning: ad-hoc signed; rebuilding changes the code identity and resets Screen Recording permission" >&2
+    echo "         set CODESIGN_IDENTITY to a stable certificate for TCC to persist across builds" >&2
+fi
 
 mkdir -p "$out_dir"
 archive="kocr-gui-macos-${arch}.zip"
