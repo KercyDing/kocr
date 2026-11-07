@@ -36,6 +36,8 @@ On Arch:
 paru -S kocr-gui-bin
 ```
 
+**Linux capture is KDE-only.** It shells out to `spectacle --region`, so GNOME and other desktops are not supported for capturing yet (recognition and the CLI are desktop-independent).
+
 **macOS** — open the `.dmg`, drag `kocr.app` to Applications, and allow it in **System Settings → Privacy & Security**: the app is unsigned.
 
 **Windows** — run the `setup.exe` installer.
