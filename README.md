@@ -101,7 +101,7 @@ zig build run-cli -- image images/1.png
 
 ## Using Only
 
-With [Only](https://github.com/onlyjs/only) installed, the project `Onlyfile` mirrors the common workflows:
+With [Only](https://github.com/KercyDing/only) installed, the project `Onlyfile` mirrors the common workflows:
 
 ```bash
 only build               # build the CLI and the GUI
