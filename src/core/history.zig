@@ -264,6 +264,8 @@ test "queries, deletes, and clears history" {
     defer allocator.free(root);
     try std.Io.Dir.cwd().createDirPath(io, root);
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    // macOS resolves data folders from HOME; XDG_DATA_HOME covers Linux.
+    try env.put("HOME", root);
     try env.put("XDG_DATA_HOME", root);
 
     try appendText(io, allocator, &env, "first text");

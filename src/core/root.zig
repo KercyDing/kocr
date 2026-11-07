@@ -73,4 +73,6 @@ test {
     std.testing.refAllDecls(@This());
     std.testing.refAllDecls(Keyboard);
     std.testing.refAllDecls(Screenshot);
+    std.testing.refAllDecls(autostart);
+    std.testing.refAllDecls(clipboard);
 }
