@@ -1,6 +1,6 @@
 .{
     .name = .kocr,
-    .version = "0.5.1",
+    .version = "0.5.2",
     .fingerprint = 0x7e330b7749964618,
     .minimum_zig_version = "0.17.1",
     .dependencies = .{
