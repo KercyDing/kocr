@@ -144,7 +144,7 @@ jobs:
             zig-release-${{ matrix.os }}-${{ matrix.arch }}-
 
       - name: Build
-        run: zig build install -Doptimize=fast -Dstrip=true
+        run: zig build -Doptimize=fast -Dstrip=true
 
       - name: Package CLI (Linux)
         if: runner.os == 'Linux'
