@@ -1,22 +1,31 @@
-//! Shortcut daemon: captures and OCR runs independently of the GUI.
+//! Linux shortcut daemon: captures and OCR run independently of the GUI,
+//! and the controls the desktop window uses to start and stop it.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const core = @import("core");
 
 const config = core.config;
 
+const state_mod = @import("state.zig");
+const State = state_mod.State;
+
 pub fn run(init: std.process.Init) !void {
-    runInner(init) catch |err| {
-        var buffer: [128]u8 = undefined;
-        const text = std.fmt.bufPrint(&buffer, "failed: {s}\n", .{@errorName(err)}) catch "failed\n";
-        writeLog(init, text);
-        return err;
-    };
+    if (builtin.os.tag == .linux) {
+        runInner(init) catch |err| {
+            var buffer: [128]u8 = undefined;
+            const text = std.fmt.bufPrint(&buffer, "failed: {s}\n", .{@errorName(err)}) catch "failed\n";
+            writeLog(init, text);
+            return err;
+        };
+        return;
+    }
+    return error.UnsupportedPlatform;
 }
 
 fn writeLog(init: std.process.Init, text: []const u8) void {
-    const dir = core.config.dir(init.io, init.gpa, init.environ_map) catch return;
+    const dir = config.dir(init.io, init.gpa, init.environ_map) catch return;
     defer init.gpa.free(dir);
     const path = std.Io.Dir.path.join(init.gpa, &.{ dir, "daemon.log" }) catch return;
     defer init.gpa.free(path);
@@ -218,7 +227,7 @@ pub fn lock(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !std.Io.File {
-    const dir = try core.config.dir(io, allocator, environ);
+    const dir = try config.dir(io, allocator, environ);
     defer allocator.free(dir);
     const path = try std.Io.Dir.path.join(allocator, &.{ dir, "daemon.lock" });
     defer allocator.free(path);
@@ -233,6 +242,15 @@ pub fn lock(
 }
 
 pub fn isRunning(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !bool {
+    if (builtin.os.tag == .linux) return isRunningLinux(io, allocator, environ);
+    return false;
+}
+
+fn isRunningLinux(
     io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
@@ -283,6 +301,14 @@ pub fn stop(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !void {
+    if (builtin.os.tag == .linux) return stopLinux(io, allocator, environ);
+}
+
+fn stopLinux(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !void {
     const path = try pidPath(io, allocator, environ);
     defer allocator.free(path);
     const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(64)) catch |err| switch (err) {
@@ -307,10 +333,19 @@ pub fn ensureRunning(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !void {
+    if (builtin.os.tag == .linux) return ensureRunningLinux(io, allocator, environ);
+    return error.UnsupportedPlatform;
+}
+
+fn ensureRunningLinux(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !void {
     if (try isRunning(io, allocator, environ)) return DaemonError.AlreadyRunning;
     const executable = try std.process.executablePathAlloc(io, allocator);
     defer allocator.free(executable);
-    const config_dir = try core.config.dir(io, allocator, environ);
+    const config_dir = try config.dir(io, allocator, environ);
     defer allocator.free(config_dir);
     const log_path = try std.Io.Dir.path.join(allocator, &.{ config_dir, "daemon.log" });
     defer allocator.free(log_path);
@@ -337,9 +372,52 @@ fn pidPath(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const dir = try core.config.dir(io, allocator, environ);
+    const dir = try config.dir(io, allocator, environ);
     defer allocator.free(dir);
     return std.Io.Dir.path.join(allocator, &.{ dir, "daemon.pid" });
 }
 
 pub fn initProcess() void {}
+
+pub fn updateDaemon(state: *State) bool {
+    if (builtin.os.tag == .linux) return updateDaemonLinux(state);
+    return false;
+}
+
+fn updateDaemonLinux(state: *State) bool {
+    const running = isRunningLinux(state.io, state.allocator, state.environ) catch false;
+    if (running == state.daemon_running) return false;
+    state.daemon_running = running;
+    return true;
+}
+
+pub fn applyDaemon(state: *State) void {
+    if (builtin.os.tag == .linux) applyDaemonLinux(state);
+}
+
+fn applyDaemonLinux(state: *State) void {
+    if (state.daemon_running) {
+        const started = blk: {
+            ensureRunningLinux(state.io, state.allocator, state.environ) catch |err| switch (err) {
+                error.AlreadyRunning => break :blk false,
+                else => {
+                    var buffer: [256]u8 = undefined;
+                    state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
+                    _ = updateDaemonLinux(state);
+                    return;
+                },
+            };
+            break :blk true;
+        };
+        state.setMainStatus(if (started) "Daemon started" else "Daemon already running");
+    } else {
+        stopLinux(state.io, state.allocator, state.environ) catch |err| {
+            var buffer: [256]u8 = undefined;
+            state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon stop failed: {s}", .{@errorName(err)}) catch "Daemon stop failed");
+            _ = updateDaemonLinux(state);
+            return;
+        };
+        state.setMainStatus("Daemon stopped");
+    }
+    _ = updateDaemonLinux(state);
+}

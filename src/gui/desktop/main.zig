@@ -5,7 +5,7 @@ const builtin = @import("builtin");
 
 const nui = @import("nanoui");
 
-const daemon = @import("../daemon/controls.zig");
+const daemon = @import("daemon_linux.zig");
 const history = @import("history.zig");
 const jobs = @import("jobs.zig");
 const settings = @import("settings.zig");

@@ -4,7 +4,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const daemon = @import("daemon/root.zig");
+const daemon = @import("desktop/daemon_linux.zig");
 
 pub fn main(init: std.process.Init) !void {
     daemon.initProcess();
