@@ -12,11 +12,13 @@ const jobs = @import("jobs.zig");
 const model = @import("model.zig");
 const state_mod = @import("state.zig");
 const theme = @import("theme.zig");
-const tray = @import("tray.zig");
+const tray = @import("../tray/root.zig");
 const windows = @import("windows.zig");
 
 const State = state_mod.State;
 const macos = builtin.os.tag == .macos;
+const win = builtin.os.tag == .windows;
+const agent = macos or win;
 
 fn refreshTimer(context: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(context.?));
@@ -28,7 +30,7 @@ fn refreshTimer(context: ?*anyopaque) callconv(.c) void {
         if (state.settings_window) |window| @import("titlebar.zig").apply(window);
     }
     var changed = history.pollHistory(state);
-    if (!macos and daemon.updateDaemon(state)) changed = true;
+    if (!agent and daemon.updateDaemon(state)) changed = true;
     const changed_model = model.updateModelStatus(state);
     if (changed_model) changed = true;
     if (changed) state.redraw();
@@ -51,28 +53,39 @@ fn hotkey(context: *anyopaque, action: core.Action) !bool {
     return true;
 }
 
+fn trayTimer(context: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(context.?));
+    tray.pump();
+    if (tray.takeShowRequest()) windows.showMain(state);
+    nui.App.after(50, state, trayTimer);
+}
+
 pub fn run(init: std.process.Init) !void {
+    if (!tray.claim()) return;
     var state = try State.init(init);
     defer state.deinit();
 
     const app = try nui.App.create(init, .{
         .name = "kocr",
-        .quit_on_last_window_closed = !macos,
+        .quit_on_last_window_closed = !agent,
         .ctx = &state,
-        .on_reopen = if (macos) onReopen else null,
+        .on_reopen = if (agent) onReopen else null,
     });
     defer app.destroy();
     state.app = app;
 
-    if (macos) {
-        // A menu bar app: no Dock icon ever, windows or not.
-        _ = nui.objc.msg(nui.objc.BOOL, app.nsapp, "setActivationPolicy:", .{@as(nui.objc.NSInteger, 1)});
+    if (agent) {
+        if (macos) {
+            // A menu bar app: no Dock icon ever, windows or not.
+            _ = nui.objc.msg(nui.objc.BOOL, app.nsapp, "setActivationPolicy:", .{@as(nui.objc.NSInteger, 1)});
+        }
         if (core.config.load(init.gpa, init.io, init.environ_map)) |value| {
             var parsed = value;
             state.show_tray = parsed.value.ui.tray;
             parsed.deinit();
         } else |_| {}
         tray.sync(&state);
+        if (win) nui.App.after(50, &state, trayTimer);
         core.startHotkeys(init.gpa, init.io, init.environ_map, &state, hotkey) catch |err| {
             std.debug.print("kocr: shortcuts unavailable: {s}\n", .{@errorName(err)});
         };

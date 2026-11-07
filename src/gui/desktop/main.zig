@@ -172,7 +172,7 @@ pub fn view(state: *State, c: *ui.Context) void {
     {
         ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
         defer ui.end(c);
-        if (builtin.os.tag != .macos) {
+        if (builtin.os.tag == .linux) {
             if (ui.toggle(c, "Daemon", &state.daemon_running)) daemon.applyDaemon(state);
         }
         ui.spacer(c);

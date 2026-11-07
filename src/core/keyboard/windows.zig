@@ -155,6 +155,41 @@ fn run(state: *Listener) !void {
     }
 }
 
+/// Windows app mode: creates the hidden hotkey window and returns; nanoui's
+/// message loop dispatches WM_HOTKEY to it.
+pub fn startConfigured(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    const bindings = try loadBindings(allocator, io, environ);
+    const state = try allocator.create(Listener);
+    errdefer allocator.destroy(state);
+    state.* = .{
+        .hwnd = undefined,
+        .allocator = allocator,
+        .io = io,
+        .environ = environ,
+        .bindings = bindings,
+        .owned = true,
+        .reload_from_config = true,
+        .context = context,
+        .handler = handler,
+    };
+    state.hwnd = try createWindow();
+    listener = state;
+    try state.registerAll();
+    _ = user32.SetTimer(state.hwnd, 1, 500, null);
+}
+
+/// Picks up shortcut edits from the configuration file.
+pub fn reloadConfigured() void {
+    const state = listener orelse return;
+    reload(state);
+}
+
 pub fn listen(
     allocator: std.mem.Allocator,
     io: std.Io,

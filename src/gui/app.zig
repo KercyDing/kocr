@@ -11,8 +11,8 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     for (args[1..]) |arg| {
         if (std.mem.eql(u8, arg, "--daemon")) {
-            if (builtin.os.tag == .macos) continue;
-            return daemon.run(init);
+            if (builtin.os.tag == .linux) return daemon.run(init);
+            continue;
         }
     }
     try @import("desktop/root.zig").run(init);

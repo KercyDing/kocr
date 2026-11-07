@@ -11,9 +11,10 @@ const model = @import("model.zig");
 const state_mod = @import("state.zig");
 const theme = @import("theme.zig");
 const titlebar = @import("titlebar.zig");
-const tray = @import("tray.zig");
+const tray = @import("../tray/root.zig");
 
 const config = core.config;
+const agent = builtin.os.tag == .macos or builtin.os.tag == .windows;
 
 const ui = nui.ui;
 const kit = nui.kit;
@@ -315,8 +316,8 @@ fn settingsView(state: *State, c: *ui.Context) void {
     ui.text(c, "Shortcuts", .{ .size = 14, .weight = .semibold });
     for (0..state.shortcuts.len) |index| shortcutRow(state, c, index, shortcut_labels[index]);
     ui.spacer(c);
-    _ = ui.checkbox(c, if (builtin.os.tag == .macos) "Launch at login" else "Start daemon at login", &state.autostart);
-    if (builtin.os.tag == .macos) {
+    _ = ui.checkbox(c, if (agent) "Launch at login" else "Start daemon at login", &state.autostart);
+    if (agent) {
         _ = ui.checkbox(c, "Show menu bar icon", &state.show_tray);
     }
 

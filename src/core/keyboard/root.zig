@@ -50,12 +50,13 @@ pub fn startConfigured(
     context: *anyopaque,
     handler: types.Handler,
 ) !void {
-    if (builtin.os.tag == .macos) {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
         return platform.startConfigured(allocator, io, environ, context, handler);
+    } else {
+        return error.UnsupportedPlatform;
     }
-    return error.UnsupportedPlatform;
 }
 
 pub fn reloadConfigured() void {
-    if (builtin.os.tag == .macos) platform.reloadConfigured();
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) platform.reloadConfigured();
 }

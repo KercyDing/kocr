@@ -44,7 +44,7 @@ pub fn set(
         return;
     }
     if (daemon_executable.len == 0) return error.InvalidExecutable;
-    const command = try std.fmt.allocPrint(allocator, "\"{s}\" --daemon", .{daemon_executable});
+    const command = try std.fmt.allocPrint(allocator, "\"{s}\"", .{daemon_executable});
     defer allocator.free(command);
     const utf16 = try std.unicode.utf8ToUtf16LeAllocZ(allocator, command);
     defer allocator.free(utf16);

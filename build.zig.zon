@@ -40,6 +40,11 @@
             .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
             .lazy = true,
         },
+        .perch = .{
+            .url = "git+https://github.com/jinzhongjia/perch?ref=main#ee555d26fc02c855774ed52ecd96e217fba2142c",
+            .hash = "perch-0.0.0-N5IBLmsqBgAIO29sys29n0Lc5q9Y5_YMNntH0LARzOK9",
+            .lazy = true,
+        },
     },
     .paths = .{
         "build.zig",
