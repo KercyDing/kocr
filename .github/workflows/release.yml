@@ -236,7 +236,7 @@ jobs:
 
             Windows: run the setup executable.
 
-            macOS: open the dmg, then drag `kocr.app` to Applications.
+            macOS: open the dmg, then drag `kocr.app` to Applications. It is unsigned: allow it in System Settings → Privacy & Security.
 
             CLI:
 
