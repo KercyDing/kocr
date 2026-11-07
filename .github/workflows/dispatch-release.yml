@@ -1,0 +1,25 @@
+name: Dispatch Release
+
+# A run triggered by a tag has its own cache scope, so each release would
+# rebuild from cold. Dispatch the release from main instead: those caches
+# belong to the default branch, which runs for other tags can restore.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    name: Dispatch release ${{ github.ref_name }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh workflow run release.yml --ref main -f "tag=$TAG"

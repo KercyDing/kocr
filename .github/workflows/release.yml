@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       tag:
@@ -130,18 +127,6 @@ jobs:
         uses: mlugg/setup-zig@v2.2.1
         with:
           version: "0.17.1"
-
-      - name: Cache Zig
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            .zig-cache
-            ~/.cache/zig
-            ~/AppData/Local/zig
-            ~/Library/Caches/zig
-          key: zig-release-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('build.zig', 'build.zig.zon') }}
-          restore-keys: |
-            zig-release-${{ matrix.os }}-${{ matrix.arch }}-
 
       - name: Build
         run: zig build -Doptimize=fast -Dstrip=true
