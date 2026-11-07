@@ -38,8 +38,8 @@ fn actionRow(state: *State, c: *ui.Context) void {
 fn previewPanel(c: *ui.Context, trigger: ui.Interaction, fallback: ui.Size, padding: f32, width: ?f32) ?ui.Div {
     const t = c.theme;
     const tip_key = c.print("history-preview-{x}", .{trigger.id});
-    // Wait briefly before showing, as kit.tooltip does.
-    const rested = ui.motion.number(c, tip_key, if (trigger.hovered and !trigger.pressed) 1 else 0, if (trigger.hovered) .{ .tween = .{ .duration = 0.5, .ease = .linear } } else .instant);
+    // Rest for a second before showing the preview.
+    const rested = ui.motion.number(c, tip_key, if (trigger.hovered and !trigger.pressed) 1 else 0, if (trigger.hovered) .{ .tween = .{ .duration = 1.0, .ease = .linear } } else .instant);
     const anchor = trigger.rect orelse return null;
     const show = trigger.hovered and rested >= 0.999;
     const f = ui.motion.present(c, tip_key, show, .{
