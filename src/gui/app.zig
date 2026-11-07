@@ -7,6 +7,7 @@ const builtin = @import("builtin");
 const daemon = @import("desktop/daemon_linux.zig");
 
 pub fn main(init: std.process.Init) !void {
+    scanEnvironment();
     daemon.initProcess();
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     for (args[1..]) |arg| {
@@ -16,4 +17,13 @@ pub fn main(init: std.process.Init) !void {
         }
     }
     try @import("desktop/root.zig").run(init);
+}
+
+/// std keeps the startup environ's slice for its first stderr write; GTK
+/// unsets variables first, shrinking that array under it and crashing the
+/// log. Scan it here, while it is whole.
+fn scanEnvironment() void {
+    var buffer: [1]u8 = undefined;
+    _ = std.debug.lockStderr(&buffer);
+    std.debug.unlockStderr();
 }
