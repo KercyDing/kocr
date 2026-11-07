@@ -1,6 +1,7 @@
 //! KDE Spectacle region capture. Mirrors kocr-rs's Linux backend.
 
 const std = @import("std");
+const proc = @import("../proc.zig");
 
 pub const Capture = enum {
     saved,
@@ -18,18 +19,19 @@ pub const dependencies = [_][]const u8{ "spectacle", "notify-send" };
 pub fn captureRegion(
     allocator: std.mem.Allocator,
     io: std.Io,
+    environ: *const std.process.Environ.Map,
     output_path: []const u8,
 ) !Capture {
     if (output_path.len == 0) return error.InvalidOutputPath;
 
-    const release_capture = try supportsReleaseCapture(allocator, io);
+    const release_capture = try supportsReleaseCapture(allocator, io, environ);
     var argv: std.ArrayList([]const u8) = .empty;
     defer argv.deinit(allocator);
     try argv.appendSlice(allocator, &.{ "spectacle", "--region", "--background", "--nonotify" });
     if (release_capture) try argv.append(allocator, "--release-capture");
     try argv.appendSlice(allocator, &.{ "--output", output_path });
 
-    const result = std.process.run(allocator, io, .{
+    const result = proc.run(allocator, io, environ, .{
         .argv = argv.items,
         .stdout_limit = .limited(64 << 10),
         .stderr_limit = .limited(64 << 10),
@@ -57,8 +59,12 @@ pub fn captureRegion(
     return .saved;
 }
 
-fn supportsReleaseCapture(allocator: std.mem.Allocator, io: std.Io) !bool {
-    const result = std.process.run(allocator, io, .{
+fn supportsReleaseCapture(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+) !bool {
+    const result = proc.run(allocator, io, environ, .{
         .argv = &.{ "spectacle", "--help" },
         .stdout_limit = .limited(64 << 10),
         .stderr_limit = .limited(64 << 10),

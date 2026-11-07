@@ -1,6 +1,7 @@
 //! macOS clipboard through the system pbcopy and osascript tools.
 
 const std = @import("std");
+const proc = @import("../proc.zig");
 
 pub const ClipboardError = error{
     ClipboardUnavailable,
@@ -13,11 +14,11 @@ const osascript = "/usr/bin/osascript";
 pub fn copyText(
     _: std.mem.Allocator,
     io: std.Io,
-    _: *const std.process.Environ.Map,
+    environ: *const std.process.Environ.Map,
     text: []const u8,
 ) !void {
     if (text.len == 0) return;
-    var child = std.process.spawn(io, .{
+    var child = proc.spawn(io, environ, .{
         .argv = &.{pbcopy},
         .stdin = .pipe,
         .stdout = .ignore,
@@ -41,7 +42,7 @@ pub fn copyText(
 pub fn copyImage(
     allocator: std.mem.Allocator,
     io: std.Io,
-    _: *const std.process.Environ.Map,
+    environ: *const std.process.Environ.Map,
     path: []const u8,
 ) !void {
     var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch
@@ -57,7 +58,7 @@ pub fn copyImage(
     );
     defer allocator.free(script);
 
-    const result = std.process.run(allocator, io, .{
+    const result = proc.run(allocator, io, environ, .{
         .argv = &.{ osascript, "-e", script },
         .stdout_limit = .limited(64 << 10),
         .stderr_limit = .limited(64 << 10),

@@ -131,7 +131,7 @@ fn runAction(daemon: *Daemon, action: core.Action) !void {
     defer daemon.allocator.free(path);
     defer std.Io.Dir.cwd().deleteFile(daemon.io, path) catch {};
 
-    if (try core.captureRegion(daemon.allocator, daemon.io, path) == .cancelled) return;
+    if (try core.captureRegion(daemon.allocator, daemon.io, daemon.environ, path) == .cancelled) return;
 
     switch (action) {
         .copy => {
@@ -183,7 +183,7 @@ fn chooseSavePath(daemon: *Daemon) ![]u8 {
     });
     defer daemon.allocator.free(default);
 
-    const result = std.process.run(daemon.allocator, daemon.io, .{
+    const result = core.proc.run(daemon.allocator, daemon.io, daemon.environ, .{
         .argv = &.{ "kdialog", "--getsavefilename", default, "PNG image (*.png)" },
         .stdout_limit = .limited(4096),
         .stderr_limit = .limited(4096),
@@ -207,7 +207,7 @@ fn linesToText(allocator: std.mem.Allocator, lines: []const core.Line, one_line:
 }
 
 fn notify(daemon: *Daemon, title: []const u8, body: []const u8) void {
-    var child = std.process.spawn(daemon.io, .{
+    var child = core.proc.spawn(daemon.io, daemon.environ, .{
         .argv = &.{ "notify-send", "--app-name", "kocr", title, body },
         .stdin = .ignore,
         .stdout = .ignore,
@@ -352,7 +352,7 @@ fn ensureRunningLinux(
     const log_file: ?std.Io.File = std.Io.Dir.cwd().createFile(io, log_path, .{ .truncate = true }) catch null;
     defer if (log_file) |file| file.close(io);
     const output: std.process.SpawnOptions.StdIo = if (log_file) |file| .{ .file = file } else .ignore;
-    var child = std.process.spawn(io, .{
+    var child = core.proc.spawn(io, environ, .{
         .argv = &.{ "setsid", "-f", executable, "--daemon" },
         .stdin = .ignore,
         .stdout = output,

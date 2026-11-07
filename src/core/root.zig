@@ -33,18 +33,24 @@ pub const Binding = types.Binding;
 pub const Capture = screenshot.Capture;
 pub const Screenshot = screenshot;
 pub const Keyboard = keyboard;
+pub const proc = @import("proc.zig");
 pub const autostart = @import("autostart/root.zig");
 pub const clipboard = @import("clipboard/root.zig");
 
 pub const CaptureError = Screenshot.CaptureError;
 pub const KeyboardError = Keyboard.KeyboardError;
 
+/// `environ` must be the process's `init.environ_map`: a spawn without one
+/// rebuilds the child's environment from the startup `envp`, which a library's
+/// `unsetenv` may have shortened:
+/// https://codeberg.org/ziglang/zig/issues/35512
 pub fn captureRegion(
     allocator: std.mem.Allocator,
     io: std.Io,
+    environ: *const std.process.Environ.Map,
     output_path: []const u8,
 ) !Capture {
-    return Screenshot.captureRegion(allocator, io, output_path);
+    return Screenshot.captureRegion(allocator, io, environ, output_path);
 }
 
 /// Blocks while the platform shortcut listener is active.

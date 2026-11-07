@@ -1,6 +1,7 @@
 //! macOS region capture through the system screencapture tool.
 
 const std = @import("std");
+const proc = @import("../proc.zig");
 
 pub const Capture = enum {
     saved,
@@ -20,6 +21,7 @@ const executable = "/usr/sbin/screencapture";
 pub fn captureRegion(
     allocator: std.mem.Allocator,
     io: std.Io,
+    environ: *const std.process.Environ.Map,
     output_path: []const u8,
 ) !Capture {
     if (output_path.len == 0) return error.InvalidOutputPath;
@@ -27,7 +29,7 @@ pub fn captureRegion(
     // screencapture leaves a stale file behind when the selection is cancelled.
     std.Io.Dir.cwd().deleteFile(io, output_path) catch {};
 
-    const result = std.process.run(allocator, io, .{
+    const result = proc.run(allocator, io, environ, .{
         .argv = &.{ executable, "-i", "-x", output_path },
         .stdout_limit = .limited(64 << 10),
         .stderr_limit = .limited(64 << 10),

@@ -1,4 +1,5 @@
 const std = @import("std");
+const proc = @import("../proc.zig");
 
 pub const ClipboardError = error{
     ClipboardUnavailable,
@@ -33,19 +34,20 @@ fn copy(
 ) !void {
     const wayland = if (environ.get("WAYLAND_DISPLAY")) |value| value.len != 0 else false;
     if (wayland) {
-        if (try copyWith(io, &.{ "wl-copy", "--type", mime }, content)) return;
+        if (try copyWith(io, environ, &.{ "wl-copy", "--type", mime }, content)) return;
     }
-    if (try copyWith(io, &.{ "xclip", "-selection", "clipboard", "-t", mime }, content)) return;
-    if (try copyWith(io, &.{ "xsel", "--clipboard", "--input" }, content)) return;
+    if (try copyWith(io, environ, &.{ "xclip", "-selection", "clipboard", "-t", mime }, content)) return;
+    if (try copyWith(io, environ, &.{ "xsel", "--clipboard", "--input" }, content)) return;
     return ClipboardError.ClipboardUnavailable;
 }
 
 fn copyWith(
     io: std.Io,
+    environ: *const std.process.Environ.Map,
     argv: []const []const u8,
     content: []const u8,
 ) !bool {
-    var child = std.process.spawn(io, .{
+    var child = proc.spawn(io, environ, .{
         .argv = argv,
         .stdin = .pipe,
         .stdout = .ignore,

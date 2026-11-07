@@ -67,7 +67,7 @@ pub fn worker(job: *Job) void {
                 finishError(job, error.InvalidOutputPath);
                 return;
             };
-            const capture = core.captureRegion(job.allocator, job.io, path) catch |err| {
+            const capture = core.captureRegion(job.allocator, job.io, job.environ, path) catch |err| {
                 finishError(job, err);
                 return;
             };

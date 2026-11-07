@@ -409,8 +409,10 @@ fn createOverlay(overlay: *Overlay, bounds: foundation.RECT) !foundation.HWND {
 pub fn captureRegion(
     allocator: std.mem.Allocator,
     io: std.Io,
+    environ: *const std.process.Environ.Map,
     output_path: []const u8,
 ) !Capture {
+    _ = environ;
     if (output_path.len == 0) return CaptureError.InvalidOutputPath;
     if (active) return CaptureError.CaptureFailed;
     active = true;
