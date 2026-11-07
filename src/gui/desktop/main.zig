@@ -67,6 +67,27 @@ fn previewPanel(c: *ui.Context, trigger: ui.Interaction, fallback: ui.Size, padd
     return d.motion(f);
 }
 
+/// Draws a picture filling `box`, trimmed to the box's proportions: history
+/// rows keep one height whatever shape the capture is, without stretching it.
+fn imageCover(c: *ui.Context, key: []const u8, bytes: []const u8, box: ui.Size, radius: f32) bool {
+    const source = ui.imageSize(c, key, bytes) orelse return false;
+    const src_w = @max(source.w, 1);
+    const src_h = @max(source.h, 1);
+    const scale = @max(box.w / src_w, box.h / src_h);
+    const shown_w = box.w / scale;
+    const shown_h = box.h / scale;
+    const l = 0.5 * (1 - shown_w / src_w);
+    const t = 0.5 * (1 - shown_h / src_h);
+    return ui.image(c, .{
+        .key = key,
+        .bytes = bytes,
+        .box = box,
+        .part = .{ l, t, 1 - l, 1 - t },
+        .radius = radius,
+        .scale = 1,
+    });
+}
+
 fn imagePreviewTooltip(c: *ui.Context, trigger: ui.Interaction, key: []const u8, bytes: []const u8) void {
     var d = previewPanel(c, trigger, .{ .w = 368, .h = 248 }, 4, null) orelse return;
     d = d.w(368).h(248);
@@ -138,7 +159,7 @@ fn historyView(state: *State, c: *ui.Context) void {
                 defer content.end();
                 if (row.image) |bytes| {
                     const key = c.print("history-thumb-{s}", .{row.label});
-                    if (!ui.image(c, .{ .key = key, .bytes = bytes, .max_width = 56, .max_height = 48, .scale = 1, .radius = 6 })) {
+                    if (!imageCover(c, key, bytes, .{ .w = 56, .h = 48 }, 6)) {
                         ui.text(c, row.label, .{ .size = 12, .color = t.muted, .truncate = .ellipsis });
                     }
                 } else {
