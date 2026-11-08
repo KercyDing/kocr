@@ -13,6 +13,12 @@ build():
 build-release():
     zig build -Doptimize=fast -Dstrip=true
 
+[help] Run the test suite
+[pass] All tests passed.
+[fail] Tests failed.
+test():
+    zig build test
+
 [help] Package the CLI and GUI
 [desc] Build release and package both the CLI and the GUI for this platform.
 [pass] Packaged the CLI and GUI.
