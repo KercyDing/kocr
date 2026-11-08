@@ -1,9 +1,7 @@
 //! Per-monitor frozen-screen region capture with a layered selection overlay.
 //!
-//! The screen is captured once, then shown in a `WS_EX_LAYERED` window: the
-//! whole frame is blended toward a dark tint, and the drag region toward a
-//! light one. The overlay never repaints the desktop, so dragging cannot
-//! flicker.
+//! The screen is captured once and shown under a light gray veil; the drag
+//! region is restored from the capture.
 
 const std = @import("std");
 
@@ -20,11 +18,9 @@ const class_name = win32.zig.L("kocr-capture-overlay");
 const hint_text = win32.zig.L("Drag to select. Esc or right-click to cancel.");
 const hint_face = win32.zig.L("Segoe UI");
 
-// Blend weights out of 255: the frozen screen is tinted dark, the selection
-// light, so the drag reads as a translucent mask over a frozen screen.
-const blend_alpha: u16 = 64;
-const mask_tint: u8 = 0x20;
-const selection_tint: u8 = 0xd0;
+// Light gray veil; the selection stays clear.
+const blend_alpha: u16 = 96;
+const mask_tint: u8 = 0x80;
 
 var active = false;
 
@@ -140,17 +136,29 @@ fn dragRect(overlay: *const Overlay) ?foundation.RECT {
 fn drawSelection(overlay: *Overlay, rect: foundation.RECT) void {
     const width = overlay.surface.width;
     const pixels = overlay.surface.pixels();
+    const source = overlay.screen.pixels();
     const left = @max(rect.left, 0);
     const top = @max(rect.top, 0);
     const right = @min(rect.right, width);
     const bottom = @min(rect.bottom, overlay.surface.height);
+    if (left >= right or top >= bottom) return;
+    const span: usize = @intCast(right - left);
     var y = top;
     while (y < bottom) : (y += 1) {
-        var x = left;
-        while (x < right) : (x += 1) {
-            const index = @as(usize, @intCast(y)) * @as(usize, @intCast(width)) + @as(usize, @intCast(x));
-            const border = x == left or y == top or x + 1 == right or y + 1 == bottom;
-            pixels[index] = if (border) 0xFFFFFFFF else tinted(pixels[index], selection_tint, blend_alpha);
+        const row = @as(usize, @intCast(y)) * @as(usize, @intCast(width));
+        const start = row + @as(usize, @intCast(left));
+        const end = start + span;
+
+        // Restore the capture so the selection is a hole in the veil. BitBlt
+        // leaves alpha at zero; the layered window needs it opaque.
+        @memcpy(pixels[start..end], source[start..end]);
+        for (pixels[start..end]) |*pixel| pixel.* |= 0xFF000000;
+
+        if (y == top or y + 1 == bottom) {
+            for (pixels[start..end]) |*pixel| pixel.* = 0xFFFFFFFF;
+        } else {
+            pixels[start] = 0xFFFFFFFF;
+            pixels[end - 1] = 0xFFFFFFFF;
         }
     }
 }
@@ -503,4 +511,33 @@ pub fn captureRegion(
     );
     image.save(io, allocator, output_path) catch return CaptureError.CaptureFailed;
     return .saved;
+}
+
+test "selection clears the mask" {
+    const screen_dc = user32.GetDC(null) orelse return error.SkipZigTest;
+    defer _ = user32.ReleaseDC(null, screen_dc);
+
+    var overlay: Overlay = .{
+        .surface = try Surface.create(screen_dc, 8, 8),
+        .screen = try Surface.create(screen_dc, 8, 8),
+        .background = &.{},
+    };
+    defer overlay.surface.deinit();
+    defer overlay.screen.deinit();
+
+    for (overlay.surface.pixels(), 0..) |*pixel, index| pixel.* = 0xFF000000 | @as(u32, @intCast(index));
+    for (overlay.screen.pixels(), 0..) |*pixel, index| pixel.* = 0x00800000 | @as(u32, @intCast(index));
+
+    drawSelection(&overlay, .{ .left = 1, .top = 1, .right = 4, .bottom = 4 });
+
+    const pixels = overlay.surface.pixels();
+    const source = overlay.screen.pixels();
+    try std.testing.expectEqual(@as(u32, 0xFFFFFFFF), pixels[1 * 8 + 1]);
+    try std.testing.expectEqual(@as(u32, 0xFFFFFFFF), pixels[3 * 8 + 3]);
+    try std.testing.expectEqual(source[2 * 8 + 2] | 0xFF000000, pixels[2 * 8 + 2]);
+    try std.testing.expectEqual(@as(u32, 0xFF000000), pixels[0]);
+
+    const interior = pixels[2 * 8 + 2];
+    drawSelection(&overlay, .{ .left = 2, .top = 2, .right = 2, .bottom = 2 });
+    try std.testing.expectEqual(interior, pixels[2 * 8 + 2]);
 }
