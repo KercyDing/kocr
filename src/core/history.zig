@@ -254,24 +254,22 @@ fn timestamp(io: std.Io) i64 {
 test "queries, deletes, and clears history" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
+
     var env = std.process.Environ.Map.init(allocator);
     defer env.deinit();
-
-    const root = try std.fmt.allocPrint(allocator, "/tmp/kocr-history-test-{d}", .{
-        std.Io.Clock.real.now(io).nanoseconds,
-    });
-    defer allocator.free(root);
-    try std.Io.Dir.cwd().createDirPath(io, root);
-    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
-    // macOS resolves data folders from HOME; XDG_DATA_HOME covers Linux.
-    try env.put("HOME", root);
-    try env.put("XDG_DATA_HOME", root);
+    try env.put("KOCR_DATA_HOME", root);
 
     try appendText(io, allocator, &env, "first text");
     try appendText(io, allocator, &env, "second text");
     const source = try std.Io.Dir.path.join(allocator, &.{ root, "capture.png" });
     defer allocator.free(source);
-    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = source, .data = "\x89PNG\r\n\x1a\n" });
+    // Only the copy is under test, so the bytes need not be a decodable image.
+    try tmp.dir.writeFile(io, .{ .sub_path = "capture.png", .data = "\x89PNG\r\n\x1a\n" });
     try appendImage(io, allocator, &env, source);
 
     {

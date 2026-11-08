@@ -18,6 +18,10 @@ pub fn dataRoot(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
+    // KOCR_DATA_HOME overrides the platform folder; Windows ignores the env map.
+    if (environ.get("KOCR_DATA_HOME")) |root| {
+        if (root.len != 0) return allocator.dupe(u8, root);
+    }
     const base = try known_folders.getPath(io, allocator, environ, dataFolder()) orelse
         return error.DataDirUnavailable;
     defer allocator.free(base);
