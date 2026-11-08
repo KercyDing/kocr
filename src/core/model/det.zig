@@ -56,11 +56,17 @@ pub const Det = struct {
         net.setNumThreads(threads);
         try net.loadParamFile(paths.param);
         try net.loadModelFile(paths.bin);
+
+        const input_name = try allocator.dupe(u8, paths.input);
+        errdefer allocator.free(input_name);
+        const output_name = try allocator.dupe(u8, paths.output);
+        errdefer allocator.free(output_name);
+
         return .{
             .allocator = allocator,
-            .net = net,
-            .input_name = try allocator.dupe(u8, paths.input),
-            .output_name = try allocator.dupe(u8, paths.output),
+            .net = net.move(),
+            .input_name = input_name,
+            .output_name = output_name,
         };
     }
 

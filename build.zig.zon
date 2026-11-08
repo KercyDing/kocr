@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.17.1",
     .dependencies = .{
         .ncnn_zig = .{
-            .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.0.1#b88c52bb36b3460061f85d0f04634207f856b1d4",
-            .hash = "ncnn_zig-0.0.1-nXBvajsqAgBsc-PE4eKh8x_ZGALm5tft4LNAZDIiLj4W",
+            .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.1.0#82aa043356959b0a1c8a856a72c6922849c0958a",
+            .hash = "ncnn_zig-0.1.0-nXBvang5AgB2aGb3Wv6AACmDj9dnBEGmT6gON1w7eIsL",
         },
         .nanoui = .{
             .url = "git+https://github.com/KercyDing/nanoui?ref=fix/theme#5f720ca8b70d808d81275de488755eb71ada5c50",
