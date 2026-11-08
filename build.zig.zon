@@ -4,45 +4,52 @@
     .fingerprint = 0x7e330b7749964618,
     .minimum_zig_version = "0.17.1",
     .dependencies = .{
+        // Model
         .ncnn_zig = .{
             .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.1.0#82aa043356959b0a1c8a856a72c6922849c0958a",
             .hash = "ncnn_zig-0.1.0-nXBvang5AgB2aGb3Wv6AACmDj9dnBEGmT6gON1w7eIsL",
         },
-        .nanoui = .{
-            .url = "git+https://github.com/KercyDing/nanoui?ref=fix/theme#5f720ca8b70d808d81275de488755eb71ada5c50",
-            .hash = "nanoui-0.13.0-we0KMVOiMQBUL4_PC_QjsYlBdM2IUq3lFHPUP1aSrZE1",
-        },
+        // Image
         .zignal = .{
             .url = "git+https://github.com/arrufat/zignal#6a14fedfb3249b597883e79adc6ec3d7ffd2cc10",
             .hash = "zignal-0.12.0-dev-OrZ3s82KKgCsPD83scYfJYzqYjS46SeHN_BqCV5vlZhI",
         },
+        // Configuration
         .known_folders = .{
             .url = "git+https://github.com/ziglibs/known-folders.git#c7a8a1974ccf8b5b022ee7f4b13fd734cdd89ae1",
             .hash = "known_folders-0.0.0-Fy-PJiLLAABzqCdF6GWFmE36oCwioOh6Uxj4FF1Neanr",
         },
+        // CLI
         .zommand = .{
             .url = "git+https://github.com/KercyDing/zommand?ref=main#2beb866662ebba77b31e6e9608d61b5f5dbc5890",
             .hash = "zommand-0.0.1-Ph_F7Sy4AADYm5HuWIZJk1jmEe_zveJ48JiiEAKpr9oj",
         },
+        // GUI
+        .nanoui = .{
+            .url = "git+https://github.com/KercyDing/nanoui?ref=fix/theme#5f720ca8b70d808d81275de488755eb71ada5c50",
+            .hash = "nanoui-0.13.0-we0KMVOiMQBUL4_PC_QjsYlBdM2IUq3lFHPUP1aSrZE1",
+        },
+        // Tray (macOS & Windows)
+        .perch = .{
+            .url = "git+https://github.com/KercyDing/perch?ref=fix/windows#b3ace63212e74f2c50753374bbb6700d02020bd3",
+            .hash = "perch-0.0.0-N5IBLpQqBgD1xv360O5lQGWzEUT4CIHtRZaqYgXUrJiW",
+            .lazy = true,
+        },
+        // Sqlite
         .zqlite = .{
             .url = "git+https://github.com/karlseguin/zqlite.zig?ref=master#865223b734a5113f731ab1eb1d7d81c8ac252913",
             .hash = "zqlite-0.0.1-RWLaY4Y8nADz2l5aBE-JVyDyM3sZzHjq0agNykuVZKqQ",
         },
-        // Linux
+        // Linux (D-Bus)
         .goose = .{
             .url = "git+https://github.com/luxluth/goose?ref=master#8b22c35c67cdfc563296fabe4a7e15b5632a0742",
             .hash = "goose-4.0.1-e9MzML9aBAC8cYvi7WGtEXuYk7Fip9gpw0Z437Gb57YF",
             .lazy = true,
         },
-        // Windows
+        // Windows (Win32 API)
         .win32 = .{
             .url = "git+https://github.com/marlersoft/zigwin32?ref=main#fb2645891520f3e99931db17a7eba04057e87e89",
             .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
-            .lazy = true,
-        },
-        .perch = .{
-            .url = "git+https://github.com/KercyDing/perch?ref=fix/windows#b3ace63212e74f2c50753374bbb6700d02020bd3",
-            .hash = "perch-0.0.0-N5IBLpQqBgD1xv360O5lQGWzEUT4CIHtRZaqYgXUrJiW",
             .lazy = true,
         },
     },
