@@ -4,9 +4,9 @@
     .fingerprint = 0x7e330b7749964618,
     .minimum_zig_version = "0.17.1",
     .dependencies = .{
-        .ncnn = .{
-            .url = "git+https://github.com/kercyding/ncnn.zig?ref=main#ab11f6716177f7a7785b57383726c80c44894318",
-            .hash = "ncnn_zig-0.0.1-nXBvajgqAgDSc47mxmqXH_znhms_O_Iuw8aG8Z1FFIvA",
+        .ncnn_zig = .{
+            .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.0.1#b88c52bb36b3460061f85d0f04634207f856b1d4",
+            .hash = "ncnn_zig-0.0.1-nXBvajsqAgBsc-PE4eKh8x_ZGALm5tft4LNAZDIiLj4W",
         },
         .nanoui = .{
             .url = "git+https://github.com/KercyDing/nanoui?ref=fix/theme#5f720ca8b70d808d81275de488755eb71ada5c50",
