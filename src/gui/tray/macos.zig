@@ -3,30 +3,18 @@
 const nui = @import("nanoui");
 
 const state_mod = @import("../desktop/state.zig");
-const windows = @import("../desktop/windows.zig");
+const tray_menu = @import("menu.zig");
 
 const State = state_mod.State;
 const icon_size = 40;
 const template = @embedFile("../icons/kocr-tray.bgra");
-
-fn onOpen(state: *State, _: *nui.menu.Item) void {
-    windows.showMain(state);
-}
-
-fn onQuit(state: *State, _: *nui.menu.Item) void {
-    if (state.app) |app| app.quit();
-}
 
 /// Creates the item once, then only its visibility follows the setting.
 pub fn sync(state: *State) void {
     const app = state.app orelse return;
 
     if (state.tray == null) {
-        const items = [_]nui.MenuItem{
-            .{ .label = "Open kocr", .click = nui.MenuClick.of(state, onOpen) },
-            .{ .is_separator = true },
-            .{ .label = "Quit kocr", .click = nui.MenuClick.of(state, onQuit) },
-        };
+        const items = tray_menu.items(state);
         state.tray = app.newTray(.{
             .symbol = "text.viewfinder",
             .tooltip = "kocr",

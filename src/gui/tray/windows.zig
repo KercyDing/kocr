@@ -1,34 +1,21 @@
 //! The Windows notification area icon (nanoui), and the single-instance handoff.
 
-const nui = @import("nanoui");
 const win32 = @import("win32");
 
 const state_mod = @import("../desktop/state.zig");
-const windows = @import("../desktop/windows.zig");
+const tray_menu = @import("menu.zig");
 
 const State = state_mod.State;
 const foundation = win32.foundation;
 const kernel32 = win32.kernel32;
 const threading = win32.system.threading;
 
-fn onOpen(state: *State, _: *nui.menu.Item) void {
-    windows.showMain(state);
-}
-
-fn onQuit(state: *State, _: *nui.menu.Item) void {
-    if (state.app) |app| app.quit();
-}
-
 /// The menu is the whole entry, as on the Mac: any click opens it.
 pub fn sync(state: *State) void {
     const app = state.app orelse return;
     if (state.show_tray) {
         if (state.tray == null) {
-            const items = [_]nui.MenuItem{
-                .{ .label = "Open kocr", .click = nui.MenuClick.of(state, onOpen) },
-                .{ .is_separator = true },
-                .{ .label = "Quit kocr", .click = nui.MenuClick.of(state, onQuit) },
-            };
+            const items = tray_menu.items(state);
             // The icon is the executable's own resource (icons/kocr.rc).
             state.tray = app.newTray(.{
                 .tooltip = "kocr",
@@ -39,15 +26,6 @@ pub fn sync(state: *State) void {
         tray.destroy();
         state.tray = null;
     }
-}
-
-/// nanoui runs the tray's window itself; nothing to poll.
-pub fn pump() void {}
-
-/// A second launch asks this copy to show its window.
-pub fn takeShowRequest() bool {
-    const event = Win.show_event orelse return false;
-    return kernel32.WaitForSingleObject(event, 0) == foundation.WAIT_OBJECT_0;
 }
 
 pub fn claim() bool {
@@ -64,6 +42,15 @@ pub fn claim() bool {
     }
     Win.show_event = event;
     return true;
+}
+
+/// nanoui runs the tray's window itself; nothing to poll.
+pub fn pump() void {}
+
+/// A second launch asks this copy to show its window.
+pub fn takeShowRequest() bool {
+    const event = Win.show_event orelse return false;
+    return kernel32.WaitForSingleObject(event, 0) == foundation.WAIT_OBJECT_0;
 }
 
 const Win = struct {
