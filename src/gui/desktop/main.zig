@@ -80,7 +80,7 @@ fn imageCover(c: *ui.Context, key: []const u8, bytes: []const u8, box: ui.Size, 
     const t = 0.5 * (1 - shown_h / src_h);
     return ui.image(c, .{
         .key = key,
-        .bytes = bytes,
+        .source = .{ .encoded = bytes },
         .box = box,
         .part = .{ l, t, 1 - l, 1 - t },
         .radius = radius,
@@ -94,7 +94,7 @@ fn imagePreviewTooltip(c: *ui.Context, trigger: ui.Interaction, key: []const u8,
     defer d.end();
     const inner = ui.div(c).wFull().hFull().itemsCenter().justifyCenter();
     defer inner.end();
-    _ = ui.image(c, .{ .key = key, .bytes = bytes, .max_width = 360, .max_height = 240, .radius = 6, .scale = 1 });
+    _ = ui.image(c, .{ .key = key, .source = .{ .encoded = bytes }, .max_width = 360, .max_height = 240, .radius = 6, .scale = 1 });
 }
 
 fn textPreviewTooltip(c: *ui.Context, trigger: ui.Interaction, text: []const u8) void {

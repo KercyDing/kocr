@@ -26,8 +26,8 @@
         },
         // GUI
         .nanoui = .{
-            .url = "git+https://github.com/KercyDing/nanoui?ref=fix/theme#5f720ca8b70d808d81275de488755eb71ada5c50",
-            .hash = "nanoui-0.13.0-we0KMVOiMQBUL4_PC_QjsYlBdM2IUq3lFHPUP1aSrZE1",
+            .url = "git+https://github.com/justrach/nanoui?ref=v0.14.0#7b3227295d37982306eee7b87b3e1fbbb76b3970",
+            .hash = "nanoui-0.14.0-we0KMVwFOwDGZlfnq2LthniS08HthaiFaP6vL3Asa5sw",
         },
         // Tray (macOS & Windows)
         .perch = .{
