@@ -9,26 +9,28 @@ const state_mod = @import("state.zig");
 const State = state_mod.State;
 const Row = state_mod.Row;
 
+/// Pictures are kept this large for the list: the window draws 56×48 rows and
+/// a 368-wide preview from them, so a screenful each would be waste.
+const preview_side = 512;
+
 var stamp_buffer: [32]u8 = undefined;
 
+/// Rebuilds records and rows; a row whose picture is already loaded keeps it.
 pub fn loadHistory(state: *State) void {
     var selected_id: ?i64 = null;
     if (state.selected) |index| {
         if (index < state.records.len) selected_id = state.records[index].id;
     }
-    state.freeHistory();
-    state.records = core.history.recent(state.io, state.allocator, state.environ, 200) catch |err| {
+    const records = core.history.recent(state.io, state.allocator, state.environ, core.history.kept) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setMainStatus(std.fmt.bufPrint(&buffer, "History error: {s}", .{@errorName(err)}) catch "History error");
         return;
     };
-    if (state.records.len == 0) {
-        state.setMainStatus("No history yet");
+    const rows = state.allocator.alloc(Row, records.len) catch {
+        core.history.freeRecords(state.allocator, records);
         return;
-    }
-    state.rows = state.allocator.alloc(Row, state.records.len) catch &.{};
-    for (state.records, 0..) |record, index| {
-        if (index >= state.rows.len) break;
+    };
+    for (records, 0..) |record, index| {
         var stamp_scratch: [64]u8 = undefined;
         const stamp = std.fmt.bufPrint(&stamp_scratch, "{s}", .{formatTime(record.created_at)}) catch "";
         var image: ?[]u8 = null;
@@ -42,18 +44,30 @@ pub fn loadHistory(state: *State) void {
             },
             .image => |path| {
                 label = state.allocator.dupe(u8, path) catch &.{};
-                image = std.Io.Dir.cwd().readFileAlloc(state.io, path, state.allocator, .limited(64 << 20)) catch null;
+                image = takePicture(state, path) orelse
+                    core.previewPng(state.io, state.allocator, path, preview_side) catch null;
             },
         }
-        state.rows[index] = .{
+        rows[index] = .{
             .time = state.allocator.dupe(u8, stamp) catch &.{},
             .label = label,
             .detail = detail,
             .image = image,
         };
     }
+
+    state.freeHistory();
+    state.records = records;
+    state.rows = rows;
+    // The poll compares this: reading the history again for a write it can
+    // already see would read every picture twice.
+    state.history_revision = core.history.revision(state.io, state.allocator, state.environ) catch null;
+    if (records.len == 0) {
+        state.setMainStatus("No history yet");
+        return;
+    }
     if (selected_id) |id| {
-        for (state.records, 0..) |record, index| {
+        for (records, 0..) |record, index| {
             if (record.id == id) {
                 state.selected = index;
                 break;
@@ -62,10 +76,21 @@ pub fn loadHistory(state: *State) void {
     }
 }
 
+/// The picture a previous row holds for `path`, handed over to the new one.
+fn takePicture(state: *State, path: []const u8) ?[]u8 {
+    for (state.rows) |*row| {
+        const bytes = row.image orelse continue;
+        if (!std.mem.eql(u8, row.label, path)) continue;
+        row.image = null;
+        return bytes;
+    }
+    return null;
+}
+
 pub fn pollHistory(state: *State) bool {
     const revision = core.history.revision(state.io, state.allocator, state.environ) catch return false;
     if (state.history_revision) |current| {
-        if (current.count == revision.count and current.max_id == revision.max_id) return false;
+        if (current == revision) return false;
     }
     state.history_revision = revision;
     loadHistory(state);

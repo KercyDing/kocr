@@ -95,6 +95,23 @@ pub fn freeLines(allocator: std.mem.Allocator, lines: []Line) void {
     ocr.freeLines(allocator, lines);
 }
 
+/// A picture's bytes for a list: PNG, scaled to fit `max_side`, so a window can
+/// keep many of them instead of a screenful each. The caller frees it.
+pub fn previewPng(io: std.Io, allocator: std.mem.Allocator, path: []const u8, max_side: u32) ![]u8 {
+    var image: Image = try .load(io, allocator, path);
+    defer image.deinit(allocator);
+    const longest = @max(image.rows, image.cols);
+    if (longest <= max_side) return zignal.png.encode(zignal.Rgb(u8), io, allocator, image, .{});
+
+    const scale = @as(f32, @floatFromInt(max_side)) / @as(f32, @floatFromInt(longest));
+    const rows: u32 = @max(1, @as(u32, @intFromFloat(@round(@as(f32, @floatFromInt(image.rows)) * scale))));
+    const cols: u32 = @max(1, @as(u32, @intFromFloat(@round(@as(f32, @floatFromInt(image.cols)) * scale))));
+    var small: Image = try .init(allocator, rows, cols);
+    defer small.deinit(allocator);
+    image.resize(io, allocator, small, .bilinear);
+    return zignal.png.encode(zignal.Rgb(u8), io, allocator, small, .{});
+}
+
 /// Joins recognized lines with spaces (`one_line`) or newlines.
 pub fn linesToText(allocator: std.mem.Allocator, lines: []const Line, one_line: bool) ![]u8 {
     var text: std.ArrayList(u8) = .empty;

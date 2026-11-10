@@ -26,6 +26,7 @@ pub const detectFile = library.detectFile;
 pub const recognizeLine = library.recognizeLine;
 pub const freeLines = library.freeLines;
 pub const linesToText = library.linesToText;
+pub const previewPng = library.previewPng;
 
 pub const Action = types.Action;
 pub const Binding = types.Binding;

@@ -24,16 +24,17 @@ pub const Record = struct {
 };
 
 pub const Query = struct {
-    limit: usize = 200,
+    limit: usize = kept,
     before_id: ?i64 = null,
     kind: ?Kind = null,
     search: ?[]const u8 = null,
 };
 
-pub const Revision = struct {
-    count: i64,
-    max_id: i64,
-};
+/// A stamp that changes with every write, this process's or another's.
+pub const Revision = i64;
+
+/// Rows the history keeps; older ones are pruned with their pictures.
+pub const kept: usize = 200;
 
 pub fn historyPath(
     io: std.Io,
@@ -62,11 +63,45 @@ pub fn revision(
 ) !Revision {
     var conn = try open(io, allocator, environ);
     defer conn.close();
-    if (try conn.row("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM captures", .{})) |row| {
+    return writes(conn);
+}
+
+/// The database header's `user_version`, which every write bumps: one read
+/// whatever the history holds, and it sees deletes too, not just new rows.
+fn writes(conn: zqlite.Conn) !Revision {
+    const row = try conn.row("PRAGMA user_version", .{}) orelse return 0;
+    defer row.deinit();
+    return row.int(0);
+}
+
+/// Marks the history as written, so `revision` reports the change.
+fn bump(conn: zqlite.Conn) !void {
+    var buffer: [48]u8 = undefined;
+    const sql = try std.fmt.bufPrint(&buffer, "PRAGMA user_version = {d}", .{try writes(conn) + 1});
+    try conn.exec(sql, .{});
+}
+
+/// Drops all but the newest `kept` rows, and the pictures of the ones dropped.
+fn prune(conn: zqlite.Conn, io: std.Io, allocator: std.mem.Allocator) !void {
+    const oldest_kept = blk: {
+        const row = try conn.row("SELECT id FROM captures ORDER BY id DESC LIMIT 1 OFFSET ?1", .{@as(i64, kept)}) orelse return;
         defer row.deinit();
-        return .{ .count = row.int(0), .max_id = row.int(1) };
+        break :blk row.int(0);
+    };
+    var pictures: std.ArrayList([]u8) = .empty;
+    defer {
+        for (pictures.items) |path| allocator.free(path);
+        pictures.deinit(allocator);
     }
-    return .{ .count = 0, .max_id = 0 };
+    var rows = try conn.rows("SELECT image_path FROM captures WHERE id <= ?1 AND image_path IS NOT NULL", .{oldest_kept});
+    defer rows.deinit();
+    while (rows.next()) |row| {
+        const path = row.nullableText(0) orelse continue;
+        try pictures.append(allocator, try allocator.dupe(u8, path));
+    }
+    if (rows.err) |err| return err;
+    try conn.exec("DELETE FROM captures WHERE id <= ?1", .{oldest_kept});
+    for (pictures.items) |path| std.Io.Dir.cwd().deleteFile(io, path) catch {};
 }
 
 pub fn appendText(
@@ -82,6 +117,8 @@ pub fn appendText(
         "INSERT INTO captures (created_at, kind, text) VALUES (?1, 'text', ?2)",
         .{ timestamp(io), text },
     );
+    try prune(conn, io, allocator);
+    try bump(conn);
 }
 
 /// Copies an absolute source path into the history image directory.
@@ -111,6 +148,8 @@ pub fn appendImage(
         "INSERT INTO captures (created_at, kind, image_path) VALUES (?1, 'image', ?2)",
         .{ timestamp(io), destination },
     );
+    try prune(conn, io, allocator);
+    try bump(conn);
 }
 
 pub fn recent(
@@ -194,6 +233,7 @@ pub fn delete(
         }
     }
     try conn.exec("DELETE FROM captures WHERE id = ?1", .{id});
+    try bump(conn);
 }
 
 pub fn clear(
@@ -204,6 +244,7 @@ pub fn clear(
     var conn = try open(io, allocator, environ);
     defer conn.close();
     try conn.execNoArgs("DELETE FROM captures");
+    try bump(conn);
     const directory = try imagesDir(io, allocator, environ);
     defer allocator.free(directory);
     std.Io.Dir.cwd().deleteTree(io, directory) catch {};
@@ -229,9 +270,25 @@ fn open(
     const path_z = try allocator.dupeSentinel(u8, path, 0);
     defer allocator.free(path_z);
 
+    // Every call opens the file, a poll once a second; the schema and the
+    // journal mode only ever have to be made once, for a new database.
+    const known = blk: {
+        const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| switch (err) {
+            error.FileNotFound => break :blk false,
+            else => return err,
+        };
+        file.close(io);
+        break :blk true;
+    };
+
     var conn = try zqlite.open(path_z, zqlite.OpenFlags.Create | zqlite.OpenFlags.EXResCode);
     errdefer conn.close();
     try conn.busyTimeout(2000);
+    if (!known) try migrate(conn);
+    return conn;
+}
+
+fn migrate(conn: zqlite.Conn) !void {
     try conn.execNoArgs(
         \\PRAGMA journal_mode = WAL;
         \\CREATE TABLE IF NOT EXISTS captures (
@@ -243,12 +300,40 @@ fn open(
         \\);
         \\CREATE INDEX IF NOT EXISTS captures_kind_id ON captures(kind, id DESC);
     );
-    return conn;
 }
 
 fn timestamp(io: std.Io) i64 {
     const now = std.Io.Clock.real.now(io);
     return @intCast(@divTrunc(now.nanoseconds, 1_000_000_000));
+}
+
+test "keeps the newest rows and reports every write" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
+
+    var env = std.process.Environ.Map.init(allocator);
+    defer env.deinit();
+    try env.put("KOCR_DATA_HOME", root);
+
+    const start = try revision(io, allocator, &env);
+    var index: usize = 0;
+    while (index < kept + 5) : (index += 1) try appendText(io, allocator, &env, "text");
+
+    const records = try recent(io, allocator, &env, kept + 10);
+    defer freeRecords(allocator, records);
+    try std.testing.expectEqual(kept, records.len);
+
+    const appended = try revision(io, allocator, &env);
+    try std.testing.expect(appended > start);
+
+    // An old row going away moves the stamp too: a count of rows would not.
+    try delete(io, allocator, &env, records[kept - 1].id);
+    try std.testing.expect((try revision(io, allocator, &env)) > appended);
 }
 
 test "queries, deletes, and clears history" {
