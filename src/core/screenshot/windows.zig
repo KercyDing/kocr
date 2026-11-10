@@ -1,7 +1,9 @@
-//! Per-monitor frozen-screen region capture with a layered selection overlay.
+//! Per-monitor region capture with a layered selection overlay.
 //!
-//! The screen is captured once and shown under a light gray veil; the drag
-//! region is restored from the capture.
+//! The screen stays live under a light gray veil, and the drag region is a
+//! hole in it. The screen is read only when the drag ends: freezing it earlier
+//! would freeze whatever the desktop is still animating, a closing menu above
+//! all, into the selection.
 
 const std = @import("std");
 
@@ -18,9 +20,12 @@ const class_name = win32.zig.L("kocr-capture-overlay");
 const hint_text = win32.zig.L("Drag to select. Esc or right-click to cancel.");
 const hint_face = win32.zig.L("Segoe UI");
 
-// Light gray veil; the selection stays clear.
-const blend_alpha: u16 = 96;
-const mask_tint: u8 = 0x80;
+// The veil: gray at 38%, premultiplied as a layered window takes it. The
+// selection is a hole one alpha step from nothing, since a fully transparent
+// pixel would be click-through and a drag must start anywhere.
+const veil: u32 = 0x60303030;
+const clear: u32 = 0x01000000;
+const border: u32 = 0xFFFFFFFF;
 
 var active = false;
 
@@ -88,8 +93,6 @@ const Surface = struct {
 
 const Overlay = struct {
     surface: Surface,
-    screen: Surface,
-    background: []u32,
     start: ?foundation.POINT = null,
     current: foundation.POINT = .{ .x = 0, .y = 0 },
     selection: ?foundation.RECT = null,
@@ -102,18 +105,6 @@ fn combine(comptime T: type, values: anytype) T {
     var bits: u32 = 0;
     inline for (values) |value| bits |= @as(u32, @bitCast(value));
     return @bitCast(bits);
-}
-
-fn mix(channel: u8, tint: u8, alpha: u16) u8 {
-    return @intCast((@as(u16, channel) * (255 - alpha) + @as(u16, tint) * alpha) / 255);
-}
-
-/// Blends one BGRA pixel toward `tint`, keeping it opaque.
-fn tinted(pixel: u32, tint: u8, alpha: u16) u32 {
-    const blue = mix(@truncate(pixel & 0xFF), tint, alpha);
-    const green = mix(@truncate((pixel >> 8) & 0xFF), tint, alpha);
-    const red = mix(@truncate((pixel >> 16) & 0xFF), tint, alpha);
-    return 0xFF000000 | (@as(u32, red) << 16) | (@as(u32, green) << 8) | blue;
 }
 
 fn clampPoint(overlay: *const Overlay, point: foundation.POINT) foundation.POINT {
@@ -133,10 +124,14 @@ fn dragRect(overlay: *const Overlay) ?foundation.RECT {
     };
 }
 
+fn fillVeil(overlay: *Overlay) void {
+    @memset(overlay.surface.pixels(), veil);
+}
+
+/// Punches the drag region out of the veil, so the live screen shows through.
 fn drawSelection(overlay: *Overlay, rect: foundation.RECT) void {
     const width = overlay.surface.width;
     const pixels = overlay.surface.pixels();
-    const source = overlay.screen.pixels();
     const left = @max(rect.left, 0);
     const top = @max(rect.top, 0);
     const right = @min(rect.right, width);
@@ -149,16 +144,12 @@ fn drawSelection(overlay: *Overlay, rect: foundation.RECT) void {
         const start = row + @as(usize, @intCast(left));
         const end = start + span;
 
-        // Restore the capture so the selection is a hole in the veil. BitBlt
-        // leaves alpha at zero; the layered window needs it opaque.
-        @memcpy(pixels[start..end], source[start..end]);
-        for (pixels[start..end]) |*pixel| pixel.* |= 0xFF000000;
-
+        @memset(pixels[start..end], clear);
         if (y == top or y + 1 == bottom) {
-            for (pixels[start..end]) |*pixel| pixel.* = 0xFFFFFFFF;
+            @memset(pixels[start..end], border);
         } else {
-            pixels[start] = 0xFFFFFFFF;
-            pixels[end - 1] = 0xFFFFFFFF;
+            pixels[start] = border;
+            pixels[end - 1] = border;
         }
     }
 }
@@ -270,20 +261,12 @@ fn updateLayered(hwnd: foundation.HWND, surface: *const Surface) void {
 }
 
 fn refresh(hwnd: foundation.HWND, overlay: *Overlay) void {
-    const pixels = overlay.surface.pixels();
-    @memcpy(pixels, overlay.background);
+    fillVeil(overlay);
     if (dragRect(overlay)) |rect| drawSelection(overlay, rect);
     var dpi = user32.GetDpiForWindow(hwnd);
     if (dpi == 0) dpi = 96;
     drawHint(overlay, dpi);
     updateLayered(hwnd, &overlay.surface);
-}
-
-fn freeze(overlay: *Overlay) void {
-    const source = overlay.screen.pixels();
-    for (source, overlay.background) |pixel, *out| {
-        out.* = tinted(pixel, mask_tint, blend_alpha);
-    }
 }
 
 fn overlayFrom(hwnd: foundation.HWND) ?*Overlay {
@@ -293,9 +276,9 @@ fn overlayFrom(hwnd: foundation.HWND) ?*Overlay {
     return @ptrCast(@alignCast(pointer));
 }
 
-fn dismiss(hwnd: foundation.HWND, cancelled: bool) void {
+fn cancel(hwnd: foundation.HWND) void {
     const overlay = overlayFrom(hwnd) orelse return;
-    overlay.cancelled = cancelled;
+    overlay.cancelled = true;
     _ = user32.ReleaseCapture();
     _ = user32.DestroyWindow(hwnd);
 }
@@ -312,13 +295,6 @@ fn overlayProc(hwnd: foundation.HWND, message: u32, wparam: usize, lparam: isize
     const overlay = overlayFrom(hwnd) orelse return user32.DefWindowProcW(hwnd, message, wparam, lparam);
 
     switch (message) {
-        // Layered windows are hit-tested per pixel; keep the whole surface
-        // interactive so a drag can start anywhere.
-        wm.WM_NCHITTEST => return @intCast(wm.HTCLIENT),
-        wm.WM_SETCURSOR => {
-            _ = user32.SetCursor(user32.LoadCursorW(null, wm.IDC_CROSS));
-            return 1;
-        },
         wm.WM_LBUTTONDOWN => {
             const point = clampPoint(overlay, win32.zig.pointFromLparam(lparam));
             overlay.start = point;
@@ -328,7 +304,6 @@ fn overlayProc(hwnd: foundation.HWND, message: u32, wparam: usize, lparam: isize
             return 0;
         },
         wm.WM_MOUSEMOVE => {
-            _ = user32.SetCursor(user32.LoadCursorW(null, wm.IDC_CROSS));
             if (overlay.start != null) {
                 const point = clampPoint(overlay, win32.zig.pointFromLparam(lparam));
                 if (!std.meta.eql(point, overlay.current)) {
@@ -341,7 +316,6 @@ fn overlayProc(hwnd: foundation.HWND, message: u32, wparam: usize, lparam: isize
         wm.WM_LBUTTONUP => {
             if (overlay.start) |start| {
                 const point = clampPoint(overlay, win32.zig.pointFromLparam(lparam));
-                overlay.start = null;
                 overlay.selection = .{
                     .left = @min(start.x, point.x),
                     .top = @min(start.y, point.y),
@@ -354,12 +328,12 @@ fn overlayProc(hwnd: foundation.HWND, message: u32, wparam: usize, lparam: isize
             return 0;
         },
         wm.WM_RBUTTONDOWN, wm.WM_CLOSE => {
-            dismiss(hwnd, true);
+            cancel(hwnd);
             return 0;
         },
         wm.WM_KEYDOWN => {
             if (wparam == @backingInt(win32.ui.input.keyboard_and_mouse.VIRTUAL_KEY.ESCAPE)) {
-                dismiss(hwnd, true);
+                cancel(hwnd);
                 return 0;
             }
             return user32.DefWindowProcW(hwnd, message, wparam, lparam);
@@ -449,21 +423,11 @@ pub fn captureRegion(
 
     var overlay: Overlay = .{
         .surface = try Surface.create(screen_dc, width, height),
-        .screen = undefined,
-        .background = undefined,
     };
     defer overlay.surface.deinit();
-    overlay.screen = try Surface.create(screen_dc, width, height);
-    defer overlay.screen.deinit();
-    overlay.background = try allocator.alloc(u32, @as(usize, @intCast(width)) * @as(usize, @intCast(height)));
-    defer allocator.free(overlay.background);
     defer {
         if (overlay.font) |font| _ = gdi32.DeleteObject(font);
     }
-
-    overlay.screen.copyFromScreen(screen_dc, bounds.left, bounds.top);
-    freeze(&overlay);
-    @memcpy(overlay.surface.pixels(), overlay.background);
 
     const hwnd = try createOverlay(&overlay, bounds);
     defer _ = user32.DestroyWindow(hwnd);
@@ -486,22 +450,24 @@ pub fn captureRegion(
     const selection_height: usize = @intCast(rect.bottom - rect.top);
     if (selection_width == 0 or selection_height == 0) return .cancelled;
 
+    // The overlay is gone, but the composed frame that still has it may be the
+    // one on screen: wait for the next one so the veil is not in the selection.
+    _ = win32.dwmapi.DwmFlush();
+
+    var selection = try Surface.create(screen_dc, @intCast(selection_width), @intCast(selection_height));
+    defer selection.deinit();
+    selection.copyFromScreen(screen_dc, rect.left, rect.top);
+
     const pixels = try allocator.alloc(zignal.Rgb(u8), selection_width * selection_height);
     defer allocator.free(pixels);
 
-    const screen_pixels = overlay.screen.pixels();
-    const image_width: usize = @intCast(overlay.screen.width);
-    for (0..selection_height) |row| {
-        for (0..selection_width) |column| {
-            const source_index = (@as(usize, @intCast(rect.top)) + row) * image_width +
-                @as(usize, @intCast(rect.left)) + column;
-            const pixel = screen_pixels[source_index];
-            pixels[row * selection_width + column] = .{
-                .r = @truncate((pixel >> 16) & 0xFF),
-                .g = @truncate((pixel >> 8) & 0xFF),
-                .b = @truncate(pixel & 0xFF),
-            };
-        }
+    const source = selection.pixels();
+    for (source, 0..) |pixel, index| {
+        pixels[index] = .{
+            .r = @truncate((pixel >> 16) & 0xFF),
+            .g = @truncate((pixel >> 8) & 0xFF),
+            .b = @truncate(pixel & 0xFF),
+        };
     }
 
     const image = zignal.Image(zignal.Rgb(u8)).initFromSlice(
@@ -513,31 +479,24 @@ pub fn captureRegion(
     return .saved;
 }
 
-test "selection clears the mask" {
+test "the selection is a hole in the veil" {
     const screen_dc = user32.GetDC(null) orelse return error.SkipZigTest;
     defer _ = user32.ReleaseDC(null, screen_dc);
 
-    var overlay: Overlay = .{
-        .surface = try Surface.create(screen_dc, 8, 8),
-        .screen = try Surface.create(screen_dc, 8, 8),
-        .background = &.{},
-    };
+    var overlay: Overlay = .{ .surface = try Surface.create(screen_dc, 8, 8) };
     defer overlay.surface.deinit();
-    defer overlay.screen.deinit();
 
-    for (overlay.surface.pixels(), 0..) |*pixel, index| pixel.* = 0xFF000000 | @as(u32, @intCast(index));
-    for (overlay.screen.pixels(), 0..) |*pixel, index| pixel.* = 0x00800000 | @as(u32, @intCast(index));
-
+    fillVeil(&overlay);
     drawSelection(&overlay, .{ .left = 1, .top = 1, .right = 4, .bottom = 4 });
 
     const pixels = overlay.surface.pixels();
-    const source = overlay.screen.pixels();
-    try std.testing.expectEqual(@as(u32, 0xFFFFFFFF), pixels[1 * 8 + 1]);
-    try std.testing.expectEqual(@as(u32, 0xFFFFFFFF), pixels[3 * 8 + 3]);
-    try std.testing.expectEqual(source[2 * 8 + 2] | 0xFF000000, pixels[2 * 8 + 2]);
-    try std.testing.expectEqual(@as(u32, 0xFF000000), pixels[0]);
+    try std.testing.expectEqual(veil, pixels[0]);
+    try std.testing.expectEqual(clear, pixels[2 * 8 + 2]);
+    try std.testing.expectEqual(border, pixels[2 * 8 + 1]);
+    try std.testing.expectEqual(border, pixels[1 * 8 + 1]);
+    try std.testing.expectEqual(border, pixels[3 * 8 + 2]);
 
-    const interior = pixels[2 * 8 + 2];
+    // A drag of no size leaves the veil alone.
     drawSelection(&overlay, .{ .left = 2, .top = 2, .right = 2, .bottom = 2 });
-    try std.testing.expectEqual(interior, pixels[2 * 8 + 2]);
+    try std.testing.expectEqual(clear, pixels[2 * 8 + 2]);
 }
