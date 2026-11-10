@@ -1,8 +1,6 @@
-//! The Windows notification area icon (perch), and the single-instance handoff.
+//! The Windows notification area icon (nanoui), and the single-instance handoff.
 
-const std = @import("std");
-
-const perch = @import("perch");
+const nui = @import("nanoui");
 const win32 = @import("win32");
 
 const state_mod = @import("../desktop/state.zig");
@@ -13,75 +11,38 @@ const foundation = win32.foundation;
 const kernel32 = win32.kernel32;
 const threading = win32.system.threading;
 
-const icon: perch.Icon = .{ .bytes = @embedFile("../icons/kocr.ico") };
-
-const Win = struct {
-    var tray: ?*perch.Tray = null;
-    var menu: perch.Menu = undefined;
-    var menu_ready: bool = false;
-    var open_id: perch.MenuItem.Id = 0;
-    var quit_id: perch.MenuItem.Id = 0;
-    var show_event: ?foundation.HANDLE = null;
-};
-
-fn onActivate(context: ?*anyopaque, _: *perch.Tray, id: perch.MenuItem.Id) void {
-    const state: *State = @ptrCast(@alignCast(context.?));
-    if (id == Win.open_id) {
-        windows.showMain(state);
-    } else if (id == Win.quit_id) {
-        if (state.app) |app| app.quit();
-    }
+fn onOpen(state: *State, _: *nui.menu.Item) void {
+    windows.showMain(state);
 }
 
-fn onClick(context: ?*anyopaque, _: *perch.Tray, event: perch.ClickEvent) void {
-    switch (event.button) {
-        .left => {
-            const state: *State = @ptrCast(@alignCast(context.?));
-            windows.showMain(state);
-        },
-        // Right clicks open the menu; perch pops it after this callback returns,
-        // so popping it here too would show it twice. Middle clicks are unused.
-        .right, .middle => {},
-    }
+fn onQuit(state: *State, _: *nui.menu.Item) void {
+    if (state.app) |app| app.quit();
 }
 
-fn create(state: *State) void {
-    Win.menu = perch.Menu.init(state.allocator);
-    Win.menu_ready = true;
-    Win.open_id = Win.menu.addItem("Open kocr") catch return;
-    Win.menu.addSeparator() catch return;
-    Win.quit_id = Win.menu.addItem("Quit kocr") catch return;
-    Win.tray = perch.Tray.create(state.allocator, .{
-        .io = state.io,
-        .app_id = "io.github.KercyDing.kocr",
-        .tooltip = "kocr",
-        .icon = icon,
-        .menu = &Win.menu,
-        .left_click = .activate,
-        .handler = .{ .ctx = state, .on_activate = onActivate, .on_click = onClick },
-    }) catch null;
-}
-
-fn destroy() void {
-    if (Win.tray) |tray| tray.destroy();
-    Win.tray = null;
-    if (Win.menu_ready) {
-        Win.menu.deinit();
-        Win.menu_ready = false;
-    }
-}
-
+/// The menu is the whole entry, as on the Mac: any click opens it.
 pub fn sync(state: *State) void {
+    const app = state.app orelse return;
     if (state.show_tray) {
-        if (Win.tray == null) create(state);
-    } else {
-        destroy();
+        if (state.tray == null) {
+            const items = [_]nui.MenuItem{
+                .{ .label = "Open kocr", .click = nui.MenuClick.of(state, onOpen) },
+                .{ .is_separator = true },
+                .{ .label = "Quit kocr", .click = nui.MenuClick.of(state, onQuit) },
+            };
+            // The icon is the executable's own resource (icons/kocr.rc).
+            state.tray = app.newTray(.{
+                .tooltip = "kocr",
+                .menu = &items,
+            }) catch null;
+        }
+    } else if (state.tray) |tray| {
+        tray.destroy();
+        state.tray = null;
     }
 }
 
-pub fn pump() void {
-    if (Win.tray) |tray| tray.pump() catch {};
-}
+/// nanoui runs the tray's window itself; nothing to poll.
+pub fn pump() void {}
 
 /// A second launch asks this copy to show its window.
 pub fn takeShowRequest() bool {
@@ -90,7 +51,6 @@ pub fn takeShowRequest() bool {
 }
 
 pub fn claim() bool {
-    perch.awareDpi();
     const name = win32.zig.L("Local\\kocr-show-window");
     const event = kernel32.CreateEventW(null, 0, 0, name);
     if (event == null) return true;
@@ -105,3 +65,7 @@ pub fn claim() bool {
     Win.show_event = event;
     return true;
 }
+
+const Win = struct {
+    var show_event: ?foundation.HANDLE = null;
+};

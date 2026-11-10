@@ -53,14 +53,6 @@ pub fn build(b: *std.Build) !void {
     else
         null;
 
-    const perch = if (target.result.os.tag == .windows)
-        try b.dependencyLazy("perch", .{
-            .target = target,
-            .optimize = optimize,
-        })
-    else
-        null;
-
     const core_mod = b.addModule("core", .{
         .root_source_file = b.path("src/core/root.zig"),
         .target = target,
@@ -154,7 +146,6 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "core", .module = core_mod },
             .{ .name = "nanoui", .module = nanoui.module("nanoui") },
             .{ .name = "win32", .module = win32.?.module("win32") },
-            .{ .name = "perch", .module = perch.?.module("perch") },
         } else &.{
             .{ .name = "core", .module = core_mod },
             .{ .name = "nanoui", .module = nanoui.module("nanoui") },
