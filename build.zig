@@ -152,6 +152,11 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    // The About window shows it; build.zig.zon keeps the one copy.
+    const gui_options = b.addOptions();
+    gui_options.addOption([]const u8, "version", @import("build.zig.zon").version);
+    gui_mod.addOptions("build_options", gui_options);
+
     const gui = b.addExecutable(.{
         .name = "kocr-gui",
         .root_module = gui_mod,

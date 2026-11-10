@@ -58,7 +58,7 @@ On Arch, `paru -S kocr-bin` installs the CLI alone.
 zig build run-gui
 ```
 
-Four actions, one click each:
+Four actions, from the tray menu or a shortcut (the window is history and settings):
 
 | Action | What it does |
 | --- | --- |
@@ -67,9 +67,9 @@ Four actions, one click each:
 | Extract text | capture, recognize, copy the text |
 | One line | same, with the text joined into a single line |
 
-History keeps every text and capture; hover an image row for a preview. Settings covers the model, shortcuts, login autostart, and the tray icon.
+History keeps every text and capture; hover an image row for a preview. Settings covers the model, shortcuts, the theme, login autostart, and the tray icon. The theme is `auto` (follow the system), `light`, or `dark`.
 
-Shortcuts are served by `kocr-gui --daemon`, so closing the window does not cost you the hotkeys.
+On Linux the shortcuts come from `kocr-gui --daemon`, which the app starts with its window: closing the window does not cost you the hotkeys. The window keeps the settings, the about box, and the history.
 
 ## CLI
 

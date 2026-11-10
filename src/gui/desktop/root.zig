@@ -22,7 +22,6 @@ const agent = macos or win;
 fn refreshTimer(context: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(context.?));
     var changed = history.pollHistory(state);
-    if (!agent and daemon.updateDaemon(state)) changed = true;
     const changed_model = model.updateModelStatus(state);
     if (changed_model) changed = true;
     if (changed) state.redraw();
@@ -66,24 +65,28 @@ pub fn run(init: std.process.Init) !void {
     defer app.destroy();
     state.app = app;
 
+    if (core.config.load(init.gpa, init.io, init.environ_map)) |value| {
+        var parsed = value;
+        state.show_tray = parsed.value.ui.tray;
+        state.theme = parsed.value.ui.theme;
+        parsed.deinit();
+    } else |_| {}
+
     if (agent) {
         if (macos) {
             // A menu bar app: no Dock icon ever, windows or not.
             _ = nui.objc.msg(nui.objc.BOOL, app.nsapp, "setActivationPolicy:", .{@as(nui.objc.NSInteger, 1)});
         }
-        if (core.config.load(init.gpa, init.io, init.environ_map)) |value| {
-            var parsed = value;
-            state.show_tray = parsed.value.ui.tray;
-            parsed.deinit();
-        } else |_| {}
         tray.sync(&state);
         if (win) nui.App.after(50, &state, trayTimer);
         core.startHotkeys(init.gpa, init.io, init.environ_map, &state, hotkey) catch |err| {
             std.debug.print("kocr: shortcuts unavailable: {s}\n", .{@errorName(err)});
         };
     } else {
+        // No tray and no toggle: the daemon that serves the shortcuts comes up
+        // with the window, quietly.
+        daemon.startInBackground(&state);
         windows.showMain(&state);
-        _ = daemon.updateDaemon(&state);
     }
 
     model.loadSelection(&state);

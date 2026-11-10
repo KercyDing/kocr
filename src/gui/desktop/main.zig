@@ -1,39 +1,22 @@
-//! Main window: daemon header, capture actions, and history.
+//! Main window: the history and settings tabs.
 
 const std = @import("std");
-const builtin = @import("builtin");
 
 const nui = @import("nanoui");
 
-const daemon = @import("daemon_linux.zig");
+const confirm = @import("confirm.zig");
 const history = @import("history.zig");
-const jobs = @import("jobs.zig");
 const settings = @import("settings.zig");
 const state_mod = @import("state.zig");
 
 const ui = nui.ui;
 const kit = nui.kit;
 const State = state_mod.State;
-const JobKind = jobs.JobKind;
 
-fn actionRow(state: *State, c: *ui.Context) void {
-    const busy = state.job != null;
-    {
-        ui.row(c, .{ .width = .fill, .gap = 8 });
-        defer ui.end(c);
-        const actions = [_]struct { label: []const u8, kind: JobKind }{
-            .{ .label = "Copy image", .kind = .copy_image },
-            .{ .label = "Save image", .kind = .save_image },
-            .{ .label = "Extract text", .kind = .extract },
-            .{ .label = "One line", .kind = .extract_oneline },
-        };
-        for (actions) |action| {
-            if (kit.button(c, action.label, .{ .full_width = true, .disabled = busy }).clicked) {
-                jobs.startCapture(state, action.kind);
-            }
-        }
-    }
-}
+/// The rows' buttons sit a scroll padding (6) and a row padding (10) in from
+/// the panel's edge; the toolbar keeps the same inset, so the trash lands over
+/// the rows' own buttons.
+const row_inset: f32 = 16;
 
 fn previewPanel(c: *ui.Context, trigger: ui.Interaction, fallback: ui.Size, padding: f32, width: ?f32) ?ui.Div {
     const t = c.theme;
@@ -167,8 +150,8 @@ fn historyView(state: *State, c: *ui.Context) void {
                 }
             }
 
-            if (kit.button(c, "Copy", .{ .size = .sm, .disabled = busy }).clicked) copy_index = index;
-            if (kit.button(c, "Delete", .{ .size = .sm, .disabled = busy }).clicked) delete_index = index;
+            if (kit.iconButton(c, "doc.on.doc", .{ .variant = .default, .size = .sm, .tooltip = "Copy", .disabled = busy }).clicked) copy_index = index;
+            if (kit.iconButton(c, "xmark", .{ .variant = .default, .size = .sm, .tooltip = "Delete", .disabled = busy }).clicked) delete_index = index;
         }
         if (interaction.hovered) {
             if (row.image) |bytes| {
@@ -184,30 +167,33 @@ fn historyView(state: *State, c: *ui.Context) void {
 }
 
 pub fn view(state: *State, c: *ui.Context) void {
+    c.theme_chosen = state.themeChoice();
     const t = c.theme;
     const idle = state.job == null;
     ui.column(c, .{ .width = .fill, .height = .fill, .padding = .all(16), .gap = 12, .background = t.background });
     defer ui.end(c);
 
-    // Header
     {
-        ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
+        ui.row(c, .{ .width = .fill, .gap = 16, .align_items = .center, .padding = .{ .right = row_inset } });
         defer ui.end(c);
-        if (builtin.os.tag == .linux) {
-            if (ui.toggle(c, "Daemon", &state.daemon_running)) daemon.applyDaemon(state);
+        var titles = [_][]const u8{ "History", "Settings" };
+        var selected: usize = @backingInt(state.tab);
+        if (kit.tabs(c, &titles, &selected, .{ .variant = .segmented })) {
+            state.tab = @fromBackingInt(@intCast(selected));
+            state.confirm_clear = false;
+            if (state.tab == .settings) settings.load(state);
+            c.changed = true;
         }
         ui.spacer(c);
-        if (kit.button(c, "Settings", .{}).clicked) settings.openSettings(state);
+        if (state.tab == .history) {
+            const idle_clear = state.rows.len != 0 and idle;
+            if (confirm.button(c, &state.confirm_clear, "clear-all", "Clear all", "Click again to clear", !idle_clear)) {
+                history.clearHistory(state);
+            }
+        }
     }
-
-    actionRow(state, c);
-
-    {
-        ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center, .padding = .{ .top = 8 } });
-        defer ui.end(c);
-        ui.text(c, "History", .{ .size = 14, .weight = .semibold });
-        ui.spacer(c);
-        if (kit.button(c, "Clear all", .{ .size = .sm, .disabled = state.rows.len == 0 or !idle }).clicked) history.clearHistory(state);
+    switch (state.tab) {
+        .history => historyView(state, c),
+        .settings => settings.page(state, c),
     }
-    historyView(state, c);
 }

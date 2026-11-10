@@ -1,4 +1,4 @@
-//! State shared by the main and settings windows.
+//! State shared by the main window, its tabs, and the about box.
 
 const std = @import("std");
 
@@ -8,6 +8,8 @@ const nui = @import("nanoui");
 const jobs = @import("jobs.zig");
 
 const Job = jobs.Job;
+
+pub const Tab = enum { history, settings };
 
 pub const Row = struct {
     time: []u8,
@@ -21,21 +23,26 @@ pub const State = struct {
     io: std.Io,
     environ: *const std.process.Environ.Map,
     main_window: ?*nui.Window = null,
-    settings_window: ?*nui.Window = null,
     app: ?*nui.App = null,
-    daemon_running: bool = false,
+    about_window: ?*nui.Window = null,
+    tab: Tab = .history,
     profile_index: usize = 0,
     installed: bool = false,
     job: ?*Job = null,
     selected: ?usize = null,
     autostart: bool = false,
     show_tray: bool = true,
+    theme: core.config.Theme = .auto,
     tray: ?*nui.Tray = null,
     main_status: []u8,
     settings_status: []u8,
     records: []core.history.Record = &.{},
     rows: []Row = &.{},
     history_revision: ?core.history.Revision = null,
+    /// "Clear all" was clicked once: the next click on it clears the history.
+    confirm_clear: bool = false,
+    /// The same for removing the model in the settings tab.
+    confirm_remove: bool = false,
     shortcuts: [4]?[]u8 = .{ null, null, null, null },
 
     pub fn init(process_init: std.process.Init) !State {
@@ -95,6 +102,14 @@ pub const State = struct {
 
     pub fn redraw(self: *State) void {
         if (self.main_window) |window| window.redraw();
-        if (self.settings_window) |window| window.redraw();
+    }
+
+    /// The window theme the setting asks for; null follows the system.
+    pub fn themeChoice(self: State) ?nui.ui.Theme {
+        return switch (self.theme) {
+            .auto => null,
+            .light => nui.ui.Theme.light,
+            .dark => nui.ui.Theme.dark_theme,
+        };
     }
 };

@@ -4,6 +4,9 @@ const std = @import("std");
 
 const known_folders = @import("known_folders");
 
+/// The window colors; `auto` follows the system.
+pub const Theme = enum { auto, light, dark };
+
 pub const Config = struct {
     models: Models = .{},
     shortcuts: Shortcuts = .{},
@@ -11,6 +14,7 @@ pub const Config = struct {
 
     pub const Ui = struct {
         tray: bool = true,
+        theme: Theme = .auto,
     };
 
     pub const Models = struct {

@@ -296,37 +296,6 @@ pub fn release(
     std.Io.Dir.cwd().deleteFile(io, path) catch {};
 }
 
-pub fn stop(
-    io: std.Io,
-    allocator: std.mem.Allocator,
-    environ: *const std.process.Environ.Map,
-) !void {
-    if (builtin.os.tag == .linux) return stopLinux(io, allocator, environ);
-}
-
-fn stopLinux(
-    io: std.Io,
-    allocator: std.mem.Allocator,
-    environ: *const std.process.Environ.Map,
-) !void {
-    const path = try pidPath(io, allocator, environ);
-    defer allocator.free(path);
-    const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(64)) catch |err| switch (err) {
-        error.FileNotFound => return,
-        else => return err,
-    };
-    defer allocator.free(content);
-    const pid = std.fmt.parseInt(i32, std.mem.trim(u8, content, " \t\r\n"), 10) catch {
-        std.Io.Dir.cwd().deleteFile(io, path) catch {};
-        return;
-    };
-    std.posix.kill(pid, .TERM) catch |err| switch (err) {
-        error.ProcessNotFound => {},
-        else => return err,
-    };
-    std.Io.Dir.cwd().deleteFile(io, path) catch {};
-}
-
 /// Starts the current executable in daemon mode if the pid file is not live.
 pub fn ensureRunning(
     io: std.Io,
@@ -379,45 +348,14 @@ fn pidPath(
 
 pub fn initProcess() void {}
 
-pub fn updateDaemon(state: *State) bool {
-    if (builtin.os.tag == .linux) return updateDaemonLinux(state);
-    return false;
+/// Starts it without holding the first frame: the window shows now, shortcuts
+/// are served a moment later. "Already running" is the usual answer.
+pub fn startInBackground(state: *State) void {
+    if (builtin.os.tag != .linux) return;
+    const thread = std.Thread.spawn(.{}, startThread, .{state}) catch return;
+    thread.detach();
 }
 
-fn updateDaemonLinux(state: *State) bool {
-    const running = isRunningLinux(state.io, state.allocator, state.environ) catch false;
-    if (running == state.daemon_running) return false;
-    state.daemon_running = running;
-    return true;
-}
-
-pub fn applyDaemon(state: *State) void {
-    if (builtin.os.tag == .linux) applyDaemonLinux(state);
-}
-
-fn applyDaemonLinux(state: *State) void {
-    if (state.daemon_running) {
-        const started = blk: {
-            ensureRunningLinux(state.io, state.allocator, state.environ) catch |err| switch (err) {
-                error.AlreadyRunning => break :blk false,
-                else => {
-                    var buffer: [256]u8 = undefined;
-                    state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon start failed: {s}", .{@errorName(err)}) catch "Daemon start failed");
-                    _ = updateDaemonLinux(state);
-                    return;
-                },
-            };
-            break :blk true;
-        };
-        state.setMainStatus(if (started) "Daemon started" else "Daemon already running");
-    } else {
-        stopLinux(state.io, state.allocator, state.environ) catch |err| {
-            var buffer: [256]u8 = undefined;
-            state.setMainStatus(std.fmt.bufPrint(&buffer, "Daemon stop failed: {s}", .{@errorName(err)}) catch "Daemon stop failed");
-            _ = updateDaemonLinux(state);
-            return;
-        };
-        state.setMainStatus("Daemon stopped");
-    }
-    _ = updateDaemonLinux(state);
+fn startThread(state: *State) void {
+    ensureRunningLinux(state.io, state.allocator, state.environ) catch {};
 }

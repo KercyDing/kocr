@@ -1,4 +1,4 @@
-//! Settings window: model, shortcuts, autostart, and saving.
+//! The settings tab: model, shortcuts, autostart, and saving.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -8,9 +8,10 @@ const nui = @import("nanoui");
 
 const jobs = @import("jobs.zig");
 const model = @import("model.zig");
+const about = @import("about.zig");
+const confirm = @import("confirm.zig");
 const state_mod = @import("state.zig");
 const tray = @import("../tray/root.zig");
-const windows = @import("windows.zig");
 
 const config = core.config;
 const agent = builtin.os.tag == .macos or builtin.os.tag == .windows;
@@ -21,7 +22,15 @@ const State = state_mod.State;
 
 const shortcut_labels = [4][]const u8{ "Copy image", "Save image", "Extract text", "One line" };
 
-fn loadSettings(state: *State) void {
+const section_title: ui.TextStyle = .{ .size = 14, .weight = .semibold };
+
+/// A titled group: its title and its content a gap apart.
+fn section(c: *ui.Context) void {
+    ui.column(c, .{ .width = .fill, .gap = 8 });
+}
+
+/// Fills the tab from the config and the model folder, when it is opened.
+pub fn load(state: *State) void {
     var parsed = config.load(state.allocator, state.io, state.environ) catch return;
     defer parsed.deinit();
     const values = [_]?[]const u8{
@@ -35,6 +44,7 @@ fn loadSettings(state: *State) void {
         state.shortcuts[index] = if (value) |text| state.allocator.dupe(u8, text) catch null else null;
     }
     state.show_tray = parsed.value.ui.tray;
+    state.theme = parsed.value.ui.theme;
     state.autostart = core.autostart.enabled(state.io, state.allocator, state.environ) catch false;
 }
 
@@ -50,6 +60,7 @@ fn persistSettings(state: *State, apply_autostart: bool, apply_tray: bool) void 
     parsed.value.shortcuts.ocr = state.shortcuts[2];
     parsed.value.shortcuts.oneline = state.shortcuts[3];
     parsed.value.ui.tray = state.show_tray;
+    parsed.value.ui.theme = state.theme;
     config.save(state.allocator, state.io, state.environ, parsed.value) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setSettingsStatus(std.fmt.bufPrint(&buffer, "Could not save config: {s}", .{@errorName(err)}) catch "Could not save config");
@@ -254,64 +265,82 @@ fn installProgress(state: *State, c: *ui.Context) void {
     kit.progress(c, value, .{ .width = .fill, .height = 6 });
 }
 
-fn settingsClosed(context: *anyopaque, window: *nui.Window) void {
-    _ = window;
-    const state: *State = @ptrCast(@alignCast(context));
-    state.settings_window = null;
-}
-
-pub fn openSettings(state: *State) void {
-    if (state.settings_window) |window| {
-        window.focus();
-        return;
-    }
-    const app = state.app orelse return;
-    loadSettings(state);
-    const window = app.newWindow(.{
-        .title = "kocr settings",
-        .width = 560,
-        .height = 620,
-        .min_width = 480,
-        .min_height = 520,
-        .icon = windows.windowIcon(),
-        .content = .{ .view = .init(state, settingsView) },
-        .on_close = .{ .ctx = state, .func = settingsClosed },
-    }) catch return;
-    state.settings_window = window;
-}
-
-fn settingsView(state: *State, c: *ui.Context) void {
+pub fn page(state: *State, c: *ui.Context) void {
     const t = c.theme;
-    ui.column(c, .{ .width = .fill, .height = .fill, .padding = .all(16), .gap = 12, .background = t.background });
+    ui.column(c, .{ .width = .fill, .grow = 1, .gap = 10 });
     defer ui.end(c);
+    {
+        // One gap between sections; a title sits one smaller gap above its own.
+        ui.scroll(c, .{ .width = .fill, .grow = 1, .gap = 20 });
+        defer ui.end(c);
 
-    ui.text(c, "Model", .{ .size = 14, .weight = .semibold });
+        {
+            section(c);
+            defer ui.end(c);
+            ui.text(c, "Model", section_title);
+            {
+                ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
+                defer ui.end(c);
+                var index = state.profile_index;
+                if (kit.tabs(c, &model.profiles, &index, .{ .variant = .segmented })) {
+                    state.profile_index = index;
+                    state.confirm_remove = false;
+                    _ = model.updateModelStatus(state);
+                    model.saveSelection(state);
+                    state.redraw();
+                }
+                if (state.installed) {
+                    if (confirm.button(c, &state.confirm_remove, "model-remove", "Remove model", "Click again to remove", state.job != null)) {
+                        jobs.startModel(state, .remove);
+                    }
+                } else {
+                    if (kit.iconButton(c, "plus", .{ .variant = .ghost, .size = .sm, .tooltip = "Install model", .disabled = state.job != null }).clicked) {
+                        jobs.startModel(state, .install);
+                    }
+                }
+            }
+            installProgress(state, c);
+        }
+
+        {
+            section(c);
+            defer ui.end(c);
+            ui.text(c, "Shortcuts", section_title);
+            for (0..state.shortcuts.len) |index| shortcutRow(state, c, index, shortcut_labels[index]);
+        }
+
+        {
+            section(c);
+            defer ui.end(c);
+            ui.text(c, "Theme", section_title);
+            const names = [_][]const u8{ "Auto", "Light", "Dark" };
+            var index: usize = @backingInt(state.theme);
+            if (kit.tabs(c, &names, &index, .{ .variant = .segmented })) {
+                state.theme = @fromBackingInt(@intCast(index));
+                persistSettings(state, false, false);
+                state.redraw();
+            }
+        }
+
+        {
+            // The toggles belong together, and have no title of their own.
+            section(c);
+            defer ui.end(c);
+            if (ui.checkbox(c, if (agent) "Launch at login" else "Start daemon at login", &state.autostart)) {
+                persistSettings(state, true, false);
+            }
+            if (agent) {
+                if (ui.checkbox(c, "Show menu bar icon", &state.show_tray)) persistSettings(state, false, true);
+            }
+        }
+    }
+
     {
         ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
         defer ui.end(c);
-        var index = state.profile_index;
-        if (ui.segmented(c, &model.profiles, &index)) {
-            state.profile_index = index;
-            _ = model.updateModelStatus(state);
-            model.saveSelection(state);
-            state.redraw();
-        }
-        if (state.installed) {
-            if (kit.button(c, "Remove", .{ .variant = .ghost, .disabled = state.job != null }).clicked) jobs.startModel(state, .remove);
-        } else {
-            if (kit.button(c, "Install", .{ .disabled = state.job != null }).clicked) jobs.startModel(state, .install);
-        }
-    }
-    installProgress(state, c);
-    ui.div(c).wFull().h(20).end();
-
-    ui.text(c, "Shortcuts", .{ .size = 14, .weight = .semibold });
-    for (0..state.shortcuts.len) |index| shortcutRow(state, c, index, shortcut_labels[index]);
-    ui.spacer(c);
-    if (ui.checkbox(c, if (agent) "Launch at login" else "Start daemon at login", &state.autostart)) {
-        persistSettings(state, true, false);
-    }
-    if (agent) {
-        if (ui.checkbox(c, "Show menu bar icon", &state.show_tray)) persistSettings(state, false, true);
+        const status = ui.div(c).grow();
+        ui.text(c, state.settings_status, .{ .size = 12, .color = t.muted, .truncate = .ellipsis });
+        status.end();
+        if (kit.button(c, "About kocr", .{ .variant = .ghost, .size = .sm }).clicked) about.openAbout(state);
     }
 }
