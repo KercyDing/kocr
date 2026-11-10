@@ -1,6 +1,7 @@
 //! Main window: the history and settings tabs.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 const nui = @import("nanoui");
 
@@ -170,7 +171,13 @@ pub fn view(state: *State, c: *ui.Context) void {
     c.theme_chosen = state.themeChoice();
     const t = c.theme;
     const idle = state.job == null;
-    ui.column(c, .{ .width = .fill, .height = .fill, .padding = .all(16), .gap = 12, .background = t.background });
+    // Under the hidden title bar the content owns the top edge: 44 leaves room
+    // for the traffic lights, and the empty band drags the window.
+    const padding: ui.Edges = if (comptime builtin.os.tag == .macos)
+        .{ .top = 44, .left = 16, .right = 16, .bottom = 16 }
+    else
+        .all(16);
+    ui.column(c, .{ .width = .fill, .height = .fill, .padding = padding, .gap = 12, .background = t.background });
     defer ui.end(c);
 
     {

@@ -48,6 +48,9 @@ pub fn showMain(state: *State) void {
         .min_width = 640,
         .min_height = 520,
         .icon = windowIcon(),
+        // macOS: content runs under a transparent title bar, the view leaving
+        // room for the traffic lights. Elsewhere the system's bar stays.
+        .title_bar = if (comptime builtin.os.tag == .macos) .hidden else .default,
         .content = .{ .view = .init(state, main.view) },
         .on_close = .{ .ctx = state, .func = mainClosed },
     }) catch return;
