@@ -26,8 +26,8 @@
         },
         // GUI
         .nanoui = .{
-            .url = "git+https://github.com/justrach/nanoui?ref=v0.14.1#8168b777985b37779fc0e333e1291138aa9bc882",
-            .hash = "nanoui-0.14.1-we0KMY_6PAD3bI7Txflz4lAApWxrZ8u_SihdfmO302IL",
+            .url = "git+https://github.com/KercyDing/nanoui?ref=d3d11-shader-cache#5046c46642fc8ac07c82a004eb8e1a98b22a6101",
+            .hash = "nanoui-0.14.2-we0KMZw3PQCyUXE6WFZC5Rl9JwZi5FQ2kjJbkvHSRtIb",
         },
         // Sqlite
         .zqlite = .{
