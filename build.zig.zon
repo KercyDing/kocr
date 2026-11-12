@@ -46,12 +46,17 @@
             .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
             .lazy = true,
         },
+        .bundle = .{
+            .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.1#7156f9c0f5c56fc14d30e4d12c6ce6d2a4195047",
+            .hash = "zig_bundle-0.1.1-Ni_yYaGCFwAkm0QMi4Qfzqk1tqU6yxgEyKpdHvIRQoDp",
+        },
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
         "images",
+        "packaging",
         "cli.zon",
         "LICENSE",
         "README.md",

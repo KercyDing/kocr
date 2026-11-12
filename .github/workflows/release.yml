@@ -132,57 +132,52 @@ jobs:
       - name: Build
         run: zig build -Doptimize=fast -Dstrip=true
 
-      - name: Package CLI (Linux)
+      - name: Bundle
+        run: zig build bundle -Doptimize=fast -Dstrip=true
+
+      - name: Zip macOS app
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate.outputs.version }}"
+          arch="${{ matrix.arch }}"
+          mkdir -p zig-out/bundle/macos
+          ditto -c -k --norsrc --noextattr --keepParent zig-out/bundle/app/kocr.app \
+            "zig-out/bundle/macos/kocr-${version}-macos-${arch}.app.zip"
+          rm -rf zig-out/bundle/app
+
+      - name: Checksums (Linux)
         if: runner.os == 'Linux'
-        run: packaging/linux/package-cli.sh "${{ matrix.arch }}"
+        run: |
+          set -euo pipefail
+          find zig-out/bundle -type f ! -name '*.sha256' -print0 | while IFS= read -r -d '' file; do
+            sha256sum "$file" > "$file.sha256"
+          done
 
-      - name: Package GUI (Linux)
-        if: runner.os == 'Linux'
-        run: packaging/linux/package.sh "${{ matrix.arch }}"
+      - name: Checksums (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          find zig-out/bundle -type f ! -name '*.sha256' -print0 | while IFS= read -r -d '' file; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
 
-      - name: Install Inno Setup
-        if: runner.os == 'Windows'
-        run: choco install innosetup --no-progress -y
-
-      - name: Package CLI (Windows)
+      - name: Checksums (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        env:
-          VERSION: ${{ needs.validate.outputs.version }}
-          ARCH: ${{ matrix.arch }}
-        run: packaging/windows/package-cli.ps1 -Version $env:VERSION -Arch $env:ARCH
+        run: |
+          Get-ChildItem zig-out\bundle -Recurse -File |
+            Where-Object { $_.Extension -ne '.sha256' } |
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)" | Set-Content "$($_.FullName).sha256"
+            }
 
-      - name: Package GUI (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.validate.outputs.version }}
-          ARCH: ${{ matrix.arch }}
-        run: packaging/windows/package.ps1 -Version $env:VERSION -Arch $env:ARCH
-
-      - name: Package CLI (macOS)
-        if: runner.os == 'macOS'
-        run: packaging/macos/package-cli.sh "${{ matrix.arch }}"
-
-      - name: Package GUI (macOS)
-        if: runner.os == 'macOS'
-        run: packaging/macos/package.sh "${{ matrix.arch }}"
-
-      - name: Upload CLI assets
+      - name: Upload assets
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: release-cli-${{ matrix.os }}-${{ matrix.arch }}
-          path: zig-out/bundle/${{ matrix.os }}/*-cli-*
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload GUI assets
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: release-gui-${{ matrix.os }}-${{ matrix.arch }}
-          path: |
-            zig-out/bundle/${{ matrix.os }}/*
-            !zig-out/bundle/${{ matrix.os }}/*-cli-*
+          name: release-${{ matrix.os }}-${{ matrix.arch }}
+          path: zig-out/bundle/**
           if-no-files-found: error
           retention-days: 7
 
@@ -212,20 +207,14 @@ jobs:
 
             | Platform | GUI | CLI |
             | --- | --- | --- |
-            | Linux x86_64 | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-linux-amd64.tar.gz) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-linux-amd64.tar.gz) |
-            | Linux ARM64 | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-linux-arm64.tar.gz) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-linux-arm64.tar.gz) |
-            | Windows x86_64 | [setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-windows-x86_64-setup.exe) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-windows-x86_64.zip) |
-            | Windows ARM64 | [setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-windows-arm64-setup.exe) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-windows-arm64.zip) |
-            | macOS x86_64 | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-macos-x86_64.dmg) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-macos-x86_64.tar.gz) |
-            | macOS ARM64 | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-macos-arm64.dmg) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-macos-arm64.tar.gz) |
+            | Linux x86_64 | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr_${{ needs.validate.outputs.version }}_amd64.deb) · [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-1.x86_64.rpm) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-x86_64-linux.tar.gz) |
+            | Linux ARM64 | [deb](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr_${{ needs.validate.outputs.version }}_arm64.deb) · [rpm](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-1.aarch64.rpm) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-aarch64-linux.tar.gz) |
+            | Windows x86_64 | [setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr_${{ needs.validate.outputs.version }}_x86_64-setup.exe) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-x86_64-windows.zip) |
+            | Windows ARM64 | [setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr_${{ needs.validate.outputs.version }}_aarch64-setup.exe) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-aarch64-windows.zip) |
+            | macOS x86_64 | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr_${{ needs.validate.outputs.version }}_x86_64.dmg) · [app.zip](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-macos-x86_64.app.zip) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-x86_64-macos.tar.gz) |
+            | macOS ARM64 | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr_${{ needs.validate.outputs.version }}_aarch64.dmg) · [app.zip](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-${{ needs.validate.outputs.version }}-macos-arm64.app.zip) | [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ needs.validate.outputs.tag }}/kocr-cli-${{ needs.validate.outputs.version }}-aarch64-macos.tar.gz) |
 
-            GUI on Linux:
-
-            ```sh
-            tar -xzf kocr-${{ needs.validate.outputs.version }}-linux-amd64.tar.gz
-            cd kocr-${{ needs.validate.outputs.version }}
-            ./setup.sh
-            ```
+            GUI on Linux: install the `.deb` or `.rpm` package.
 
             Windows: run the setup executable.
 
@@ -234,8 +223,8 @@ jobs:
             CLI:
 
             ```sh
-            tar -xzf kocr-cli-${{ needs.validate.outputs.version }}-linux-amd64.tar.gz
-            install -Dm755 kocr-cli-${{ needs.validate.outputs.version }}/bin/kocr ~/.local/bin/kocr
+            tar -xzf kocr-cli-${{ needs.validate.outputs.version }}-x86_64-linux.tar.gz
+            install -Dm755 kocr ~/.local/bin/kocr
             ```
 
             Windows: extract the zip and put `kocr.exe` on your `PATH`.
@@ -244,7 +233,7 @@ jobs:
 
             Arch Linux: the AUR package consumes the Linux GUI and CLI tarballs.
           files: |
-            artifacts/*
+            artifacts/**/*
 
       - name: Publish the AUR packages
         env:

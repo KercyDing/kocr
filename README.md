@@ -24,17 +24,7 @@ Everything is on [Releases](https://github.com/KercyDing/kocr/releases).
 
 **Linux**
 
-```sh
-tar -xzf kocr-<version>-linux-amd64.tar.gz
-cd kocr-<version>
-./setup.sh
-```
-
-On Arch:
-
-```sh
-paru -S kocr-gui-bin
-```
+Install the `.deb` or `.rpm` package for your distribution.
 
 **Linux capture is KDE-only.** It shells out to `spectacle --region`, so GNOME and other desktops are not supported for capturing yet (recognition and the CLI are desktop-independent).
 
@@ -46,9 +36,9 @@ paru -S kocr-gui-bin
 
 The CLI on its own, for automation:
 
-- Linux: `kocr-cli-<version>-linux-<arch>.tar.gz`
-- macOS: `kocr-cli-<version>-macos-<arch>.tar.gz`
-- Windows: `kocr-cli-<version>-windows-<arch>.zip`
+- Linux: `kocr-cli-<version>-<arch>-linux.tar.gz`
+- macOS: `kocr-cli-<version>-<arch>-macos.tar.gz`
+- Windows: `kocr-cli-<version>-<arch>-windows.zip`
 
 On Arch, `paru -S kocr-bin` installs the CLI alone.
 
@@ -96,6 +86,7 @@ zig build            # both
 zig build gui        # GUI
 zig build cli        # CLI
 zig build test       # tests
+zig build bundle     # package the release artifacts
 zig build run-cli -- image images/1.png
 ```
 

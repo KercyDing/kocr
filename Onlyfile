@@ -127,18 +127,16 @@ group cli {
     [pass] Packaged the macOS CLI.
     [fail] Packaging failed.
     package() ? @os("macos") & build-release:
-        | arch="$(uname -m)"
-        | bash packaging/macos/package-cli.sh "$arch"
-        | ls -lh zig-out/bundle/macos/*.tar.gz zig-out/bundle/macos/*.sha256
+        | zig build bundle-cli -Doptimize=fast -Dstrip=true
+        | find zig-out/bundle -type f | sort
 
     [help] Package the CLI as a Linux tarball
     [desc] Build release and package kocr into zig-out/bundle/linux.
     [pass] Packaged the Linux CLI.
     [fail] Packaging failed.
     package() ? @os("linux") & build-release:
-        | arch="$(uname -m)"
-        | bash packaging/linux/package-cli.sh "$arch"
-        | ls -lh zig-out/bundle/linux/*.tar.gz zig-out/bundle/linux/*.sha256
+        | zig build bundle-cli -Doptimize=fast -Dstrip=true
+        | find zig-out/bundle -type f | sort
 
     [help] Package the CLI as a Windows zip
     [desc] Build release and package kocr.exe into zig-out/bundle/windows.
@@ -149,8 +147,8 @@ group cli {
         & build-release
         shell~=pwsh
     :
-        | ./packaging/windows/package-cli.ps1
-        | Get-ChildItem zig-out/bundle/windows
+        | zig build bundle-cli -Doptimize=fast -Dstrip=true
+        | Get-ChildItem zig-out/bundle -Recurse -File
 }
 
 # =============== GUI ===============
@@ -184,18 +182,16 @@ group gui {
     [pass] Packaged the macOS app.
     [fail] Packaging failed.
     package() ? @os("macos") & build-release:
-        | arch="$(uname -m)"
-        | bash packaging/macos/package.sh "$arch"
-        | ls -lh zig-out/bundle/macos/*.dmg
+        | zig build bundle-gui -Doptimize=fast -Dstrip=true
+        | find zig-out/bundle -type f | sort
 
-    [help] Package the GUI as a Linux tarball
-    [desc] Build release and package the kocr-gui tarball into zig-out/bundle/linux.
-    [pass] Packaged the Linux bundle.
+    [help] Package the GUI as Linux packages
+    [desc] Build release and package the kocr-gui deb/rpm into zig-out/bundle.
+    [pass] Packaged the Linux packages.
     [fail] Packaging failed.
     package() ? @os("linux") & build-release:
-        | arch="$(uname -m)"
-        | bash packaging/linux/package.sh "$arch"
-        | ls -lh zig-out/bundle/linux/*.tar.gz zig-out/bundle/linux/*.sha256
+        | zig build bundle-gui -Doptimize=fast -Dstrip=true
+        | find zig-out/bundle -type f | sort
 
     [help] Package the GUI as a Windows installer
     [desc] Build release and run the Inno Setup packaging.
@@ -206,8 +202,8 @@ group gui {
         & build-release
         shell~=pwsh
     :
-        | ./packaging/windows/package.ps1
-        | Get-ChildItem zig-out/bundle/windows
+        | zig build bundle-gui -Doptimize=fast -Dstrip=true
+        | Get-ChildItem zig-out/bundle -Recurse -File
 }
 
 # =============== Version ===============

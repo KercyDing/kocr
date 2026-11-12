@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const bundler = @import("bundle");
 const zommand = @import("zommand");
 
 pub fn build(b: *std.Build) !void {
@@ -171,6 +172,15 @@ pub fn build(b: *std.Build) !void {
         });
     }
 
+    const gui_input: bundler.Input = .{
+        .executable = gui,
+        .icons = .{
+            .png = &.{b.path("src/gui/icons/linux")},
+            .ico = b.path("src/gui/icons/kocr.ico"),
+            .icns = b.path("src/gui/icons/kocr.icns"),
+        },
+    };
+
     const install_gui = b.addInstallArtifact(gui, .{});
     b.getInstallStep().dependOn(&install_gui.step);
     const gui_step = b.step("gui", "Build the native GUI");
@@ -181,6 +191,99 @@ pub fn build(b: *std.Build) !void {
     gui_cmd.addPassthruArgs();
     const gui_run = b.step("run-gui", "Run the native GUI");
     gui_run.dependOn(&gui_cmd.step);
+
+    const version = @import("build.zig.zon").version;
+
+    const gui_app: bundler.App = .{
+        .name = "kocr",
+        .identifier = "io.github.KercyDing.kocr",
+        .version = version,
+        .publisher = "KercyDing <KercyDing@users.noreply.github.com>",
+        .copyright = "Copyright 2026 KercyDing",
+        .license = "MIT",
+        .categories = "Utility;Graphics;",
+        .description = "Offline OCR for images and screen captures",
+    };
+    const cli_app: bundler.App = .{
+        .name = "kocr-cli",
+        .identifier = "io.github.KercyDing.kocr.cli",
+        .version = version,
+        .publisher = gui_app.publisher,
+        .copyright = gui_app.copyright,
+        .license = gui_app.license,
+        .description = "kocr command-line interface",
+    };
+
+    const cli_bundle = bundler.add(b, .{
+        .app = cli_app,
+        .input = .{
+            .executable = exe,
+            .resources = &.{
+                .{ .source = b.path("README.md") },
+                .{ .source = b.path("LICENSE") },
+            },
+        },
+        .formats = .{ .zip = .{}, .tar_gz = .{} },
+    });
+    const cli_bundle_step = b.step("bundle-cli", "Package the CLI");
+    cli_bundle_step.dependOn(cli_bundle.step);
+
+    const gui_bundle_step = b.step("bundle-gui", "Package the GUI");
+    const os = target.result.os.tag;
+    switch (os) {
+        .linux => {
+            const packages = bundler.add(b, .{
+                .app = gui_app,
+                .input = gui_input,
+                .formats = .{
+                    .deb = .{
+                        .homepage = "https://github.com/KercyDing/kocr",
+                        .section = "graphics",
+                    },
+                    .rpm = .{
+                        .url = "https://github.com/KercyDing/kocr",
+                        .group = "Applications/Graphics",
+                    },
+                },
+            });
+            gui_bundle_step.dependOn(packages.step);
+        },
+        .windows => {
+            const setup = bundler.add(b, .{
+                .app = gui_app,
+                .input = gui_input,
+                .formats = .{ .nsis = .{
+                    .install_scope = .current_user,
+                    .shortcuts = .{ .start_menu = true, .desktop = true },
+                    .launch_app = true,
+                } },
+            });
+            gui_bundle_step.dependOn(setup.step);
+        },
+        .macos => {
+            const app = bundler.add(b, .{
+                .app = gui_app,
+                .input = gui_input,
+                .formats = .{
+                    .app = .{
+                        .plist_entries = &.{
+                            bundler.plistBool("LSUIElement", true),
+                            bundler.plistString("LSMinimumSystemVersion", "13.0"),
+                            bundler.plistString("NSPrincipalClass", "NSApplication"),
+                            bundler.plistString("NSScreenCaptureUsageDescription", "kocr captures a screen region to recognize text."),
+                        },
+                    },
+                    .dmg = .{},
+                },
+            });
+            gui_bundle_step.dependOn(app.step);
+        },
+        else => {},
+    }
+
+    const bundle_step = b.step("bundle", "Package release artifacts");
+    bundle_step.dependOn(cli_bundle_step);
+    bundle_step.dependOn(gui_bundle_step);
 }
 
 fn linkWindowsLibraries(artifact: *std.Build.Step.Compile) void {
