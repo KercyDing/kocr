@@ -30,7 +30,7 @@ On Arch, `paru -S kocr-gui-bin` installs the GUI.
 
 **Linux capture is KDE-only.** It shells out to `spectacle --region`, so GNOME and other desktops are not supported for capturing yet (recognition and the CLI are desktop-independent).
 
-**macOS** — open the `.dmg`, drag `kocr.app` to Applications, and allow it in **System Settings → Privacy & Security**: the app is unsigned.
+**macOS** — open the `.dmg`, drag `kocr.app` to Applications, then allow it once in **System Settings → Privacy & Security**. The app is signed but not notarized, and the ad-hoc signature means Screen Recording must be granted again after each update.
 
 **Windows** — run the `setup.exe` installer.
 

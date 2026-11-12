@@ -218,7 +218,7 @@ jobs:
 
             Windows: run the setup executable.
 
-            macOS: open the dmg, then drag `kocr.app` to Applications. It is unsigned: allow it in System Settings → Privacy & Security.
+            macOS: open the dmg, then drag `kocr.app` to Applications. The app is signed but not notarized: allow it once in System Settings → Privacy & Security, and re-grant Screen Recording after each update.
 
             CLI:
 
