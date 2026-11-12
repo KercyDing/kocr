@@ -6,7 +6,7 @@ No account, no server, no uploads.
 
 The GUI is the way in; the CLI exists for scripts and agents.
 
-<img width="600" alt="image" src="https://github.com/user-attachments/assets/f823db07-39fd-419c-b5b4-63c54bebf2e6" />
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/eee7c2d4-7fa0-4bb9-9f72-0780ed563359" />
 
 ## What you get
 
