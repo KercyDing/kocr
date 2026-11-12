@@ -44,10 +44,10 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
+      # The PKGBUILDs come from the dispatched branch; the tag only names the
+      # release whose assets the packages install.
       - name: Checkout
         uses: actions/checkout@v7.0.1
-        with:
-          ref: ${{ steps.meta.outputs.tag }}
 
       - name: Wait for the release assets
         env:
