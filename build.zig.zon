@@ -26,8 +26,8 @@
         },
         // GUI
         .nanoui = .{
-            .url = "git+https://github.com/KercyDing/nanoui?ref=fix/theme#11908f72129df0c5d9a2e95feec6b813f69c0cfd",
-            .hash = "nanoui-0.14.0-we0KMTYwOwB3Wdx5pBifTCM-jNuIXcMGKswunTBxHBHH",
+            .url = "git+https://github.com/justrach/nanoui?ref=v0.14.1#8168b777985b37779fc0e333e1291138aa9bc882",
+            .hash = "nanoui-0.14.1-we0KMY_6PAD3bI7Txflz4lAApWxrZ8u_SihdfmO302IL",
         },
         // Sqlite
         .zqlite = .{
