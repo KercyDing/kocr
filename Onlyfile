@@ -19,12 +19,6 @@ build-release():
 test():
     zig build test
 
-[help] Package the CLI and GUI
-[desc] Build release and package both the CLI and the GUI for this platform.
-[pass] Packaged the CLI and GUI.
-[fail] Packaging failed.
-package() & cli.package & gui.package
-
 [help] Format all Zig files
 [pass] Formatting complete.
 fmt():
@@ -121,34 +115,6 @@ group cli {
     [desc] Remove ~/.local/bin/kocr.
     uninstall():
         rm -f "$HOME/.local/bin/kocr"
-
-    [help] Package the CLI as a macOS tarball
-    [desc] Build release and package kocr into zig-out/bundle/macos.
-    [pass] Packaged the macOS CLI.
-    [fail] Packaging failed.
-    package() ? @os("macos") & build-release:
-        | zig build bundle-cli -Doptimize=fast -Dstrip=true
-        | find zig-out/bundle -type f | sort
-
-    [help] Package the CLI as a Linux tarball
-    [desc] Build release and package kocr into zig-out/bundle/linux.
-    [pass] Packaged the Linux CLI.
-    [fail] Packaging failed.
-    package() ? @os("linux") & build-release:
-        | zig build bundle-cli -Doptimize=fast -Dstrip=true
-        | find zig-out/bundle -type f | sort
-
-    [help] Package the CLI as a Windows zip
-    [desc] Build release and package kocr.exe into zig-out/bundle/windows.
-    [pass] Packaged the Windows CLI.
-    [fail] Packaging failed.
-    package()
-        ? @os("windows")
-        & build-release
-        shell~=pwsh
-    :
-        | zig build bundle-cli -Doptimize=fast -Dstrip=true
-        | Get-ChildItem zig-out/bundle -Recurse -File
 }
 
 # =============== GUI ===============
@@ -176,34 +142,58 @@ group gui {
     [fail] GUI release run failed.
     run-release():
         zig build run-gui -Doptimize=fast -Dstrip=true
+}
 
-    [help] Package the GUI as a macOS app
-    [desc] Build release and package kocr.app into zig-out/bundle/macos.
-    [pass] Packaged the macOS app.
-    [fail] Packaging failed.
-    package() ? @os("macos") & build-release:
-        | zig build bundle-gui -Doptimize=fast -Dstrip=true
-        | find zig-out/bundle -type f | sort
+# =============== Bundle ===============
+[help] Release bundling tasks
+group bundle {
 
-    [help] Package the GUI as Linux packages
-    [desc] Build release and package the kocr-gui deb/rpm into zig-out/bundle.
-    [pass] Packaged the Linux packages.
-    [fail] Packaging failed.
-    package() ? @os("linux") & build-release:
-        | zig build bundle-gui -Doptimize=fast -Dstrip=true
-        | find zig-out/bundle -type f | sort
+    [help] Bundle the macOS app
+    [desc] Target: aarch64-macos.
+    [pass] Bundled the macOS app.
+    [fail] Bundling failed.
+    app():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=app -Dtarget=aarch64-macos
 
-    [help] Package the GUI as a Windows installer
-    [desc] Build release and run the Inno Setup packaging.
-    [pass] Packaged the Windows installer.
-    [fail] Packaging failed.
-    package()
-        ? @os("windows")
-        & build-release
-        shell~=pwsh
-    :
-        | zig build bundle-gui -Doptimize=fast -Dstrip=true
-        | Get-ChildItem zig-out/bundle -Recurse -File
+    [help] Bundle the macOS DMG
+    [desc] Target: aarch64-macos.
+    [pass] Bundled the macOS DMG.
+    [fail] Bundling failed.
+    dmg():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=dmg -Dtarget=aarch64-macos
+
+    [help] Bundle the Debian package
+    [desc] Target: x86_64-linux-gnu.
+    [pass] Bundled the Debian package.
+    [fail] Bundling failed.
+    deb():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=deb -Dtarget=x86_64-linux-gnu
+
+    [help] Bundle the RPM package
+    [desc] Target: x86_64-linux-gnu.
+    [pass] Bundled the RPM package.
+    [fail] Bundling failed.
+    rpm():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=rpm -Dtarget=x86_64-linux-gnu
+
+    [help] Bundle the Windows installer
+    [desc] Target: x86_64-windows-gnu.
+    [pass] Bundled the Windows installer.
+    [fail] Bundling failed.
+    nsis():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=nsis -Dtarget=x86_64-windows-gnu
+
+    [help] Bundle the CLI zip for the host target
+    [pass] Bundled the CLI zip.
+    [fail] Bundling failed.
+    zip():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=zip
+
+    [help] Bundle the CLI tarball for the host target
+    [pass] Bundled the CLI tarball.
+    [fail] Bundling failed.
+    tar_gz():
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=tar_gz
 }
 
 # =============== Version ===============

@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
+    const format = b.option(bundler.Format, "format", "Bundle format") orelse null;
     const x86_isa = b.option([]const u8, "x86_isa", "x86 dispatch subset: all, off, or comma-separated ISAs") orelse "avx,avx2,avx512";
     const arm_isa = b.option([]const u8, "arm_isa", "arm64 dispatch subset: all, off, or comma-separated ISAs") orelse "all";
 
@@ -214,76 +215,99 @@ pub fn build(b: *std.Build) !void {
         .description = "kocr command-line interface",
     };
 
-    const cli_bundle = bundler.add(b, .{
-        .app = cli_app,
-        .input = .{
-            .executable = exe,
-            .resources = &.{
-                .{ .source = b.path("README.md") },
-                .{ .source = b.path("LICENSE") },
-            },
-        },
-        .formats = .{ .zip = .{}, .tar_gz = .{} },
-    });
+    const cli_formats = selectFormat(.{ .zip = .{}, .tar_gz = .{} }, format);
     const cli_bundle_step = b.step("bundle-cli", "Package the CLI");
-    cli_bundle_step.dependOn(cli_bundle.step);
+    if (hasFormats(cli_formats)) {
+        const cli_bundle = bundler.add(b, .{
+            .app = cli_app,
+            .input = .{
+                .executable = exe,
+                .resources = &.{
+                    .{ .source = b.path("README.md") },
+                    .{ .source = b.path("LICENSE") },
+                },
+            },
+            .formats = cli_formats,
+        });
+        cli_bundle_step.dependOn(cli_bundle.step);
+    }
 
     const gui_bundle_step = b.step("bundle-gui", "Package the GUI");
     const os = target.result.os.tag;
-    switch (os) {
-        .linux => {
-            const packages = bundler.add(b, .{
-                .app = gui_app,
-                .input = gui_input,
-                .formats = .{
-                    .deb = .{
-                        .homepage = "https://github.com/KercyDing/kocr",
-                        .section = "graphics",
-                    },
-                    .rpm = .{
-                        .url = "https://github.com/KercyDing/kocr",
-                        .group = "Applications/Graphics",
-                    },
+    const all_gui_formats: bundler.Formats = switch (os) {
+        .linux => .{
+            .deb = .{
+                .homepage = "https://github.com/KercyDing/kocr",
+                .section = "graphics",
+            },
+            .rpm = .{
+                .url = "https://github.com/KercyDing/kocr",
+                .group = "Applications/Graphics",
+            },
+        },
+        .windows => .{ .nsis = .{
+            .install_scope = .current_user,
+            .shortcuts = .{ .start_menu = true, .desktop = true },
+            .launch_app = true,
+        } },
+        .macos => .{
+            .app = .{
+                .plist_entries = &.{
+                    bundler.plistBool("LSUIElement", true),
+                    bundler.plistString("LSMinimumSystemVersion", "13.0"),
+                    bundler.plistString("NSPrincipalClass", "NSApplication"),
+                    bundler.plistString("NSScreenCaptureUsageDescription", "kocr captures a screen region to recognize text."),
                 },
-            });
-            gui_bundle_step.dependOn(packages.step);
+            },
+            .dmg = .{},
         },
-        .windows => {
-            const setup = bundler.add(b, .{
-                .app = gui_app,
-                .input = gui_input,
-                .formats = .{ .nsis = .{
-                    .install_scope = .current_user,
-                    .shortcuts = .{ .start_menu = true, .desktop = true },
-                    .launch_app = true,
-                } },
-            });
-            gui_bundle_step.dependOn(setup.step);
-        },
-        .macos => {
-            const app = bundler.add(b, .{
-                .app = gui_app,
-                .input = gui_input,
-                .formats = .{
-                    .app = .{
-                        .plist_entries = &.{
-                            bundler.plistBool("LSUIElement", true),
-                            bundler.plistString("LSMinimumSystemVersion", "13.0"),
-                            bundler.plistString("NSPrincipalClass", "NSApplication"),
-                            bundler.plistString("NSScreenCaptureUsageDescription", "kocr captures a screen region to recognize text."),
-                        },
-                    },
-                    .dmg = .{},
-                },
-            });
-            gui_bundle_step.dependOn(app.step);
-        },
-        else => {},
+        else => .{},
+    };
+    const gui_formats = selectFormat(all_gui_formats, format);
+    if (hasFormats(gui_formats)) {
+        const gui_bundle = bundler.add(b, .{
+            .app = gui_app,
+            .input = gui_input,
+            .formats = gui_formats,
+        });
+        gui_bundle_step.dependOn(gui_bundle.step);
+    }
+
+    if (!hasFormats(cli_formats) and !hasFormats(gui_formats)) {
+        std.process.fatal("bundle format '{s}' is not available on {s}", .{
+            @tagName(format.?),
+            @tagName(os),
+        });
     }
 
     const bundle_step = b.step("bundle", "Package release artifacts");
     bundle_step.dependOn(cli_bundle_step);
     bundle_step.dependOn(gui_bundle_step);
+}
+
+fn selectFormat(all: bundler.Formats, format: ?bundler.Format) bundler.Formats {
+    const selected = format orelse return all;
+    return switch (selected) {
+        .zip => .{ .zip = all.zip },
+        .tar_gz => .{ .tar_gz = all.tar_gz },
+        .deb => .{ .deb = all.deb },
+        .rpm => .{ .rpm = all.rpm },
+        .appimage => .{ .appimage = all.appimage },
+        .nsis => .{ .nsis = all.nsis },
+        .app => .{ .app = all.app },
+        .dmg => .{ .dmg = all.dmg },
+    };
+}
+
+fn hasFormats(formats: bundler.Formats) bool {
+    return formats.zip != null or
+        formats.tar_gz != null or
+        formats.deb != null or
+        formats.rpm != null or
+        formats.appimage != null or
+        formats.nsis != null or
+        formats.app != null or
+        formats.dmg != null;
 }
 
 fn linkWindowsLibraries(artifact: *std.Build.Step.Compile) void {

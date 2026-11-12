@@ -86,7 +86,7 @@ zig build            # both
 zig build gui        # GUI
 zig build cli        # CLI
 zig build test       # tests
-zig build bundle     # package the release artifacts
+zig build bundle -Doptimize=fast -Dstrip=true   # package release artifacts
 zig build run-cli -- image images/1.png
 ```
 
@@ -100,7 +100,7 @@ only build-release       # same, optimized and stripped
 only gui run
 only cli build
 only cli install         # install the CLI
-only package             # build release and package this platform
+only bundle dmg          # bundle one format: app, dmg, deb, rpm, nsis, zip, tar_gz
 ```
 
 ## License
