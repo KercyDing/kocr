@@ -26,6 +26,8 @@ Everything is on [Releases](https://github.com/KercyDing/kocr/releases).
 
 Install the `.deb` or `.rpm` package for your distribution.
 
+On Arch, `paru -S kocr-gui-bin` installs the GUI.
+
 **Linux capture is KDE-only.** It shells out to `spectacle --region`, so GNOME and other desktops are not supported for capturing yet (recognition and the CLI are desktop-independent).
 
 **macOS** — open the `.dmg`, drag `kocr.app` to Applications, and allow it in **System Settings → Privacy & Security**: the app is unsigned.

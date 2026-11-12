@@ -231,7 +231,7 @@ jobs:
 
             macOS: extract the tarball and put `kocr` on your `PATH`.
 
-            Arch Linux: the AUR package consumes the Linux GUI and CLI tarballs.
+            Arch Linux: `kocr-bin` (CLI) and `kocr-gui-bin` (GUI) are on the AUR.
           files: |
             artifacts/**/*
 
