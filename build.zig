@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
     const format = b.option(bundler.Format, "format", "Bundle format") orelse null;
+    const codesign_identity = b.option([]const u8, "codesign-identity", "macOS signing identity; defaults to ad-hoc") orelse "-";
     const x86_isa = b.option([]const u8, "x86_isa", "x86 dispatch subset: all, off, or comma-separated ISAs") orelse "avx,avx2,avx512";
     const arm_isa = b.option([]const u8, "arm_isa", "arm64 dispatch subset: all, off, or comma-separated ISAs") orelse "all";
 
@@ -250,16 +251,22 @@ pub fn build(b: *std.Build) !void {
             .shortcuts = .{ .start_menu = true, .desktop = true },
             .launch_app = true,
         } },
-        .macos => .{
-            .app = .{
-                .plist_entries = &.{
-                    bundler.plistBool("LSUIElement", true),
-                    bundler.plistString("LSMinimumSystemVersion", "13.0"),
-                    bundler.plistString("NSPrincipalClass", "NSApplication"),
-                    bundler.plistString("NSScreenCaptureUsageDescription", "kocr captures a screen region to recognize text."),
+        .macos => blk: {
+            // A stable identity keeps the TCC Screen Recording grant across
+            // updates; ad-hoc signatures change with every build.
+            const sign: bundler.SignOptions = .{ .identity = codesign_identity };
+            break :blk .{
+                .app = .{
+                    .plist_entries = &.{
+                        bundler.plistBool("LSUIElement", true),
+                        bundler.plistString("LSMinimumSystemVersion", "13.0"),
+                        bundler.plistString("NSPrincipalClass", "NSApplication"),
+                        bundler.plistString("NSScreenCaptureUsageDescription", "kocr captures a screen region to recognize text."),
+                    },
+                    .sign = sign,
                 },
-            },
-            .dmg = .{},
+                .dmg = .{ .sign = sign },
+            };
         },
         else => .{},
     };
