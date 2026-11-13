@@ -6,8 +6,8 @@
     .dependencies = .{
         // Model
         .ncnn_zig = .{
-            .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.1.0#82aa043356959b0a1c8a856a72c6922849c0958a",
-            .hash = "ncnn_zig-0.1.0-nXBvang5AgB2aGb3Wv6AACmDj9dnBEGmT6gON1w7eIsL",
+            .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.2.0#de2a701ceb86e5275f3e7b51da5225b6a284e157",
+            .hash = "ncnn_zig-0.2.0-nXBvaiyWAgAAQcH2X5p5xNMhO1DqQphgQcyDTniEHkgE",
         },
         // Image
         .zignal = .{

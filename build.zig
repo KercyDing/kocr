@@ -16,8 +16,14 @@ pub fn build(b: *std.Build) !void {
     const ncnn = b.dependency("ncnn_zig", .{
         .target = target,
         .optimize = optimize,
+        .strip = strip,
         .x86_isa = x86_isa,
         .arm_isa = arm_isa,
+        // Union of the tiny/small/medium det/rec/cls models. Regenerate with
+        // ncnn-zig's tools/layers.py when the model packs change.
+        .layers = "BatchNorm,Bias,Concat,Convolution,Crop,Deconvolution,Flatten,InnerProduct,Input,Pooling,Reduction,ReLU,Reshape,Scale,Sigmoid,Softmax,Split,BinaryOp,ConvolutionDepthWise,Padding,Squeeze,ExpandDims,Permute,Interp,Packing,Cast,HardSigmoid,HardSwish,Swish,Gemm,LayerNorm,MultiHeadAttention,GELU,Erf",
+        .int8 = false,
+        .weight_quant = false,
     });
     const nanoui = if (target.result.os.tag == .windows)
         b.dependency("nanoui", .{
