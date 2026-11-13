@@ -135,11 +135,26 @@ jobs:
         with:
           version: "0.17.1"
 
+      - name: Clear cached bundle outputs
+        shell: bash
+        run: rm -rf .zig-cache/o/*/bundle
+
       - name: Build
         run: zig build -Doptimize=fast -Dstrip=true ${{ matrix.args }}
 
       - name: Bundle
         run: zig build bundle -Doptimize=fast -Dstrip=true ${{ matrix.args }}
+
+      - name: Verify bundle version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate.outputs.version }}"
+          stale="$(find zig-out/bundle -type f ! -name '*.sha256' ! -name "*${version}*" -print -quit)"
+          if [ -n "$stale" ]; then
+            echo "unexpected bundle output: $stale" >&2
+            exit 1
+          fi
 
       - name: Zip macOS app
         if: runner.os == 'macOS'
