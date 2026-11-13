@@ -203,7 +203,8 @@ pub fn build(b: *std.Build) !void {
         .copyright = "Copyright 2026 KercyDing",
         .license = "MIT",
         .categories = "Utility;Graphics;",
-        .description = "Offline OCR for images and screen captures",
+        .description = "Offline OCR for images and screen captures\n" ++
+            "Recognizes text locally with bundled models; no network access is required.",
     };
     const cli_app: bundler.App = .{
         .name = "kocr-cli",
@@ -239,10 +240,28 @@ pub fn build(b: *std.Build) !void {
             .deb = .{
                 .homepage = "https://github.com/KercyDing/kocr",
                 .section = "graphics",
+                .revision = "1",
+                .depends = &.{ "libc6", "libgtk-4-1" },
+                .recommends = &.{
+                    "spectacle",
+                    "libnotify-bin",
+                    "wl-clipboard | xclip | xsel",
+                },
+                .license_file = b.path("LICENSE"),
             },
             .rpm = .{
                 .url = "https://github.com/KercyDing/kocr",
                 .group = "Applications/Graphics",
+                .requires = &.{
+                    "libc.so.6()(64bit)",
+                    "libm.so.6()(64bit)",
+                    "rtld(GNU_HASH)",
+                    "gtk4",
+                },
+                .assets = &.{
+                    .{ .source = b.path("LICENSE"), .dest = "usr/share/licenses/kocr/LICENSE" },
+                    .{ .source = b.path("README.md"), .dest = "usr/share/doc/kocr/README.md" },
+                },
             },
         },
         .windows => .{ .nsis = .{
