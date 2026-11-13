@@ -134,10 +134,9 @@ jobs:
         uses: mlugg/setup-zig@v2.2.1
         with:
           version: "0.17.1"
-
-      - name: Clear cached bundle outputs
-        shell: bash
-        run: rm -rf .zig-cache/o/*/bundle
+          # Release builds must be reproducible: a cross-run Zig cache can
+          # resurrect stale bundle outputs or a cancelled run's partial cache.
+          use-cache: false
 
       - name: Build
         run: zig build -Doptimize=fast -Dstrip=true ${{ matrix.args }}
