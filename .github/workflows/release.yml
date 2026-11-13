@@ -145,17 +145,6 @@ jobs:
       - name: Bundle
         run: zig build bundle -Doptimize=fast -Dstrip=true ${{ matrix.args }}
 
-      - name: Verify bundle version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${{ needs.validate.outputs.version }}"
-          stale="$(find zig-out/bundle -type f ! -name '*.sha256' ! -name "*${version}*" -print -quit)"
-          if [ -n "$stale" ]; then
-            echo "unexpected bundle output: $stale" >&2
-            exit 1
-          fi
-
       - name: Zip macOS app
         if: runner.os == 'macOS'
         run: |
@@ -166,6 +155,17 @@ jobs:
           ditto -c -k --norsrc --noextattr --keepParent zig-out/bundle/app/kocr.app \
             "zig-out/bundle/macos/kocr-${version}-macos-${arch}.app.zip"
           rm -rf zig-out/bundle/app
+
+      - name: Verify bundle version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate.outputs.version }}"
+          stale="$(find zig-out/bundle -type f ! -name '*.sha256' ! -name "*${version}*" -print -quit)"
+          if [ -n "$stale" ]; then
+            echo "unexpected bundle output: $stale" >&2
+            exit 1
+          fi
 
       - name: Checksums (Linux)
         if: runner.os == 'Linux'
