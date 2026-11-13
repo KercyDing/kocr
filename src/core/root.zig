@@ -1,4 +1,4 @@
-//! Platform-independent capture, shortcut, and daemon entry points.
+//! Platform-independent capture, shortcut, and autostart entry points.
 //! Platform implementations live under `<capability>/<os>.zig`.
 
 const std = @import("std");
@@ -69,7 +69,9 @@ pub fn listen(
     return Keyboard.listen(allocator, io, environ, bindings, context, handler);
 }
 
-/// macOS only: registers shortcuts in the app's own run loop and returns.
+/// Registers the configured shortcuts and returns; the handler runs where the
+/// platform delivers them (the main thread on macOS and Windows, a thread of
+/// its own on Linux).
 pub fn startHotkeys(
     allocator: std.mem.Allocator,
     io: std.Io,

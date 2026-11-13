@@ -2,7 +2,7 @@ const std = @import("std");
 
 const config = @import("../config.zig");
 
-const file_name = "kocr-daemon.desktop";
+const file_name = "kocr.desktop";
 
 pub fn enabled(
     io: std.Io,
@@ -24,7 +24,7 @@ pub fn set(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
     install: bool,
-    daemon_executable: []const u8,
+    executable: []const u8,
 ) !void {
     const path = try desktopPath(allocator, environ);
     defer allocator.free(path);
@@ -40,15 +40,15 @@ pub fn set(
         allocator,
         \\[Desktop Entry]
         \\Type=Application
-        \\Name=kocr daemon
-        \\Comment=Global shortcuts and OCR daemon
+        \\Name=kocr
+        \\Comment=Screenshot OCR in the tray
         \\Icon=kocr
-        \\Exec="{s}" --daemon
+        \\Exec="{s}"
         \\Terminal=false
         \\X-GNOME-Autostart-enabled=true
         \\
     ,
-        .{daemon_executable},
+        .{executable},
     );
     defer allocator.free(content);
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = content });

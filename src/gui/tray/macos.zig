@@ -1,5 +1,7 @@
 //! The menu bar item (nanoui).
 
+const std = @import("std");
+
 const nui = @import("nanoui");
 
 const state_mod = @import("../desktop/state.zig");
@@ -27,7 +29,7 @@ pub fn sync(state: *State) void {
     nui.objc.msg(void, tray.item, "setVisible:", .{if (state.show_tray) nui.objc.YES else nui.objc.NO});
 }
 
-pub fn claim() bool {
+pub fn claim(_: std.Io) bool {
     return true;
 }
 

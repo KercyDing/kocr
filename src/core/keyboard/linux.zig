@@ -190,6 +190,41 @@ pub fn listenConfigured(
     }
 }
 
+/// Serves the configured shortcuts on a thread of its own, then returns: the
+/// caller has an event loop and takes the handler's actions there. The handler
+/// itself runs on that thread.
+pub fn startConfigured(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+) !void {
+    const args = try allocator.create(ServeArgs);
+    args.* = .{ .allocator = allocator, .io = io, .environ = environ, .context = context, .handler = handler };
+    const thread = std.Thread.spawn(.{}, serveThread, .{args}) catch |err| {
+        allocator.destroy(args);
+        return err;
+    };
+    thread.detach();
+}
+
+const ServeArgs = struct {
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    context: *anyopaque,
+    handler: types.Handler,
+};
+
+fn serveThread(args: *ServeArgs) void {
+    const a = args.*;
+    args.allocator.destroy(args);
+    listenConfigured(a.allocator, a.io, a.environ, a.context, a.handler) catch |err| {
+        std.debug.print("kocr: shortcuts unavailable: {s}\n", .{@errorName(err)});
+    };
+}
+
 fn loadBindings(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -398,7 +433,7 @@ test "parses KDE shortcuts" {
     try std.testing.expectError(error.InvalidShortcut, parseShortcut("Hyper+X"));
 }
 
-test "encodes all daemon actions" {
+test "encodes all actions" {
     inline for (.{ types.Action.copy, types.Action.save, types.Action.ocr, types.Action.oneline }) |action| {
         try std.testing.expect(actionCode(action) != 0);
         try std.testing.expectEqual(action, @as(types.Action, @fromBackingInt(@intCast(actionCode(action) - 1))));

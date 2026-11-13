@@ -1,5 +1,7 @@
 //! The Windows notification area icon (nanoui), and the single-instance handoff.
 
+const std = @import("std");
+
 const win32 = @import("win32");
 
 const state_mod = @import("../desktop/state.zig");
@@ -28,7 +30,7 @@ pub fn sync(state: *State) void {
     }
 }
 
-pub fn claim() bool {
+pub fn claim(_: std.Io) bool {
     const name = win32.zig.L("Local\\kocr-show-window");
     const event = kernel32.CreateEventW(null, 0, 0, name);
     if (event == null) return true;

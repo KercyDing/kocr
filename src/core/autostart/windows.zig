@@ -35,7 +35,7 @@ pub fn set(
     allocator: std.mem.Allocator,
     _: *const std.process.Environ.Map,
     install: bool,
-    daemon_executable: []const u8,
+    executable: []const u8,
 ) !void {
     if (!install) {
         const result = advapi32.RegDeleteKeyValueW(registry.HKEY_CURRENT_USER, key_name, value_name);
@@ -43,8 +43,8 @@ pub fn set(
             return error.RegistryWriteFailed;
         return;
     }
-    if (daemon_executable.len == 0) return error.InvalidExecutable;
-    const command = try std.fmt.allocPrint(allocator, "\"{s}\"", .{daemon_executable});
+    if (executable.len == 0) return error.InvalidExecutable;
+    const command = try std.fmt.allocPrint(allocator, "\"{s}\"", .{executable});
     defer allocator.free(command);
     const utf16 = try std.unicode.utf8ToUtf16LeAllocZ(allocator, command);
     defer allocator.free(utf16);

@@ -1,5 +1,6 @@
 //! The optional tray icon, per platform.
 
+const std = @import("std");
 const builtin = @import("builtin");
 
 const state_mod = @import("../desktop/state.zig");
@@ -15,10 +16,11 @@ pub fn sync(state: *state_mod.State) void {
     platform.sync(state);
 }
 
-/// Whether this process is the only instance. Windows broadcasts a request
-/// for the existing copy to show its window.
-pub fn claim() bool {
-    return platform.claim();
+/// Whether this process is the only instance. A second launch asks the
+/// existing copy to show its window: through a named event on Windows, a
+/// unix socket on Linux.
+pub fn claim(io: std.Io) bool {
+    return platform.claim(io);
 }
 
 pub fn pump() void {

@@ -19,10 +19,10 @@
             .url = "git+https://github.com/KercyDing/zommand?ref=main#2beb866662ebba77b31e6e9608d61b5f5dbc5890",
             .hash = "zommand-0.0.1-Ph_F7Sy4AADYm5HuWIZJk1jmEe_zveJ48JiiEAKpr9oj",
         },
-        // GUI
+        // GUI: the Linux tray branch of the fork, until it lands upstream.
         .nanoui = .{
-            .url = "git+https://github.com/KercyDing/nanoui?ref=d3d11-shader-cache#5046c46642fc8ac07c82a004eb8e1a98b22a6101",
-            .hash = "nanoui-0.14.2-we0KMZw3PQCyUXE6WFZC5Rl9JwZi5FQ2kjJbkvHSRtIb",
+            .url = "git+https://github.com/KercyDing/nanoui?ref=linux/tray#64ed347ae91485d8615a83ba5e23299b830292fe",
+            .hash = "nanoui-0.14.4-we0KMcK4PgA4iAhWOSQt52kRSHW-MwwfMlA-wUFwTEzk",
         },
         // Sqlite
         .zqlite = .{

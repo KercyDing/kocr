@@ -1,7 +1,6 @@
 //! The settings tab: model, shortcuts, autostart, and saving.
 
 const std = @import("std");
-const builtin = @import("builtin");
 
 const core = @import("core");
 const nui = @import("nanoui");
@@ -13,7 +12,6 @@ const state_mod = @import("state.zig");
 const tray = @import("../tray/root.zig");
 
 const config = core.config;
-const agent = builtin.os.tag == .macos or builtin.os.tag == .windows;
 
 const ui = nui.ui;
 const kit = nui.kit;
@@ -325,12 +323,10 @@ pub fn page(state: *State, c: *ui.Context) void {
             // The toggles belong together, and have no title of their own.
             section(c);
             defer ui.end(c);
-            if (ui.checkbox(c, if (agent) "Launch at login" else "Start daemon at login", &state.autostart)) {
+            if (ui.checkbox(c, "Launch at login", &state.autostart)) {
                 persistSettings(state, true, false);
             }
-            if (agent) {
-                if (ui.checkbox(c, "Show menu bar icon", &state.show_tray)) persistSettings(state, false, true);
-            }
+            if (ui.checkbox(c, "Show menu bar icon", &state.show_tray)) persistSettings(state, false, true);
         }
     }
 
