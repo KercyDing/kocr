@@ -149,39 +149,39 @@ group gui {
 group bundle {
 
     [help] Bundle the macOS app
-    [desc] Target: aarch64-macos.
+    [desc] Local artifact for this machine; releases come from CI.
     [pass] Bundled the macOS app.
     [fail] Bundling failed.
     app():
-        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=app -Dtarget=aarch64-macos
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=app
 
     [help] Bundle the macOS DMG
-    [desc] Target: aarch64-macos.
+    [desc] Local artifact for this machine; releases come from CI.
     [pass] Bundled the macOS DMG.
     [fail] Bundling failed.
     dmg():
-        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=dmg -Dtarget=aarch64-macos
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=dmg
 
     [help] Bundle the Debian package
-    [desc] Target: x86_64-linux-gnu.
+    [desc] Local artifact for this machine; releases come from CI.
     [pass] Bundled the Debian package.
     [fail] Bundling failed.
     deb():
-        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=deb -Dtarget=x86_64-linux-gnu
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=deb
 
     [help] Bundle the RPM package
-    [desc] Target: x86_64-linux-gnu.
+    [desc] Local artifact for this machine; releases come from CI.
     [pass] Bundled the RPM package.
     [fail] Bundling failed.
     rpm():
-        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=rpm -Dtarget=x86_64-linux-gnu
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=rpm
 
     [help] Bundle the Windows installer
-    [desc] Target: x86_64-windows-gnu.
+    [desc] Local artifact for this machine; releases come from CI.
     [pass] Bundled the Windows installer.
     [fail] Bundling failed.
     nsis():
-        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=nsis -Dtarget=x86_64-windows-gnu
+        zig build bundle -Doptimize=fast -Dstrip=true -Dformat=nsis
 
     [help] Bundle the CLI zip for the host target
     [pass] Bundled the CLI zip.
@@ -212,7 +212,7 @@ group version {
     publish(version) ? @has("python3") shell~=bash:
         test -z "$(git status --porcelain)"
         python3 scripts/version.py change {{version}}
-        zig build -Doptimize=fast -Dstrip=true
+        zig build
         git add build.zig.zon cli.zon
         git commit -m "update to {{version}}"
         git tag {{version}}
