@@ -25,8 +25,8 @@ const rail_width: f32 = 208;
 const title_bar_height: f32 = 32;
 
 const top: f32 = switch (builtin.os.tag) {
+    // Below the title bar the view draws on Windows; at the top elsewhere.
     .windows => title_bar_height + 12,
-    .macos => 44,
     else => 16,
 };
 
@@ -282,8 +282,12 @@ pub fn view(state: *State, c: *ui.Context) void {
             rail.glass(.{ .style = .sidebar, .blur = 28, .edge_blur = 64, .reflection = 0.16 });
         defer rail.end();
 
-        ui.text(c, "kocr", .{ .size = 15, .weight = .semibold });
-        ui.div(c).h(10).end();
+        // The Mac's traffic lights sit in this corner; its sidebar has no
+        // wordmark under them. The other platforms start lower anyway.
+        if (comptime builtin.os.tag != .macos) {
+            ui.text(c, "kocr", .{ .size = 15, .weight = .semibold });
+            ui.div(c).h(10).end();
+        }
         const to_history = navItem(c, "list.bullet", "History", state.tab == .history);
         const to_settings = navItem(c, "gearshape", "Settings", state.tab == .settings);
         if (to_history and state.tab != .history) {
