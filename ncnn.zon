@@ -1,0 +1,9 @@
+.{
+    // ncnn-zig compile-time options shared by local builds and prebuilt CI.
+    // target/optimize/strip are selected by the build invocation, not here.
+    .layers = "BatchNorm,Bias,Concat,Convolution,Crop,Deconvolution,Flatten,InnerProduct,Input,Pooling,Reduction,ReLU,Reshape,Scale,Sigmoid,Softmax,Split,BinaryOp,ConvolutionDepthWise,Padding,Squeeze,ExpandDims,Permute,Interp,Packing,Cast,HardSigmoid,HardSwish,Swish,Gemm,LayerNorm,MultiHeadAttention,GELU,Erf",
+    .x86_isa = "avx,avx2,avx512",
+    .arm_isa = "all",
+    .int8 = false,
+    .weight_quant = false,
+}

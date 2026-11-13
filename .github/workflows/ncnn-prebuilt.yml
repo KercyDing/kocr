@@ -1,0 +1,160 @@
+name: ncnn prebuilt
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if the release tag already exists
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ncnn-prebuilt
+  cancel-in-progress: false
+
+env:
+  # Keep in sync with the ncnn_zig dependency in build.zig.zon.
+  NCNN_ZIG_REF: v0.3.0
+  NCNN_ZIG_VERSION: 0.3.0
+  ZIG_VERSION: 0.17.1
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      build: ${{ steps.meta.outputs.build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Compute release tag
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          flags_hash="$(printf '%s\n%s\n%s\n' \
+            "$(sha256sum ncnn.zon | awk '{print $1}')" \
+            "$NCNN_ZIG_REF" "$ZIG_VERSION" | sha256sum | awk '{print $1}' | cut -c1-12)"
+          tag="ncnn-prebuilt-${flags_hash}"
+          if [[ "${{ inputs.force }}" == "true" ]]; then
+            build=true
+          elif gh release view "$tag" >/dev/null 2>&1; then
+            build=false
+          else
+            build=true
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-linux-gnu
+          - runner: ubuntu-22.04-arm
+            target: aarch64-linux-gnu
+          - runner: windows-2022
+            target: x86_64-windows-gnu
+          - runner: windows-11-arm
+            target: aarch64-windows-gnu
+          - runner: macos-15-intel
+            target: x86_64-macos
+          - runner: macos-15
+            target: aarch64-macos
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout kocr
+        uses: actions/checkout@v7.0.1
+
+      - name: Checkout ncnn-zig
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: KercyDing/ncnn-zig
+          ref: ${{ env.NCNN_ZIG_REF }}
+          path: ncnn-zig
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2.2.1
+        with:
+          version: ${{ env.ZIG_VERSION }}
+          use-cache: false
+
+      - name: Build ncnn
+        shell: bash
+        working-directory: ncnn-zig
+        run: |
+          set -euo pipefail
+          mkdir -p ../.ncnn-flags
+          cp ../ncnn.zon ../.ncnn-flags/
+          cat > ../.ncnn-flags/print.zig <<'EOF'
+          const std = @import("std");
+          const f = @import("ncnn.zon");
+          pub fn main() void {
+              std.debug.print(
+                  "-Dlayers={s}\n-Dx86_isa={s}\n-Darm_isa={s}\n-Dint8={}\n-Dweight_quant={}\n",
+                  .{ f.layers, f.x86_isa, f.arm_isa, f.int8, f.weight_quant },
+              );
+          }
+          EOF
+          FLAGS=()
+          while IFS= read -r flag; do FLAGS+=("$flag"); done < <(zig run ../.ncnn-flags/print.zig 2>&1)
+          zig build -Dtarget=${{ matrix.target }} -Doptimize=fast -Dstrip=true \
+            "${FLAGS[@]}" -p "$GITHUB_WORKSPACE/ncnn-prefix"
+
+      - name: Smoke test prebuilt library
+        shell: bash
+        working-directory: ncnn-zig
+        run: zig build test -Dprebuilt="$GITHUB_WORKSPACE/ncnn-prefix" -Doptimize=fast
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" scripts/package_ncnn.py \
+            --version "$NCNN_ZIG_VERSION" \
+            --target "${{ matrix.target }}" \
+            --prefix "$GITHUB_WORKSPACE/ncnn-prefix" \
+            --out dist \
+            --ncnn-zig "$NCNN_ZIG_REF" \
+            --zig "$(zig version)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ncnn-prebuilt-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v7.0.0
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" dist/*.tar.gz \
+            --title "ncnn prebuilt $TAG" \
+            --notes "Prebuilt ncnn from ncnn-zig ${NCNN_ZIG_REF}."

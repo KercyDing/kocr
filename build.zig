@@ -10,21 +10,28 @@ pub fn build(b: *std.Build) !void {
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
     const format = b.option(bundler.Format, "format", "Bundle format") orelse null;
     const codesign_identity = b.option([]const u8, "codesign-identity", "macOS signing identity; defaults to ad-hoc") orelse "-";
-    const x86_isa = b.option([]const u8, "x86_isa", "x86 dispatch subset: all, off, or comma-separated ISAs") orelse "avx,avx2,avx512";
-    const arm_isa = b.option([]const u8, "arm_isa", "arm64 dispatch subset: all, off, or comma-separated ISAs") orelse "all";
 
-    const ncnn = b.dependency("ncnn_zig", .{
-        .target = target,
-        .optimize = optimize,
-        .strip = strip,
-        .x86_isa = x86_isa,
-        .arm_isa = arm_isa,
-        // Union of the tiny/small/medium det/rec/cls models. Regenerate with
-        // ncnn-zig's tools/layers.py when the model packs change.
-        .layers = "BatchNorm,Bias,Concat,Convolution,Crop,Deconvolution,Flatten,InnerProduct,Input,Pooling,Reduction,ReLU,Reshape,Scale,Sigmoid,Softmax,Split,BinaryOp,ConvolutionDepthWise,Padding,Squeeze,ExpandDims,Permute,Interp,Packing,Cast,HardSigmoid,HardSwish,Swish,Gemm,LayerNorm,MultiHeadAttention,GELU,Erf",
-        .int8 = false,
-        .weight_quant = false,
-    });
+    const ncnn_flags = @import("ncnn.zon");
+    const ncnn_prebuilt = b.option([]const u8, "ncnn_prebuilt", "Directory containing prebuilt include/ and lib/");
+    const ncnn = if (ncnn_prebuilt) |path|
+        b.dependency("ncnn_zig", .{
+            .target = target,
+            .optimize = optimize,
+            .prebuilt = std.Build.LazyPath{ .cwd_relative = path },
+        })
+    else
+        b.dependency("ncnn_zig", .{
+            .target = target,
+            .optimize = optimize,
+            .strip = strip,
+            .x86_isa = ncnn_flags.x86_isa,
+            .arm_isa = ncnn_flags.arm_isa,
+            // Union of the tiny/small/medium det/rec/cls models. Regenerate with
+            // ncnn-zig's tools/layers.py when the model packs change.
+            .layers = ncnn_flags.layers,
+            .int8 = ncnn_flags.int8,
+            .weight_quant = ncnn_flags.weight_quant,
+        });
     const nanoui = if (target.result.os.tag == .windows)
         b.dependency("nanoui", .{
             .target = target,
