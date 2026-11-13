@@ -6,10 +6,9 @@ const builtin = @import("builtin");
 const core = @import("core");
 const nui = @import("nanoui");
 
+const confirm = @import("confirm.zig");
 const jobs = @import("jobs.zig");
 const model = @import("model.zig");
-const about = @import("about.zig");
-const confirm = @import("confirm.zig");
 const state_mod = @import("state.zig");
 const tray = @import("../tray/root.zig");
 
@@ -335,12 +334,7 @@ pub fn page(state: *State, c: *ui.Context) void {
         }
     }
 
-    {
-        ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
-        defer ui.end(c);
-        const status = ui.div(c).grow();
-        ui.text(c, state.settings_status, .{ .size = 12, .color = t.muted, .truncate = .ellipsis });
-        status.end();
-        if (kit.button(c, "About kocr", .{ .variant = .ghost, .size = .sm }).clicked) about.openAbout(state);
-    }
+    ui.row(c, .{ .width = .fill, .gap = 8, .align_items = .center });
+    defer ui.end(c);
+    ui.text(c, state.settings_status, .{ .size = 12, .color = t.muted, .truncate = .ellipsis });
 }

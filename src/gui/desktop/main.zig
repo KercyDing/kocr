@@ -1,10 +1,11 @@
-//! Main window: the history and settings tabs.
+//! Main window: the history and settings, behind a glass sidebar.
 
 const std = @import("std");
 const builtin = @import("builtin");
 
 const nui = @import("nanoui");
 
+const about = @import("about.zig");
 const confirm = @import("confirm.zig");
 const history = @import("history.zig");
 const settings = @import("settings.zig");
@@ -18,6 +19,78 @@ const State = state_mod.State;
 /// the panel's edge; the toolbar keeps the same inset, so the trash lands over
 /// the rows' own buttons.
 const row_inset: f32 = 16;
+
+const rail_width: f32 = 208;
+
+const title_bar_height: f32 = 32;
+
+const top: f32 = switch (builtin.os.tag) {
+    .windows => title_bar_height + 12,
+    .macos => 44,
+    else => 16,
+};
+
+const rail_top: f32 = switch (builtin.os.tag) {
+    .windows => 10,
+    .macos => 44,
+    else => 12,
+};
+
+fn navItem(c: *ui.Context, icon: []const u8, label: []const u8, on: bool) bool {
+    const t = c.theme;
+    var row = ui.div(c).row().wFull().h(32).px(10).gap(10).itemsCenter().rounded(8).control();
+    const it = row.interaction();
+    if (on) {
+        row = row.bg(t.surface_hover);
+    } else if (it.hovered) {
+        row = row.bg(t.surface_hover.alpha(0.5));
+    }
+    {
+        defer row.end();
+        const fg = if (on) t.text else t.muted;
+        ui.icon(c, icon, .{ .size = 15, .weight = .medium, .color = fg });
+        ui.text(c, label, .{ .size = 13, .weight = .medium, .color = fg });
+    }
+    return it.clicked;
+}
+
+const Caption = enum { minimize, maximize, close };
+
+/// One of a Windows title bar's buttons.
+fn captionButton(c: *ui.Context, icon: []const u8, kind: Caption, window: *nui.Window) void {
+    const t = c.theme;
+    var d = ui.div(c).row().w(46).h(title_bar_height).itemsCenter().justifyCenter().control();
+    // The system hit-tests this as its maximize button, and still sends the click.
+    if (kind == .maximize) c.node(d.index).style.window_maximize = true;
+    const it = d.interaction();
+    if (it.hovered) d = d.bg(if (kind == .close) t.danger else t.surface_hover);
+    {
+        defer d.end();
+        ui.icon(c, icon, .{
+            .size = 12,
+            .weight = .medium,
+            .color = if (kind == .close and it.hovered) ui.Color.white else t.text,
+        });
+    }
+    if (!it.clicked) return;
+    switch (kind) {
+        .minimize => window.minimize(),
+        .maximize => window.zoom(),
+        .close => window.close(),
+    }
+}
+
+/// The app-drawn Windows title bar: a drag band and the system's buttons.
+fn titleBar(state: *State, c: *ui.Context) void {
+    const window = state.main_window orelse return;
+    var band = ui.div(c).row().absolute().wFull().h(title_bar_height).itemsCenter();
+    c.node(band.index).style.window_drag = true;
+    defer band.end();
+    ui.spacer(c);
+    captionButton(c, "minus", .minimize, window);
+    captionButton(c, "rectangle.on.rectangle", .maximize, window);
+    captionButton(c, "xmark", .close, window);
+}
 
 fn previewPanel(c: *ui.Context, trigger: ui.Interaction, fallback: ui.Size, padding: f32, width: ?f32) ?ui.Div {
     const t = c.theme;
@@ -171,36 +244,62 @@ pub fn view(state: *State, c: *ui.Context) void {
     c.theme_chosen = state.themeChoice();
     const t = c.theme;
     const idle = state.job == null;
-    // Under the hidden title bar the content owns the top edge: 44 leaves room
-    // for the traffic lights, and the empty band drags the window.
-    const padding: ui.Edges = if (comptime builtin.os.tag == .macos)
-        .{ .top = 44, .left = 16, .right = 16, .bottom = 16 }
-    else
-        .all(16);
-    ui.column(c, .{ .width = .fill, .height = .fill, .padding = padding, .gap = 12, .background = t.background });
+
+    ui.column(c, .{ .width = .fill, .height = .fill, .background = t.background });
     defer ui.end(c);
 
+    // Content first: the rail's glass reads the pixels painted under it.
     {
-        ui.row(c, .{ .width = .fill, .gap = 16, .align_items = .center, .padding = .{ .right = row_inset } });
+        ui.column(c, .{
+            .width = .fill,
+            .height = .fill,
+            .padding = .{ .top = top, .right = 16, .bottom = 16, .left = rail_width + 16 },
+            .gap = 12,
+        });
         defer ui.end(c);
-        var titles = [_][]const u8{ "History", "Settings" };
-        var selected: usize = @backingInt(state.tab);
-        if (kit.tabs(c, &titles, &selected, .{ .variant = .segmented })) {
-            state.tab = @fromBackingInt(@intCast(selected));
-            state.confirm_clear = false;
-            if (state.tab == .settings) settings.load(state);
-            c.changed = true;
-        }
-        ui.spacer(c);
+
         if (state.tab == .history) {
+            ui.row(c, .{ .width = .fill, .align_items = .center, .padding = .{ .right = row_inset } });
+            defer ui.end(c);
+            ui.spacer(c);
             const idle_clear = state.rows.len != 0 and idle;
             if (confirm.button(c, &state.confirm_clear, "clear-all", "Clear all", "Click again to clear", !idle_clear)) {
                 history.clearHistory(state);
             }
         }
+        switch (state.tab) {
+            .history => historyView(state, c),
+            .settings => settings.page(state, c),
+        }
     }
-    switch (state.tab) {
-        .history => historyView(state, c),
-        .settings => settings.page(state, c),
+
+    // The rail last: its glass reads the content painted under it.
+    {
+        var rail = ui.div(c).absolute().column().w(rail_width).hFull().p(12).pt(rail_top).gap(2);
+        rail = if (c.access.reduce_transparency)
+            rail.bg(t.surface).border(t.border)
+        else
+            rail.glass(.{ .style = .sidebar, .blur = 28, .edge_blur = 64, .reflection = 0.16 });
+        defer rail.end();
+
+        ui.text(c, "kocr", .{ .size = 15, .weight = .semibold });
+        ui.div(c).h(10).end();
+        const to_history = navItem(c, "list.bullet", "History", state.tab == .history);
+        const to_settings = navItem(c, "gearshape", "Settings", state.tab == .settings);
+        if (to_history and state.tab != .history) {
+            state.tab = .history;
+            state.confirm_clear = false;
+            c.changed = true;
+        }
+        if (to_settings and state.tab != .settings) {
+            state.tab = .settings;
+            state.confirm_clear = false;
+            settings.load(state);
+            c.changed = true;
+        }
+        ui.spacer(c);
+        if (navItem(c, "info.circle", "About", false)) about.openAbout(state);
     }
+
+    if (comptime builtin.os.tag == .windows) titleBar(state, c);
 }
