@@ -56,7 +56,7 @@ fn validateProfile(profile: []const u8) void {
 }
 
 fn modelPath(init: std.process.Init, profile: []const u8) ![]u8 {
-    return core.paths.profileDir(init.io, init.gpa, init.environ_map, profile);
+    return core.paths.profileDir(init.gpa, init.environ_map, profile);
 }
 
 fn requireInstalled(init: std.process.Init, profile: []const u8) ![]const u8 {

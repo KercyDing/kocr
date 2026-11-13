@@ -57,7 +57,7 @@ pub fn run(init: std.process.Init) !void {
     defer state.deinit();
 
     const app = try nui.App.create(init, .{
-        .name = "kocr",
+        .name = core.dirs.name,
         .quit_on_last_window_closed = !agent,
         .ctx = &state,
         .on_reopen = if (agent) onReopen else null,

@@ -1,8 +1,8 @@
-//! Persistent GUI/CLI configuration in `<config>/kocr/config.json`.
+//! Persistent GUI/CLI configuration in `<config>/Kocr/config.json`.
 
 const std = @import("std");
 
-const known_folders = @import("known_folders");
+const dirs = @import("dirs.zig");
 
 /// The window colors; `auto` follows the system.
 pub const Theme = enum { auto, light, dark };
@@ -30,22 +30,19 @@ pub const Config = struct {
 };
 
 pub fn dir(
-    io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const base = try known_folders.getPath(io, allocator, environ, .roaming_configuration) orelse
-        return error.ConfigDirUnavailable;
+    const base = try dirs.configRoot(allocator, environ);
     defer allocator.free(base);
-    return std.Io.Dir.path.join(allocator, &.{ base, "kocr" });
+    return std.Io.Dir.path.join(allocator, &.{ base, dirs.name });
 }
 
 pub fn path(
-    io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const config_dir = try dir(io, allocator, environ);
+    const config_dir = try dir(allocator, environ);
     defer allocator.free(config_dir);
     return std.Io.Dir.path.join(allocator, &.{ config_dir, "config.json" });
 }
@@ -55,7 +52,7 @@ pub fn load(
     io: std.Io,
     environ: *const std.process.Environ.Map,
 ) !std.json.Parsed(Config) {
-    const file = try path(io, allocator, environ);
+    const file = try path(allocator, environ);
     defer allocator.free(file);
     const content = std.Io.Dir.cwd().readFileAlloc(io, file, allocator, .limited(1 << 20)) catch |err| switch (err) {
         error.FileNotFound => return std.json.parseFromSlice(Config, allocator, "{}", .{}),
@@ -74,7 +71,7 @@ pub fn save(
     environ: *const std.process.Environ.Map,
     config: Config,
 ) !void {
-    const file = try path(io, allocator, environ);
+    const file = try path(allocator, environ);
     defer allocator.free(file);
     try std.Io.Dir.cwd().createDirPath(io, std.Io.Dir.path.dirname(file) orelse ".");
     const json = try std.json.Stringify.valueAlloc(allocator, config, .{

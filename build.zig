@@ -34,10 +34,6 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    const known_folders = b.dependency("known_folders", .{
-        .target = target,
-        .optimize = optimize,
-    });
     const zqlite = b.dependency("zqlite", .{
         .target = target,
         .optimize = optimize,
@@ -67,21 +63,18 @@ pub fn build(b: *std.Build) !void {
                 .{ .name = "ncnn", .module = ncnn.module("ncnn") },
                 .{ .name = "zignal", .module = zignal.module("zignal") },
                 .{ .name = "zqlite", .module = zqlite.module("zqlite") },
-                .{ .name = "known_folders", .module = known_folders.module("known-folders") },
                 .{ .name = "goose", .module = goose.?.module("goose") },
             },
             .windows => &.{
                 .{ .name = "ncnn", .module = ncnn.module("ncnn") },
                 .{ .name = "zignal", .module = zignal.module("zignal") },
                 .{ .name = "zqlite", .module = zqlite.module("zqlite") },
-                .{ .name = "known_folders", .module = known_folders.module("known-folders") },
                 .{ .name = "win32", .module = win32.?.module("win32") },
             },
             else => &.{
                 .{ .name = "ncnn", .module = ncnn.module("ncnn") },
                 .{ .name = "zignal", .module = zignal.module("zignal") },
                 .{ .name = "zqlite", .module = zqlite.module("zqlite") },
-                .{ .name = "known_folders", .module = known_folders.module("known-folders") },
             },
         },
     });

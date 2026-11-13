@@ -25,7 +25,7 @@ pub fn run(init: std.process.Init) !void {
 }
 
 fn writeLog(init: std.process.Init, text: []const u8) void {
-    const dir = config.dir(init.io, init.gpa, init.environ_map) catch return;
+    const dir = config.dir(init.gpa, init.environ_map) catch return;
     defer init.gpa.free(dir);
     const path = std.Io.Dir.path.join(init.gpa, &.{ dir, "daemon.log" }) catch return;
     defer init.gpa.free(path);
@@ -148,7 +148,7 @@ fn runAction(daemon: *Daemon, action: core.Action) !void {
         .ocr, .oneline => {
             const profile = try selectedProfile(daemon);
             defer daemon.allocator.free(profile);
-            const model_dir = try core.paths.profileDir(daemon.io, daemon.allocator, daemon.environ, profile);
+            const model_dir = try core.paths.profileDir(daemon.allocator, daemon.environ, profile);
             defer daemon.allocator.free(model_dir);
             const lines = try core.recognizeFile(daemon.allocator, daemon.io, path, .{
                 .model_dir = model_dir,
@@ -227,7 +227,7 @@ pub fn lock(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !std.Io.File {
-    const dir = try config.dir(io, allocator, environ);
+    const dir = try config.dir(allocator, environ);
     defer allocator.free(dir);
     const path = try std.Io.Dir.path.join(allocator, &.{ dir, "daemon.lock" });
     defer allocator.free(path);
@@ -255,7 +255,7 @@ fn isRunningLinux(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !bool {
-    const path = try pidPath(io, allocator, environ);
+    const path = try pidPath(allocator, environ);
     defer allocator.free(path);
     const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(64)) catch |err| switch (err) {
         error.FileNotFound => return false,
@@ -278,7 +278,7 @@ pub fn acquire(
     environ: *const std.process.Environ.Map,
 ) !void {
     if (try isRunning(io, allocator, environ)) return error.AlreadyRunning;
-    const path = try pidPath(io, allocator, environ);
+    const path = try pidPath(allocator, environ);
     defer allocator.free(path);
     try std.Io.Dir.cwd().createDirPath(io, std.Io.Dir.path.dirname(path) orelse ".");
     const content = try std.fmt.allocPrint(allocator, "{d}\n", .{std.os.linux.getpid()});
@@ -291,7 +291,7 @@ pub fn release(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) void {
-    const path = pidPath(io, allocator, environ) catch return;
+    const path = pidPath(allocator, environ) catch return;
     defer allocator.free(path);
     std.Io.Dir.cwd().deleteFile(io, path) catch {};
 }
@@ -314,7 +314,7 @@ fn ensureRunningLinux(
     if (try isRunning(io, allocator, environ)) return DaemonError.AlreadyRunning;
     const executable = try std.process.executablePathAlloc(io, allocator);
     defer allocator.free(executable);
-    const config_dir = try config.dir(io, allocator, environ);
+    const config_dir = try config.dir(allocator, environ);
     defer allocator.free(config_dir);
     const log_path = try std.Io.Dir.path.join(allocator, &.{ config_dir, "daemon.log" });
     defer allocator.free(log_path);
@@ -337,11 +337,10 @@ fn ensureRunningLinux(
 }
 
 fn pidPath(
-    io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const dir = try config.dir(io, allocator, environ);
+    const dir = try config.dir(allocator, environ);
     defer allocator.free(dir);
     return std.Io.Dir.path.join(allocator, &.{ dir, "daemon.pid" });
 }

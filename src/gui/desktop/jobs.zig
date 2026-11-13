@@ -77,7 +77,7 @@ pub fn worker(job: *Job) void {
                 return;
             }
             if (job.kind == .extract or job.kind == .extract_oneline) {
-                const model_dir = core.paths.profileDir(job.io, job.allocator, job.environ, job.profile) catch |err| {
+                const model_dir = core.paths.profileDir(job.allocator, job.environ, job.profile) catch |err| {
                     finishError(job, err);
                     return;
                 };
@@ -113,7 +113,7 @@ fn tempPath(state: *State) ?[]u8 {
     const now = std.Io.Clock.real.now(state.io);
     // Must be absolute: history.appendImage refuses relative paths, and
     // TEMP/TMPDIR/TMP are unset on most Linux desktops.
-    const temp = nui.path(state.allocator, .temp, "kocr") catch {
+    const temp = nui.path(state.allocator, .temp, core.dirs.name) catch {
         state.setMainStatus("Error: unable to find a temporary directory");
         return null;
     };

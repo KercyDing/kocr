@@ -9,7 +9,7 @@ pub fn enabled(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !bool {
-    const path = try desktopPath(io, allocator, environ);
+    const path = try desktopPath(allocator, environ);
     defer allocator.free(path);
     var file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
@@ -26,7 +26,7 @@ pub fn set(
     install: bool,
     daemon_executable: []const u8,
 ) !void {
-    const path = try desktopPath(io, allocator, environ);
+    const path = try desktopPath(allocator, environ);
     defer allocator.free(path);
     if (!install) {
         std.Io.Dir.cwd().deleteFile(io, path) catch |err| switch (err) {
@@ -55,11 +55,10 @@ pub fn set(
 }
 
 fn desktopPath(
-    io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const dir = try config.dir(io, allocator, environ);
+    const dir = try config.dir(allocator, environ);
     defer allocator.free(dir);
     const config_root = std.Io.Dir.path.dirname(dir) orelse return error.ConfigDirUnavailable;
     return std.Io.Dir.path.join(allocator, &.{ config_root, "autostart", file_name });

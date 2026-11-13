@@ -35,11 +35,11 @@ pub fn install(
     options: InstallOptions,
 ) ![]u8 {
     const package = catalog.find(profile) orelse return InstallError.UnknownProfile;
-    const root = try model.modelsRoot(io, allocator, environ);
+    const root = try model.modelsRoot(allocator, environ);
     defer allocator.free(root);
     try std.Io.Dir.cwd().createDirPath(io, root);
 
-    const target = try model.profileDir(io, allocator, environ, profile);
+    const target = try model.profileDir(allocator, environ, profile);
     errdefer allocator.free(target);
 
     if (std.Io.Dir.cwd().openDir(io, target, .{})) |dir| {
@@ -79,7 +79,7 @@ pub fn isInstalled(
     environ: *const std.process.Environ.Map,
     profile: []const u8,
 ) !bool {
-    const target = try model.profileDir(io, allocator, environ, profile);
+    const target = try model.profileDir(allocator, environ, profile);
     defer allocator.free(target);
     var dir = std.Io.Dir.cwd().openDir(io, target, .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
@@ -95,7 +95,7 @@ pub fn remove(
     environ: *const std.process.Environ.Map,
     profile: []const u8,
 ) !void {
-    const target = try model.profileDir(io, allocator, environ, profile);
+    const target = try model.profileDir(allocator, environ, profile);
     defer allocator.free(target);
     try std.Io.Dir.cwd().deleteTree(io, target);
 }

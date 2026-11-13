@@ -14,11 +14,6 @@
             .url = "git+https://github.com/arrufat/zignal#6a14fedfb3249b597883e79adc6ec3d7ffd2cc10",
             .hash = "zignal-0.12.0-dev-OrZ3s82KKgCsPD83scYfJYzqYjS46SeHN_BqCV5vlZhI",
         },
-        // Configuration
-        .known_folders = .{
-            .url = "git+https://github.com/ziglibs/known-folders.git#c7a8a1974ccf8b5b022ee7f4b13fd734cdd89ae1",
-            .hash = "known_folders-0.0.0-Fy-PJiLLAABzqCdF6GWFmE36oCwioOh6Uxj4FF1Neanr",
-        },
         // CLI
         .zommand = .{
             .url = "git+https://github.com/KercyDing/zommand?ref=main#2beb866662ebba77b31e6e9608d61b5f5dbc5890",

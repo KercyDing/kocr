@@ -37,21 +37,19 @@ pub const Revision = i64;
 pub const kept: usize = 200;
 
 pub fn historyPath(
-    io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const root = try model.paths.dataRoot(io, allocator, environ);
+    const root = try model.paths.dataRoot(allocator, environ);
     defer allocator.free(root);
     return std.Io.Dir.path.join(allocator, &.{ root, "history.sqlite3" });
 }
 
 pub fn imagesDir(
-    io: std.Io,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) ![]u8 {
-    const root = try model.paths.dataRoot(io, allocator, environ);
+    const root = try model.paths.dataRoot(allocator, environ);
     defer allocator.free(root);
     return std.Io.Dir.path.join(allocator, &.{ root, "history" });
 }
@@ -131,7 +129,7 @@ pub fn appendImage(
     if (source_path.len == 0) return;
     if (!std.Io.Dir.path.isAbsolute(source_path)) return error.InvalidImagePath;
 
-    const directory = try imagesDir(io, allocator, environ);
+    const directory = try imagesDir(allocator, environ);
     defer allocator.free(directory);
     try std.Io.Dir.cwd().createDirPath(io, directory);
 
@@ -245,7 +243,7 @@ pub fn clear(
     defer conn.close();
     try conn.execNoArgs("DELETE FROM captures");
     try bump(conn);
-    const directory = try imagesDir(io, allocator, environ);
+    const directory = try imagesDir(allocator, environ);
     defer allocator.free(directory);
     std.Io.Dir.cwd().deleteTree(io, directory) catch {};
 }
@@ -264,7 +262,7 @@ fn open(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) !zqlite.Conn {
-    const path = try historyPath(io, allocator, environ);
+    const path = try historyPath(allocator, environ);
     defer allocator.free(path);
     try std.Io.Dir.cwd().createDirPath(io, std.Io.Dir.path.dirname(path) orelse ".");
     const path_z = try allocator.dupeSentinel(u8, path, 0);

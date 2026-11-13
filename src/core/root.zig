@@ -12,6 +12,8 @@ pub const config = @import("config.zig");
 pub const timestamp = @import("timestamp.zig");
 pub const types = @import("types.zig");
 
+pub const dirs = @import("dirs.zig");
+
 pub const model = library.model;
 pub const paths = library.paths;
 pub const downloader = library.downloader;
@@ -95,6 +97,7 @@ pub fn listenConfigured(
 
 test {
     std.testing.refAllDecls(@This());
+    std.testing.refAllDecls(dirs);
     std.testing.refAllDecls(Keyboard);
     std.testing.refAllDecls(Screenshot);
     std.testing.refAllDecls(autostart);
