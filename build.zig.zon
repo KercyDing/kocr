@@ -42,8 +42,8 @@
             .lazy = true,
         },
         .bundle = .{
-            .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.3#f272beb5685c34d7b5aee16129bcdab32862bbdf",
-            .hash = "zig_bundle-0.1.3-Ni_yYV2nFwDYwz94SBkD9uW350UKfvXbyI5mWzw4DRQl",
+            .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.4#5c45516ab04ad9000abe5fb2beb277f343318a1a",
+            .hash = "zig_bundle-0.1.4-Ni_yYV2rFwB26Q5zHtL9wO8RCAv3esxbnHuI2ngWojhH",
         },
     },
     .paths = .{
