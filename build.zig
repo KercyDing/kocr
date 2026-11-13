@@ -13,25 +13,49 @@ pub fn build(b: *std.Build) !void {
 
     const ncnn_flags = @import("ncnn.zon");
     const ncnn_prebuilt = b.option([]const u8, "ncnn_prebuilt", "Directory containing prebuilt include/ and lib/");
+    const prebuilt_name: ?[]const u8 = switch (target.result.os.tag) {
+        .linux => if (target.result.abi == .gnu) switch (target.result.cpu.arch) {
+            .x86_64 => "ncnn_prebuilt_x86_64_linux_gnu",
+            .aarch64 => "ncnn_prebuilt_aarch64_linux_gnu",
+            else => null,
+        } else null,
+        .macos => switch (target.result.cpu.arch) {
+            .x86_64 => "ncnn_prebuilt_x86_64_macos",
+            .aarch64 => "ncnn_prebuilt_aarch64_macos",
+            else => null,
+        },
+        .windows => if (target.result.abi == .gnu) switch (target.result.cpu.arch) {
+            .x86_64 => "ncnn_prebuilt_x86_64_windows_gnu",
+            .aarch64 => "ncnn_prebuilt_aarch64_windows_gnu",
+            else => null,
+        } else null,
+        else => null,
+    };
     const ncnn = if (ncnn_prebuilt) |path|
         b.dependency("ncnn_zig", .{
             .target = target,
             .optimize = optimize,
             .prebuilt = std.Build.LazyPath{ .cwd_relative = path },
         })
-    else
-        b.dependency("ncnn_zig", .{
+    else if (prebuilt_name) |name| blk: {
+        const dep = b.lazyDependency(name, .{}) orelse return;
+        break :blk b.dependency("ncnn_zig", .{
             .target = target,
             .optimize = optimize,
-            .strip = strip,
-            .x86_isa = ncnn_flags.x86_isa,
-            .arm_isa = ncnn_flags.arm_isa,
-            // Union of the tiny/small/medium det/rec/cls models. Regenerate with
-            // ncnn-zig's tools/layers.py when the model packs change.
-            .layers = ncnn_flags.layers,
-            .int8 = ncnn_flags.int8,
-            .weight_quant = ncnn_flags.weight_quant,
+            .prebuilt = dep.path(""),
         });
+    } else b.dependency("ncnn_zig", .{
+        .target = target,
+        .optimize = optimize,
+        .strip = strip,
+        .x86_isa = ncnn_flags.x86_isa,
+        .arm_isa = ncnn_flags.arm_isa,
+        // Union of the tiny/small/medium det/rec/cls models. Regenerate with
+        // ncnn-zig's tools/layers.py when the model packs change.
+        .layers = ncnn_flags.layers,
+        .int8 = ncnn_flags.int8,
+        .weight_quant = ncnn_flags.weight_quant,
+    });
     const nanoui = if (target.result.os.tag == .windows)
         b.dependency("nanoui", .{
             .target = target,

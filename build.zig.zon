@@ -9,6 +9,38 @@
             .url = "git+https://github.com/kercyding/ncnn-zig?ref=v0.3.0#d5e9dfb83e21cd21a54f76851d4761cc3d0add6c",
             .hash = "ncnn_zig-0.3.0-nXBvalmiAgCgC-TGFYJleABbZPaeyeJ3mBQ7Ns6B2yL3",
         },
+        // Prebuilt ncnn for release targets; regenerate with the ncnn
+        // prebuilt workflow when ncnn.zon changes.
+        .ncnn_prebuilt_x86_64_linux_gnu = .{
+            .url = "https://github.com/KercyDing/kocr/releases/download/ncnn-prebuilt-0f16fe5c1e72/ncnn-prebuilt-0.3.0-x86_64-linux-gnu.tar.gz",
+            .hash = "ncnn_prebuilt_1fec6431-0.3.0-AQAAAPiVLQIYd-7GZN3WDI0780jpfty_WIkj9Mf5priN",
+            .lazy = true,
+        },
+        .ncnn_prebuilt_aarch64_linux_gnu = .{
+            .url = "https://github.com/KercyDing/kocr/releases/download/ncnn-prebuilt-0f16fe5c1e72/ncnn-prebuilt-0.3.0-aarch64-linux-gnu.tar.gz",
+            .hash = "ncnn_prebuilt_81f13a38-0.3.0-AQAAAPUo0wHkuo5qEiQqPlcpINvxBqLQk8jl8Dr0LuGi",
+            .lazy = true,
+        },
+        .ncnn_prebuilt_x86_64_macos = .{
+            .url = "https://github.com/KercyDing/kocr/releases/download/ncnn-prebuilt-0f16fe5c1e72/ncnn-prebuilt-0.3.0-x86_64-macos.tar.gz",
+            .hash = "ncnn_prebuilt_24402bba-0.3.0-AQAAAOTJFgIUrOwfOpBV1FeNSQIoNvk2mZOMeB-gR1UX",
+            .lazy = true,
+        },
+        .ncnn_prebuilt_aarch64_macos = .{
+            .url = "https://github.com/KercyDing/kocr/releases/download/ncnn-prebuilt-0f16fe5c1e72/ncnn-prebuilt-0.3.0-aarch64-macos.tar.gz",
+            .hash = "ncnn_prebuilt_33bfde9d-0.3.0-AQAAAH03zAFTe5pg26iLLXzSsT5XQ1hWpGaJAVLfLxSB",
+            .lazy = true,
+        },
+        .ncnn_prebuilt_x86_64_windows_gnu = .{
+            .url = "https://github.com/KercyDing/kocr/releases/download/ncnn-prebuilt-0f16fe5c1e72/ncnn-prebuilt-0.3.0-x86_64-windows-gnu.tar.gz",
+            .hash = "ncnn_prebuilt_2783261e-0.3.0-AQAAAIknHgJGZwmb9o96yxbRLKmfmqdYw81gKbJeqJL7",
+            .lazy = true,
+        },
+        .ncnn_prebuilt_aarch64_windows_gnu = .{
+            .url = "https://github.com/KercyDing/kocr/releases/download/ncnn-prebuilt-0f16fe5c1e72/ncnn-prebuilt-0.3.0-aarch64-windows-gnu.tar.gz",
+            .hash = "ncnn_prebuilt_7a927fb9-0.3.0-AQAAADA5yQGVu8L2QikdChfbLJCAImnizQcXK7G0DXBO",
+            .lazy = true,
+        },
         // Image
         .zignal = .{
             .url = "git+https://github.com/arrufat/zignal#6a14fedfb3249b597883e79adc6ec3d7ffd2cc10",
