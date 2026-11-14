@@ -39,6 +39,11 @@ pub const State = struct {
     records: []core.history.Record = &.{},
     rows: []Row = &.{},
     history_revision: ?core.history.Revision = null,
+    /// The search box's text: every history load filters by it.
+    search: nui.ui.TextBuffer = .{},
+    /// The history holds nothing at all; a search can hide every row without
+    /// the history being empty.
+    history_empty: bool = true,
     /// "Clear all" was clicked once: the next click on it clears the history.
     confirm_clear: bool = false,
     /// The same for removing the model in the settings tab.
@@ -61,6 +66,7 @@ pub const State = struct {
     pub fn deinit(self: *State) void {
         self.tray = null; // owned by the app
         self.freeHistory();
+        self.search.deinit();
         self.allocator.free(self.main_status);
         self.allocator.free(self.settings_status);
         for (&self.shortcuts) |*shortcut| {

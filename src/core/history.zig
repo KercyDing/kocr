@@ -169,7 +169,7 @@ pub fn query(
     defer if (search_pattern) |pattern| allocator.free(pattern);
     if (options.search) |search| {
         if (search.len != 0) {
-            search_pattern = try std.fmt.allocPrint(allocator, "%{s}%", .{search});
+            search_pattern = try likePattern(allocator, search);
         }
     }
     const kind_name: ?[]const u8 = if (options.kind) |kind| @tagName(kind) else null;
@@ -181,7 +181,7 @@ pub fn query(
         \\FROM captures
         \\WHERE (:before IS NULL OR id < :before)
         \\  AND (:kind IS NULL OR kind = :kind)
-        \\  AND (:search IS NULL OR text LIKE :search)
+        \\  AND (:search IS NULL OR text LIKE :search ESCAPE '\')
         \\ORDER BY id DESC
         \\LIMIT :limit
     , .{
@@ -214,6 +214,33 @@ pub fn query(
     }
     if (rows.err) |err| return err;
     return records.toOwnedSlice(allocator);
+}
+
+/// `text` between wildcards, with its own `%`, `_` and `\` escaped: a search
+/// matches the characters typed, not a pattern.
+fn likePattern(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
+    var pattern: std.ArrayList(u8) = .empty;
+    errdefer pattern.deinit(allocator);
+    try pattern.append(allocator, '%');
+    for (text) |byte| {
+        if (byte == '%' or byte == '_' or byte == '\\') try pattern.append(allocator, '\\');
+        try pattern.append(allocator, byte);
+    }
+    try pattern.append(allocator, '%');
+    return pattern.toOwnedSlice(allocator);
+}
+
+/// Whether the history holds anything at all, whatever a search hides.
+pub fn isEmpty(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) !bool {
+    var conn = try open(io, allocator, environ);
+    defer conn.close();
+    const row = try conn.row("SELECT 1 FROM captures LIMIT 1", .{});
+    defer if (row) |first| first.deinit();
+    return row == null;
 }
 
 pub fn delete(
@@ -332,6 +359,36 @@ test "keeps the newest rows and reports every write" {
     // An old row going away moves the stamp too: a count of rows would not.
     try delete(io, allocator, &env, records[kept - 1].id);
     try std.testing.expect((try revision(io, allocator, &env)) > appended);
+}
+
+test "searches text literally, as typed" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
+
+    var env = std.process.Environ.Map.init(allocator);
+    defer env.deinit();
+    try env.put("KOCR_DATA_HOME", root);
+
+    try appendText(io, allocator, &env, "plain");
+    try appendText(io, allocator, &env, "100% done");
+
+    // `%` and `_` reach SQLite as wildcards unless the search escapes them.
+    {
+        const records = try query(io, allocator, &env, .{ .search = "%" });
+        defer freeRecords(allocator, records);
+        try std.testing.expectEqual(@as(usize, 1), records.len);
+        try std.testing.expectEqualStrings("100% done", records[0].content.text);
+    }
+    {
+        const records = try query(io, allocator, &env, .{ .search = "_" });
+        defer freeRecords(allocator, records);
+        try std.testing.expectEqual(@as(usize, 0), records.len);
+    }
 }
 
 test "queries, deletes, and clears history" {

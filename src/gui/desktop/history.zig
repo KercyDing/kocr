@@ -21,7 +21,11 @@ pub fn loadHistory(state: *State) void {
     if (state.selected) |index| {
         if (index < state.records.len) selected_id = state.records[index].id;
     }
-    const records = core.history.recent(state.io, state.allocator, state.environ, core.history.kept) catch |err| {
+    const search = state.search.text();
+    const records = core.history.query(state.io, state.allocator, state.environ, .{
+        .limit = core.history.kept,
+        .search = if (search.len == 0) null else search,
+    }) catch |err| {
         var buffer: [256]u8 = undefined;
         state.setMainStatus(std.fmt.bufPrint(&buffer, "History error: {s}", .{@errorName(err)}) catch "History error");
         return;
@@ -56,6 +60,10 @@ pub fn loadHistory(state: *State) void {
         };
     }
 
+    state.history_empty = if (search.len == 0)
+        records.len == 0
+    else
+        core.history.isEmpty(state.io, state.allocator, state.environ) catch false;
     state.freeHistory();
     state.records = records;
     state.rows = rows;

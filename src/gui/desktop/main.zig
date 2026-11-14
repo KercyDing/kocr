@@ -168,6 +168,52 @@ fn textPreviewTooltip(c: *ui.Context, trigger: ui.Interaction, text: []const u8)
     ui.text(c, text, style);
 }
 
+/// The history search: a pill that filters the loaded rows as it is typed.
+/// A text record is the only thing it finds: image rows carry a path, not text.
+fn searchField(state: *State, c: *ui.Context) void {
+    const t = c.theme;
+    var pill = ui.div(c)
+        .row()
+        .w(280)
+        .h(30)
+        .px(12)
+        .gap(8)
+        .itemsCenter()
+        .rounded(15)
+        .bg(t.surface)
+        .border(t.border)
+        .control();
+    const it = pill.interaction();
+    if (it.hovered) c.cursor_text = true;
+    // The pill's padding belongs to it, not the field: a press there puts
+    // the caret in the field, as pressing the field itself does.
+    if (it.clicked) state.search.focus();
+    const result = blk: {
+        defer pill.end();
+        ui.icon(c, "magnifyingglass", .{ .size = 12, .color = t.muted });
+        break :blk ui.textField(c, &state.search, .{
+            .bare = true,
+            .width = .{ .px = 236 },
+            .size = 13,
+            .placeholder = "Search text",
+            .color = t.text,
+        });
+    };
+    if (result.changed) history.loadHistory(state);
+
+    // `textField` draws its focus ring only on the box it draws, and `bare`
+    // fields have none, with no option for one: the pill takes it over, as
+    // the field would have drawn it.
+    const focus_t = c.animate(it.id, 1, if (result.focused) 1 else 0, 20);
+    const node = c.node(pill.index);
+    node.style.border = t.border.mix(t.accent, focus_t);
+    node.style.border_width = 1 + focus_t;
+    node.style.shadow = if (focus_t > 0.01)
+        .{ .color = t.accent.alpha(0.25 * focus_t), .blur = 6, .y = 0 }
+    else
+        null;
+}
+
 fn historyView(state: *State, c: *ui.Context) void {
     const t = c.theme;
     const empty = state.rows.len == 0;
@@ -186,7 +232,7 @@ fn historyView(state: *State, c: *ui.Context) void {
     defer ui.end(c);
 
     if (empty) {
-        ui.text(c, "No history yet", .{ .size = 13, .color = t.muted });
+        ui.text(c, if (state.history_empty) "No history yet" else "No matches", .{ .size = 13, .color = t.muted });
         return;
     }
 
@@ -259,10 +305,16 @@ pub fn view(state: *State, c: *ui.Context) void {
         defer ui.end(c);
 
         if (state.tab == .history) {
-            ui.row(c, .{ .width = .fill, .align_items = .center, .padding = .{ .right = row_inset } });
+            ui.row(c, .{ .width = .fill, .align_items = .center, .padding = .{ .left = row_inset, .right = row_inset } });
             defer ui.end(c);
+            // An empty slot the clear button's size: with one on each side,
+            // the search field lands on the row's center instead of leaning
+            // away from the button.
+            ui.div(c).w(kit.Size.sm.height()).end();
             ui.spacer(c);
-            const idle_clear = state.rows.len != 0 and idle;
+            searchField(state, c);
+            ui.spacer(c);
+            const idle_clear = idle and !state.history_empty;
             if (confirm.button(c, &state.confirm_clear, "clear-all", "Clear all", "Click again to clear", !idle_clear)) {
                 history.clearHistory(state);
             }
