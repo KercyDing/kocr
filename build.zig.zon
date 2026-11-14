@@ -53,7 +53,7 @@
         },
         // GUI: the Linux tray branch of the fork, until it lands upstream.
         .nanoui = .{
-            .url = "git+https://github.com/KercyDing/nanoui?ref=linux/tray#64ed347ae91485d8615a83ba5e23299b830292fe",
+            .url = "git+https://github.com/justrach/nanoui?ref=main#1155e61c766e7ea17fe05e28815ec4f637ddcc44",
             .hash = "nanoui-0.14.4-we0KMcK4PgA4iAhWOSQt52kRSHW-MwwfMlA-wUFwTEzk",
         },
         // Sqlite
