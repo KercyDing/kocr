@@ -8,6 +8,7 @@ const config = core.config;
 const profiles = core.downloader.catalog.profiles;
 
 const InstallProgress = struct {
+    io: std.Io,
     last_percent: u8 = 101,
     printed: bool = false,
 
@@ -16,7 +17,7 @@ const InstallProgress = struct {
         if (total == 0) {
             if (!self.printed) {
                 self.printed = true;
-                std.debug.print("\rdownloading…", .{});
+                stderrPrint(self.io, "\rdownloading…", .{});
             }
             return;
         }
@@ -24,15 +25,22 @@ const InstallProgress = struct {
         if (percent == self.last_percent) return;
         self.last_percent = percent;
         self.printed = true;
-        std.debug.print("\rdownloading {d}%", .{percent});
+        stderrPrint(self.io, "\rdownloading {d}%", .{percent});
     }
 
     fn finish(self: *InstallProgress) void {
         if (!self.printed) return;
-        std.debug.print("\r                  \r", .{});
+        stderrPrint(self.io, "\r                  \r", .{});
         self.printed = false;
     }
 };
+
+/// Progress ticks have no trailing newline, so they bypass `std.log`.
+fn stderrPrint(io: std.Io, comptime format: []const u8, args: anytype) void {
+    var buffer: [128]u8 = undefined;
+    const text = std.fmt.bufPrint(&buffer, format, args) catch return;
+    std.Io.File.stderr().writeStreamingAll(io, text) catch {};
+}
 
 pub fn main(init: std.process.Init) !void {
     const result = try cli.parse(init.io, init.arena.allocator(), init.minimal.args);
@@ -50,13 +58,13 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn fail(comptime format: []const u8, args: anytype) noreturn {
-    std.debug.print(format, args);
+    std.log.err(format, args);
     std.process.exit(1);
 }
 
 fn validateProfile(profile: []const u8) void {
     if (core.downloader.catalog.find(profile) == null)
-        fail("unknown model profile '{s}'\nchoose tiny, small or medium\n", .{profile});
+        fail("unknown model profile '{s}'\nchoose tiny, small or medium", .{profile});
 }
 
 fn modelPath(init: std.process.Init, profile: []const u8) ![]u8 {
@@ -66,7 +74,7 @@ fn modelPath(init: std.process.Init, profile: []const u8) ![]u8 {
 fn requireInstalled(init: std.process.Init, profile: []const u8) ![]const u8 {
     validateProfile(profile);
     if (!try core.downloader.isInstalled(init.io, init.gpa, init.environ_map, profile))
-        fail("{s} is not installed\ninstall it with: kocr install {s}\n", .{ profile, profile });
+        fail("{s} is not installed\ninstall it with: kocr install {s}", .{ profile, profile });
     return profile;
 }
 
@@ -80,7 +88,7 @@ fn select(init: std.process.Init, profile: []const u8) !void {
 fn runInstall(init: std.process.Init, args: cli.Install, out: *std.Io.Writer) !void {
     const profile = args.profile;
     validateProfile(profile);
-    var progress = InstallProgress{};
+    var progress = InstallProgress{ .io = init.io };
     errdefer progress.finish();
     const installed = core.downloader.install(init.io, init.gpa, init.environ_map, profile, .{
         .force = args.force,
@@ -171,8 +179,11 @@ fn resolveImageProfile(init: std.process.Init, requested: ?[]const u8, selected:
     for (profiles) |profile| {
         if (try core.downloader.isInstalled(init.io, init.gpa, init.environ_map, profile)) return profile;
     }
-    std.debug.print("no model installed\ninstall one with:\n", .{});
-    for (profiles) |profile| std.debug.print("  kocr install {s}\n", .{profile});
+    var buffer: [128]u8 = undefined;
+    var message = std.Io.Writer.fixed(&buffer);
+    message.print("no model installed\ninstall one with:", .{}) catch {};
+    for (profiles) |profile| message.print("\n  kocr install {s}", .{profile}) catch {};
+    std.log.err("{s}", .{message.buffered()});
     std.process.exit(1);
 }
 
@@ -240,6 +251,6 @@ fn recordHistory(init: std.process.Init, lines: []const core.Line) !void {
         try text.appendSlice(init.gpa, line.text);
     }
     core.history.appendText(init.io, init.gpa, init.environ_map, text.items) catch |err| {
-        std.debug.print("warning: failed to save history: {s}\n", .{@errorName(err)});
+        std.log.warn("failed to save history: {s}", .{@errorName(err)});
     };
 }

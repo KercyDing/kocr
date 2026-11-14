@@ -102,7 +102,7 @@ pub fn run(init: std.process.Init) !void {
     tray.sync(&state);
     if (win) nui.App.after(50, &state, trayTimer);
     core.startHotkeys(init.gpa, init.io, init.environ_map, &state, hotkey) catch |err| {
-        std.debug.print("kocr: shortcuts unavailable: {s}\n", .{@errorName(err)});
+        std.log.warn("shortcuts unavailable: {s}", .{@errorName(err)});
     };
 
     model.loadSelection(&state);

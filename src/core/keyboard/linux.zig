@@ -221,7 +221,7 @@ fn serveThread(args: *ServeArgs) void {
     const a = args.*;
     args.allocator.destroy(args);
     listenConfigured(a.allocator, a.io, a.environ, a.context, a.handler) catch |err| {
-        std.debug.print("kocr: shortcuts unavailable: {s}\n", .{@errorName(err)});
+        std.log.warn("shortcuts unavailable: {s}", .{@errorName(err)});
     };
 }
 
