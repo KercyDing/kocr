@@ -12,7 +12,6 @@ pub fn build(b: *std.Build) !void {
     const codesign_identity = b.option([]const u8, "codesign-identity", "macOS signing identity; defaults to ad-hoc") orelse "-";
 
     const ncnn_flags = @import("ncnn.zon");
-    const ncnn_prebuilt = b.option([]const u8, "ncnn_prebuilt", "Directory containing prebuilt include/ and lib/");
     const prebuilt_name: ?[]const u8 = switch (target.result.os.tag) {
         .linux => if (target.result.abi == .gnu) switch (target.result.cpu.arch) {
             .x86_64 => "ncnn_prebuilt_x86_64_linux_gnu",
@@ -31,13 +30,7 @@ pub fn build(b: *std.Build) !void {
         } else null,
         else => null,
     };
-    const ncnn = if (ncnn_prebuilt) |path|
-        b.dependency("ncnn_zig", .{
-            .target = target,
-            .optimize = optimize,
-            .prebuilt = std.Build.LazyPath{ .cwd_relative = path },
-        })
-    else if (prebuilt_name) |name| blk: {
+    const ncnn = if (prebuilt_name) |name| blk: {
         const dep = b.lazyDependency(name, .{}) orelse return;
         break :blk b.dependency("ncnn_zig", .{
             .target = target,
