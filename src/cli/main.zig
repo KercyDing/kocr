@@ -36,12 +36,16 @@ const InstallProgress = struct {
 
 pub fn main(init: std.process.Init) !void {
     const result = try cli.parse(init.io, init.arena.allocator(), init.minimal.args);
+    var buffer: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(init.io, &buffer);
+    const out = &file_writer.interface;
+    defer out.flush() catch {};
     switch (result) {
-        .image => |args| try runImage(init, args),
-        .list => try runList(init),
-        .use => |args| try runUse(init, args),
-        .install => |args| try runInstall(init, args),
-        .uninstall => |args| try runUninstall(init, args),
+        .image => |args| try runImage(init, args, out),
+        .list => try runList(init, out),
+        .use => |args| try runUse(init, args, out),
+        .install => |args| try runInstall(init, args, out),
+        .uninstall => |args| try runUninstall(init, args, out),
     }
 }
 
@@ -73,7 +77,7 @@ fn select(init: std.process.Init, profile: []const u8) !void {
     try config.save(init.gpa, init.io, init.environ_map, parsed.value);
 }
 
-fn runInstall(init: std.process.Init, args: cli.Install) !void {
+fn runInstall(init: std.process.Init, args: cli.Install, out: *std.Io.Writer) !void {
     const profile = args.profile;
     validateProfile(profile);
     var progress = InstallProgress{};
@@ -90,12 +94,12 @@ fn runInstall(init: std.process.Init, args: cli.Install) !void {
     };
     defer init.gpa.free(installed);
     progress.finish();
-    std.debug.print("installed {s} at {s}\n", .{ profile, installed });
+    try out.print("installed {s} at {s}\n", .{ profile, installed });
     try select(init, profile);
-    std.debug.print("now using {s}\n", .{profile});
+    try out.print("now using {s}\n", .{profile});
 }
 
-fn runList(init: std.process.Init) !void {
+fn runList(init: std.process.Init, out: *std.Io.Writer) !void {
     var parsed = try config.load(init.gpa, init.io, init.environ_map);
     defer parsed.deinit();
     const selected = parsed.value.models.select;
@@ -117,13 +121,13 @@ fn runList(init: std.process.Init) !void {
     }
     defer for (rows) |row| init.gpa.free(row.path);
 
-    std.debug.print("{s:<6}  {s:<19}  {s}\n", .{ "NAME", "STATUS", "PATH" });
+    try out.print("{s:<6}  {s:<19}  {s}\n", .{ "NAME", "STATUS", "PATH" });
     for (rows) |row| {
-        std.debug.print("{s:<6}  {s:<19}  {s}\n", .{ row.name, row.status, row.path });
+        try out.print("{s:<6}  {s:<19}  {s}\n", .{ row.name, row.status, row.path });
     }
 }
 
-fn runUninstall(init: std.process.Init, args: cli.Uninstall) !void {
+fn runUninstall(init: std.process.Init, args: cli.Uninstall, out: *std.Io.Writer) !void {
     const profile = args.profile;
     validateProfile(profile);
     if (!try core.downloader.isInstalled(init.io, init.gpa, init.environ_map, profile))
@@ -139,11 +143,11 @@ fn runUninstall(init: std.process.Init, args: cli.Uninstall) !void {
         parsed.value.models.select = null;
         try config.save(init.gpa, init.io, init.environ_map, parsed.value);
     }
-    std.debug.print("removed {s} ({s})\n", .{ profile, model_dir });
-    if (was_selected) std.debug.print("no model selected\ninstall one with: kocr install <profile>\n", .{});
+    try out.print("removed {s} ({s})\n", .{ profile, model_dir });
+    if (was_selected) try out.print("no model selected\ninstall one with: kocr install <profile>\n", .{});
 }
 
-fn runUse(init: std.process.Init, args: cli.Use) !void {
+fn runUse(init: std.process.Init, args: cli.Use, out: *std.Io.Writer) !void {
     const profile = args.profile;
     _ = try requireInstalled(init, profile);
     const model_dir = try modelPath(init, profile);
@@ -153,13 +157,13 @@ fn runUse(init: std.process.Init, args: cli.Use) !void {
     defer parsed.deinit();
     if (parsed.value.models.select) |name| {
         if (std.mem.eql(u8, name, profile)) {
-            std.debug.print("{s} is already the active model ({s})\n", .{ profile, model_dir });
+            try out.print("{s} is already the active model ({s})\n", .{ profile, model_dir });
             return;
         }
     }
     parsed.value.models.select = profile;
     try config.save(init.gpa, init.io, init.environ_map, parsed.value);
-    std.debug.print("now using {s} ({s})\n", .{ profile, model_dir });
+    try out.print("now using {s} ({s})\n", .{ profile, model_dir });
 }
 
 fn resolveImageProfile(init: std.process.Init, requested: ?[]const u8, selected: ?[]const u8) ![]const u8 {
@@ -172,7 +176,7 @@ fn resolveImageProfile(init: std.process.Init, requested: ?[]const u8, selected:
     std.process.exit(1);
 }
 
-fn runImage(init: std.process.Init, args: cli.Image) !void {
+fn runImage(init: std.process.Init, args: cli.Image, out: *std.Io.Writer) !void {
     const threads: ?i32 = if (std.mem.eql(u8, args.threads, "auto"))
         null
     else
@@ -200,7 +204,7 @@ fn runImage(init: std.process.Init, args: cli.Image) !void {
         const boxes = try core.detectFile(init.gpa, init.io, args.path, options);
         defer init.gpa.free(boxes);
         for (boxes, 0..) |box, index| {
-            std.debug.print("{d}: [{d},{d},{d},{d}]\n", .{
+            try out.print("{d}: [{d},{d},{d},{d}]\n", .{
                 index,
                 box.bounds.left,
                 box.bounds.top,
@@ -208,21 +212,21 @@ fn runImage(init: std.process.Init, args: cli.Image) !void {
                 box.bounds.bottom,
             });
         }
-        std.debug.print("{d} boxes\n", .{boxes.len});
+        try out.print("{d} boxes\n", .{boxes.len});
         return;
     }
 
     if (args.line) {
         var result = try core.recognizeLine(init.gpa, init.io, args.path, options);
         defer result.deinit(init.gpa);
-        std.debug.print("{s}\n", .{result.text});
+        try out.print("{s}\n", .{result.text});
         return;
     }
 
     const lines = try core.recognizeFile(init.gpa, init.io, args.path, options);
     defer core.freeLines(init.gpa, lines);
     for (lines) |line| {
-        std.debug.print("{s}\n", .{line.text});
+        try out.print("{s}\n", .{line.text});
     }
     try recordHistory(init, lines);
 }
