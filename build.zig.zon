@@ -51,7 +51,7 @@
             .url = "git+https://github.com/KercyDing/zommand?ref=main#2beb866662ebba77b31e6e9608d61b5f5dbc5890",
             .hash = "zommand-0.0.1-Ph_F7Sy4AADYm5HuWIZJk1jmEe_zveJ48JiiEAKpr9oj",
         },
-        // GUI: the Linux tray branch of the fork, until it lands upstream.
+        // GUI
         .nanoui = .{
             .url = "git+https://github.com/justrach/nanoui?ref=main#1155e61c766e7ea17fe05e28815ec4f637ddcc44",
             .hash = "nanoui-0.14.4-we0KMcK4PgA4iAhWOSQt52kRSHW-MwwfMlA-wUFwTEzk",
@@ -73,6 +73,7 @@
             .hash = "win32-42.0.39-preview-mX5pFc794wMcrMyFgsO1c4csBdowhpiqqwIyN_xjqI5z",
             .lazy = true,
         },
+        // Bundle
         .bundle = .{
             .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.4#5c45516ab04ad9000abe5fb2beb277f343318a1a",
             .hash = "zig_bundle-0.1.4-Ni_yYV2rFwB26Q5zHtL9wO8RCAv3esxbnHuI2ngWojhH",
