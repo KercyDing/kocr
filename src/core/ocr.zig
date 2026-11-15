@@ -354,3 +354,146 @@ pub fn freeLines(allocator: std.mem.Allocator, lines: []Line) void {
     for (lines) |line| allocator.free(line.text);
     allocator.free(lines);
 }
+
+fn axisBox(left: u32, top: u32, right: u32, bottom: u32) model.det.TextBox {
+    const l: f32 = @floatFromInt(left);
+    const t: f32 = @floatFromInt(top);
+    const r: f32 = @floatFromInt(right);
+    const b: f32 = @floatFromInt(bottom);
+    return .{
+        .points = .{ .{ .x = l, .y = t }, .{ .x = r, .y = t }, .{ .x = r, .y = b }, .{ .x = l, .y = b } },
+        .bounds = .{ .left = left, .right = right, .top = top, .bottom = bottom },
+    };
+}
+
+fn rotateBox(box: model.det.TextBox, radians: f32) model.det.TextBox {
+    const center = boxGeometry(box);
+    const sin = @sin(radians);
+    const cos = @cos(radians);
+    var points: [4]model.det.Point = undefined;
+    for (box.points, 0..) |p, i| {
+        const dx = p.x - center.cx;
+        const dy = p.y - center.cy;
+        points[i] = .{ .x = center.cx + dx * cos - dy * sin, .y = center.cy + dx * sin + dy * cos };
+    }
+    return .{ .points = points, .bounds = box.bounds };
+}
+
+test "orderBoxPoints recovers corners from any input order" {
+    const expected = [4]model.det.Point{
+        .{ .x = 0, .y = 10 }, .{ .x = 40, .y = 10 }, .{ .x = 40, .y = 30 }, .{ .x = 0, .y = 30 },
+    };
+    // All 24 permutations.
+    for (0..4) |a| {
+        for (0..4) |b| {
+            if (b == a) continue;
+            for (0..4) |c| {
+                if (c == a or c == b) continue;
+                const d: usize = 6 - a - b - c;
+                const ordered = orderBoxPoints(.{ expected[a], expected[b], expected[c], expected[d] });
+                for (ordered, expected) |got, want| {
+                    try std.testing.expectEqual(want.x, got.x);
+                    try std.testing.expectEqual(want.y, got.y);
+                }
+            }
+        }
+    }
+}
+
+test "boxGeometry of an axis-aligned box" {
+    const g = boxGeometry(axisBox(6, 18, 14, 22));
+    try std.testing.expectEqual(10.0, g.cx);
+    try std.testing.expectEqual(20.0, g.cy);
+    try std.testing.expectEqual(4.0, g.half_w);
+    try std.testing.expectEqual(2.0, g.half_h);
+    try std.testing.expectEqual(@as(f32, 1), g.ux);
+    try std.testing.expectEqual(@as(f32, 0), g.uy);
+    try std.testing.expectEqual(@as(f32, 0), g.vx);
+    try std.testing.expectEqual(@as(f32, 1), g.vy);
+}
+
+test "boxGeometry follows a rotated box" {
+    // 3-4-5 triangle: 4 wide, 3 tall, baseline slope 3/4.
+    const box = model.det.TextBox{
+        .points = .{
+            .{ .x = 0, .y = 0 }, .{ .x = 4, .y = 3 }, .{ .x = 1, .y = 7 }, .{ .x = -3, .y = 4 },
+        },
+        .bounds = .{ .left = 0, .right = 4, .top = 0, .bottom = 7 },
+    };
+    const g = boxGeometry(box);
+    try std.testing.expectEqual(@as(f32, 0.8), g.ux);
+    try std.testing.expectEqual(@as(f32, 0.6), g.uy);
+    try std.testing.expectApproxEqAbs(@as(f32, -0.6), g.vx, 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.8), g.vy, 1e-6);
+}
+
+test "buildGroups joins boxes on one line" {
+    const allocator = std.testing.allocator;
+    const boxes = [_]model.det.TextBox{ axisBox(0, 0, 100, 20), axisBox(100, 0, 200, 20) };
+    var groups = try buildGroups(allocator, &boxes);
+    defer freeGroups(allocator, &groups);
+    try std.testing.expectEqual(1, groups.items.len);
+    try std.testing.expectEqualSlices(usize, &.{ 0, 1 }, groups.items[0].boxes.items);
+}
+
+test "buildGroups joins up to the horizontal reach" {
+    const allocator = std.testing.allocator;
+    // reach = half_w + half_w + half_h = 50 + 50 + 10, measured between centers.
+    inline for (.{ .{ 110, 1 }, .{ 111, 2 } }) |case| {
+        const boxes = [_]model.det.TextBox{ axisBox(0, 0, 100, 20), axisBox(case[0], 0, case[0] + 100, 20) };
+        var groups = try buildGroups(allocator, &boxes);
+        defer freeGroups(allocator, &groups);
+        try std.testing.expectEqual(@as(usize, case[1]), groups.items.len);
+    }
+}
+
+test "buildGroups splits past half the line height" {
+    const allocator = std.testing.allocator;
+    // perpendicular = 5 joins, 6 splits.
+    inline for (.{ .{ 5, 1 }, .{ 6, 2 } }) |case| {
+        const boxes = [_]model.det.TextBox{ axisBox(0, 0, 100, 20), axisBox(0, case[0], 100, 20 + case[0]) };
+        var groups = try buildGroups(allocator, &boxes);
+        defer freeGroups(allocator, &groups);
+        try std.testing.expectEqual(@as(usize, case[1]), groups.items.len);
+    }
+}
+
+test "buildGroups splits lines past the angle tolerance" {
+    const allocator = std.testing.allocator;
+    const line = axisBox(0, 0, 100, 20);
+    // dot = cos(angle); 5 degrees is 0.996, 20 degrees is 0.940.
+    const cases = .{ .{ 5.0, 1 }, .{ 20.0, 2 } };
+    inline for (cases) |case| {
+        const boxes = [_]model.det.TextBox{ line, rotateBox(line, case[0] * std.math.pi / 180.0) };
+        var groups = try buildGroups(allocator, &boxes);
+        defer freeGroups(allocator, &groups);
+        try std.testing.expectEqual(@as(usize, case[1]), groups.items.len);
+    }
+}
+
+test "buildGroups grows the line bounds when joining" {
+    const allocator = std.testing.allocator;
+    const boxes = [_]model.det.TextBox{ axisBox(0, 0, 100, 20), axisBox(0, 4, 100, 24) };
+    var groups = try buildGroups(allocator, &boxes);
+    defer freeGroups(allocator, &groups);
+    try std.testing.expectEqual(1, groups.items.len);
+    try std.testing.expectEqual(@as(f32, 0), groups.items[0].top);
+    try std.testing.expectEqual(@as(f32, 24), groups.items[0].bottom);
+    try std.testing.expectEqual(@as(f32, 12), groups.items[0].center);
+}
+
+test "boxLessThan orders by column within a row, by row otherwise" {
+    const tall_a = axisBox(0, 0, 10, 10);
+    const tall_b = axisBox(20, 8, 30, 18); // top delta 8, tolerance 8: same row
+    const tall_c = axisBox(5, 9, 15, 19); // top delta 9: next row
+    try std.testing.expect(boxLessThan({}, tall_a, tall_b));
+    try std.testing.expect(!boxLessThan({}, tall_b, tall_a));
+    try std.testing.expect(boxLessThan({}, tall_a, tall_c));
+    try std.testing.expect(!boxLessThan({}, tall_c, tall_a));
+
+    // The tolerance floor is 8, so short boxes still compare by column.
+    const short_a = axisBox(0, 0, 10, 4);
+    const short_b = axisBox(20, 6, 30, 10);
+    try std.testing.expect(boxLessThan({}, short_a, short_b));
+    try std.testing.expect(!boxLessThan({}, short_b, short_a));
+}
