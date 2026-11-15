@@ -1,65 +1,65 @@
 .{
     .name = "kocr",
     .version = "0.5.8",
-    .about = "Offline OCR for images",
+    .help = "Offline OCR for images",
     .commands = .{
         .{
             .name = "image",
-            .about = "Recognize text from an image",
+            .help = "Recognize text from an image",
             .args = .{
                 .{
                     .positional = .{
-                        .id = "path",
+                        .name = "path",
                         .help = "Input image path",
                         .required = true,
                     },
                 },
                 .{
                     .option = .{
-                        .id = "profile",
+                        .name = "profile",
                         .help = "Model profile: tiny, small or medium",
                     },
                 },
                 .{
                     .option = .{
-                        .id = "model_dir",
+                        .name = "model_dir",
                         .help = "Model directory",
                     },
                 },
                 .{
                     .option = .{
-                        .id = "rec_param",
+                        .name = "rec_param",
                         .help = "Recognition param file",
                     },
                 },
                 .{
                     .option = .{
-                        .id = "rec_bin",
+                        .name = "rec_bin",
                         .help = "Recognition bin file",
                     },
                 },
                 .{
                     .option = .{
-                        .id = "keys",
+                        .name = "keys",
                         .help = "Dictionary file",
                     },
                 },
                 .{
                     .option = .{
-                        .id = "threads",
+                        .name = "threads",
                         .help = "Inference threads, or auto",
                         .default = "auto",
                     },
                 },
                 .{
                     .flag = .{
-                        .id = "detect",
+                        .name = "detect",
                         .help = "Print detected text boxes",
                     },
                 },
                 .{
                     .flag = .{
-                        .id = "line",
+                        .name = "line",
                         .help = "Recognize a single text line",
                     },
                 },
@@ -67,16 +67,16 @@
         },
         .{
             .name = "list",
-            .about = "List installed model packages",
+            .help = "List installed model packages",
             .args = .{},
         },
         .{
             .name = "use",
-            .about = "Select an installed model profile",
+            .help = "Select an installed model profile",
             .args = .{
                 .{
                     .positional = .{
-                        .id = "profile",
+                        .name = "profile",
                         .help = "Model profile: tiny, small or medium",
                         .required = true,
                     },
@@ -85,18 +85,18 @@
         },
         .{
             .name = "install",
-            .about = "Download and install a model package",
+            .help = "Download and install a model package",
             .args = .{
                 .{
                     .positional = .{
-                        .id = "profile",
+                        .name = "profile",
                         .help = "Model profile: tiny, small or medium",
                         .required = true,
                     },
                 },
                 .{
                     .flag = .{
-                        .id = "force",
+                        .name = "force",
                         .help = "Replace an existing installed model",
                     },
                 },
@@ -104,11 +104,11 @@
         },
         .{
             .name = "uninstall",
-            .about = "Remove an installed model package",
+            .help = "Remove an installed model package",
             .args = .{
                 .{
                     .positional = .{
-                        .id = "profile",
+                        .name = "profile",
                         .help = "Model profile: tiny, small or medium",
                         .required = true,
                     },
