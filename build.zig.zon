@@ -48,8 +48,8 @@
         },
         // CLI
         .zommand = .{
-            .url = "git+https://github.com/KercyDing/zommand?ref=v0.1.2#90180bfe6dc7733a90b955bcd3ee4d78749157cc",
-            .hash = "zommand-0.1.2-Ph_F7ZepAQBNm1r2s-l8DKjjZr2cvbcz3I-rXB7Mpkes",
+            .url = "git+https://github.com/KercyDing/zommand?ref=v0.2.0#a6590e4b20d7652cb3e10d4bd37015f0e40f28d5",
+            .hash = "zommand-0.2.0-Ph_F7echAgDlhW86COmLf2Vt5lfLKBuX1NiM9VtXqM1W",
         },
         // GUI
         .nanoui = .{
