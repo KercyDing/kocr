@@ -42,22 +42,242 @@ fn stderrPrint(io: std.Io, comptime format: []const u8, args: anytype) void {
     std.Io.File.stderr().writeStreamingAll(io, text) catch {};
 }
 
-pub fn main(init: std.process.Init) !void {
-    const parsed = cli.parseOrExit(init);
+const App = struct {
+    out: *std.Io.Writer,
 
+    pub fn handleInstall(self: *App, init: std.process.Init, args: cli.Install) !void {
+        const out = self.out;
+        const profile = args.profile;
+        validateProfile(profile);
+
+        var progress = InstallProgress{ .io = init.io };
+        errdefer progress.finish();
+
+        const installed = core.downloader.install(
+            init.io,
+            init.gpa,
+            init.environ_map,
+            profile,
+            .{
+                .force = args.force,
+                .progress = .{
+                    .context = &progress,
+                    .report = InstallProgress.report,
+                },
+            },
+        ) catch |err| switch (err) {
+            error.AlreadyInstalled => {
+                progress.finish();
+                fail(
+                    "{s} is already installed\n" ++
+                        "reinstall with: kocr install {s} --force\n",
+                    .{ profile, profile },
+                );
+            },
+            else => return err,
+        };
+        defer init.gpa.free(installed);
+
+        progress.finish();
+        try out.print("installed {s} at {s}\n", .{ profile, installed });
+        try select(init, profile);
+        try out.print("now using {s}\n", .{profile});
+    }
+
+    pub fn handleList(self: *App, init: std.process.Init) !void {
+        const out = self.out;
+        var parsed = try config.load(init.gpa, init.io, init.environ_map);
+        defer parsed.deinit();
+        const selected = parsed.value.models.select;
+
+        const Row = struct {
+            name: []const u8,
+            status: []const u8,
+            path: []u8,
+        };
+
+        var rows: [profiles.len]Row = undefined;
+        for (profiles, 0..) |profile, index| {
+            const installed = try core.downloader.isInstalled(
+                init.io,
+                init.gpa,
+                init.environ_map,
+                profile,
+            );
+            rows[index] = .{
+                .name = profile,
+                .status = statusText(installed, isSelected(selected, profile)),
+                .path = try modelPath(init, profile),
+            };
+        }
+        defer {
+            for (rows) |row| init.gpa.free(row.path);
+        }
+
+        try out.print("{s:<6}  {s:<19}  {s}\n", .{ "NAME", "STATUS", "PATH" });
+        for (rows) |row| {
+            try out.print("{s:<6}  {s:<19}  {s}\n", .{ row.name, row.status, row.path });
+        }
+    }
+
+    pub fn handleUninstall(self: *App, init: std.process.Init, args: cli.Uninstall) !void {
+        const out = self.out;
+        const profile = args.profile;
+        validateProfile(profile);
+
+        if (!try core.downloader.isInstalled(init.io, init.gpa, init.environ_map, profile)) {
+            fail(
+                "{s} is not installed\n" ++
+                    "run kocr list to see installed models\n",
+                .{profile},
+            );
+        }
+
+        const model_dir = try modelPath(init, profile);
+        defer init.gpa.free(model_dir);
+
+        try core.downloader.remove(init.io, init.gpa, init.environ_map, profile);
+
+        var parsed = try config.load(init.gpa, init.io, init.environ_map);
+        defer parsed.deinit();
+
+        const was_selected = isSelected(parsed.value.models.select, profile);
+        if (was_selected) {
+            parsed.value.models.select = null;
+            try config.save(init.gpa, init.io, init.environ_map, parsed.value);
+        }
+
+        try out.print("removed {s} ({s})\n", .{ profile, model_dir });
+        if (was_selected) {
+            try out.print(
+                "no model selected\n" ++
+                    "install one with: kocr install <profile>\n",
+                .{},
+            );
+        }
+    }
+
+    pub fn handleUse(self: *App, init: std.process.Init, args: cli.Use) !void {
+        const out = self.out;
+        const profile = args.profile;
+        _ = try requireInstalled(init, profile);
+
+        const model_dir = try modelPath(init, profile);
+        defer init.gpa.free(model_dir);
+
+        var parsed = try config.load(init.gpa, init.io, init.environ_map);
+        defer parsed.deinit();
+
+        if (isSelected(parsed.value.models.select, profile)) {
+            try out.print("{s} is already the active model ({s})\n", .{ profile, model_dir });
+            return;
+        }
+
+        parsed.value.models.select = profile;
+        try config.save(init.gpa, init.io, init.environ_map, parsed.value);
+        try out.print("now using {s} ({s})\n", .{ profile, model_dir });
+    }
+
+    fn resolveImageProfile(
+        init: std.process.Init,
+        requested: ?[]const u8,
+        selected: ?[]const u8,
+    ) ![]const u8 {
+        if (requested orelse selected) |profile| {
+            return requireInstalled(init, profile);
+        }
+
+        for (profiles) |profile| {
+            const installed = try core.downloader.isInstalled(
+                init.io,
+                init.gpa,
+                init.environ_map,
+                profile,
+            );
+            if (installed) return profile;
+        }
+
+        var buffer: [128]u8 = undefined;
+        var message = std.Io.Writer.fixed(&buffer);
+        message.print("no model installed\ninstall one with:", .{}) catch {};
+        for (profiles) |profile| {
+            message.print("\n  kocr install {s}", .{profile}) catch {};
+        }
+
+        std.log.err("{s}", .{message.buffered()});
+        std.process.exit(1);
+    }
+
+    pub fn handleImage(self: *App, init: std.process.Init, args: cli.Image) !void {
+        const out = self.out;
+        const threads = try parseThreads(args.threads);
+
+        var parsed_config = try config.load(init.gpa, init.io, init.environ_map);
+        defer parsed_config.deinit();
+
+        const model_dir = if (args.model_dir) |dir| dir else blk: {
+            const profile = try resolveImageProfile(
+                init,
+                args.profile,
+                parsed_config.value.models.select,
+            );
+            break :blk try modelPath(init, profile);
+        };
+        defer {
+            if (args.model_dir == null) init.gpa.free(model_dir);
+        }
+
+        const options: core.Options = .{
+            .model_dir = model_dir,
+            .threads = threads,
+            .rec_param = args.rec_param,
+            .rec_bin = args.rec_bin,
+            .keys = args.keys,
+        };
+
+        if (args.detect) {
+            const boxes = try core.detectFile(init.gpa, init.io, args.path, options);
+            defer init.gpa.free(boxes);
+
+            for (boxes, 0..) |box, index| {
+                try out.print("{d}: [{d},{d},{d},{d}]\n", .{
+                    index,
+                    box.bounds.left,
+                    box.bounds.top,
+                    box.bounds.right,
+                    box.bounds.bottom,
+                });
+            }
+            try out.print("{d} boxes\n", .{boxes.len});
+            return;
+        }
+
+        if (args.line) {
+            var result = try core.recognizeLine(init.gpa, init.io, args.path, options);
+            defer result.deinit(init.gpa);
+            try out.print("{s}\n", .{result.text});
+            return;
+        }
+
+        const lines = try core.recognizeFile(init.gpa, init.io, args.path, options);
+        defer core.freeLines(init.gpa, lines);
+
+        for (lines) |line| {
+            try out.print("{s}\n", .{line.text});
+        }
+        try recordHistory(init, lines);
+    }
+};
+
+pub fn main(init: std.process.Init) !void {
     var buffer: [4096]u8 = undefined;
     var file_writer = std.Io.File.stdout().writerStreaming(init.io, &buffer);
 
     const out = &file_writer.interface;
     defer out.flush() catch {};
 
-    switch (parsed.command) {
-        .image => |args| try runImage(init, args, out),
-        .list => try runList(init, out),
-        .use => |args| try runUse(init, args, out),
-        .install => |args| try runInstall(init, args, out),
-        .uninstall => |args| try runUninstall(init, args, out),
-    }
+    var app = App{ .out = out };
+    try cli.run(init, &app);
 }
 
 fn fail(comptime format: []const u8, args: anytype) noreturn {
@@ -108,224 +328,6 @@ fn select(init: std.process.Init, profile: []const u8) !void {
 
     parsed.value.models.select = profile;
     try config.save(init.gpa, init.io, init.environ_map, parsed.value);
-}
-
-fn runInstall(init: std.process.Init, args: cli.Install, out: *std.Io.Writer) !void {
-    const profile = args.profile;
-    validateProfile(profile);
-
-    var progress = InstallProgress{ .io = init.io };
-    errdefer progress.finish();
-
-    const installed = core.downloader.install(
-        init.io,
-        init.gpa,
-        init.environ_map,
-        profile,
-        .{
-            .force = args.force,
-            .progress = .{
-                .context = &progress,
-                .report = InstallProgress.report,
-            },
-        },
-    ) catch |err| switch (err) {
-        error.AlreadyInstalled => {
-            progress.finish();
-            fail(
-                "{s} is already installed\n" ++
-                    "reinstall with: kocr install {s} --force\n",
-                .{ profile, profile },
-            );
-        },
-        else => return err,
-    };
-    defer init.gpa.free(installed);
-
-    progress.finish();
-    try out.print("installed {s} at {s}\n", .{ profile, installed });
-    try select(init, profile);
-    try out.print("now using {s}\n", .{profile});
-}
-
-fn runList(init: std.process.Init, out: *std.Io.Writer) !void {
-    var parsed = try config.load(init.gpa, init.io, init.environ_map);
-    defer parsed.deinit();
-    const selected = parsed.value.models.select;
-
-    const Row = struct {
-        name: []const u8,
-        status: []const u8,
-        path: []u8,
-    };
-
-    var rows: [profiles.len]Row = undefined;
-    for (profiles, 0..) |profile, index| {
-        const installed = try core.downloader.isInstalled(
-            init.io,
-            init.gpa,
-            init.environ_map,
-            profile,
-        );
-        rows[index] = .{
-            .name = profile,
-            .status = statusText(installed, isSelected(selected, profile)),
-            .path = try modelPath(init, profile),
-        };
-    }
-    defer {
-        for (rows) |row| init.gpa.free(row.path);
-    }
-
-    try out.print("{s:<6}  {s:<19}  {s}\n", .{ "NAME", "STATUS", "PATH" });
-    for (rows) |row| {
-        try out.print("{s:<6}  {s:<19}  {s}\n", .{ row.name, row.status, row.path });
-    }
-}
-
-fn runUninstall(init: std.process.Init, args: cli.Uninstall, out: *std.Io.Writer) !void {
-    const profile = args.profile;
-    validateProfile(profile);
-
-    if (!try core.downloader.isInstalled(init.io, init.gpa, init.environ_map, profile)) {
-        fail(
-            "{s} is not installed\n" ++
-                "run kocr list to see installed models\n",
-            .{profile},
-        );
-    }
-
-    const model_dir = try modelPath(init, profile);
-    defer init.gpa.free(model_dir);
-
-    try core.downloader.remove(init.io, init.gpa, init.environ_map, profile);
-
-    var parsed = try config.load(init.gpa, init.io, init.environ_map);
-    defer parsed.deinit();
-
-    const was_selected = isSelected(parsed.value.models.select, profile);
-    if (was_selected) {
-        parsed.value.models.select = null;
-        try config.save(init.gpa, init.io, init.environ_map, parsed.value);
-    }
-
-    try out.print("removed {s} ({s})\n", .{ profile, model_dir });
-    if (was_selected) {
-        try out.print(
-            "no model selected\n" ++
-                "install one with: kocr install <profile>\n",
-            .{},
-        );
-    }
-}
-
-fn runUse(init: std.process.Init, args: cli.Use, out: *std.Io.Writer) !void {
-    const profile = args.profile;
-    _ = try requireInstalled(init, profile);
-
-    const model_dir = try modelPath(init, profile);
-    defer init.gpa.free(model_dir);
-
-    var parsed = try config.load(init.gpa, init.io, init.environ_map);
-    defer parsed.deinit();
-
-    if (isSelected(parsed.value.models.select, profile)) {
-        try out.print("{s} is already the active model ({s})\n", .{ profile, model_dir });
-        return;
-    }
-
-    parsed.value.models.select = profile;
-    try config.save(init.gpa, init.io, init.environ_map, parsed.value);
-    try out.print("now using {s} ({s})\n", .{ profile, model_dir });
-}
-
-fn resolveImageProfile(
-    init: std.process.Init,
-    requested: ?[]const u8,
-    selected: ?[]const u8,
-) ![]const u8 {
-    if (requested orelse selected) |profile| {
-        return requireInstalled(init, profile);
-    }
-
-    for (profiles) |profile| {
-        const installed = try core.downloader.isInstalled(
-            init.io,
-            init.gpa,
-            init.environ_map,
-            profile,
-        );
-        if (installed) return profile;
-    }
-
-    var buffer: [128]u8 = undefined;
-    var message = std.Io.Writer.fixed(&buffer);
-    message.print("no model installed\ninstall one with:", .{}) catch {};
-    for (profiles) |profile| {
-        message.print("\n  kocr install {s}", .{profile}) catch {};
-    }
-
-    std.log.err("{s}", .{message.buffered()});
-    std.process.exit(1);
-}
-
-fn runImage(init: std.process.Init, args: cli.Image, out: *std.Io.Writer) !void {
-    const threads = try parseThreads(args.threads);
-
-    var parsed_config = try config.load(init.gpa, init.io, init.environ_map);
-    defer parsed_config.deinit();
-
-    const model_dir = if (args.model_dir) |dir| dir else blk: {
-        const profile = try resolveImageProfile(
-            init,
-            args.profile,
-            parsed_config.value.models.select,
-        );
-        break :blk try modelPath(init, profile);
-    };
-    defer {
-        if (args.model_dir == null) init.gpa.free(model_dir);
-    }
-
-    const options: core.Options = .{
-        .model_dir = model_dir,
-        .threads = threads,
-        .rec_param = args.rec_param,
-        .rec_bin = args.rec_bin,
-        .keys = args.keys,
-    };
-
-    if (args.detect) {
-        const boxes = try core.detectFile(init.gpa, init.io, args.path, options);
-        defer init.gpa.free(boxes);
-
-        for (boxes, 0..) |box, index| {
-            try out.print("{d}: [{d},{d},{d},{d}]\n", .{
-                index,
-                box.bounds.left,
-                box.bounds.top,
-                box.bounds.right,
-                box.bounds.bottom,
-            });
-        }
-        try out.print("{d} boxes\n", .{boxes.len});
-        return;
-    }
-
-    if (args.line) {
-        var result = try core.recognizeLine(init.gpa, init.io, args.path, options);
-        defer result.deinit(init.gpa);
-        try out.print("{s}\n", .{result.text});
-        return;
-    }
-
-    const lines = try core.recognizeFile(init.gpa, init.io, args.path, options);
-    defer core.freeLines(init.gpa, lines);
-
-    for (lines) |line| {
-        try out.print("{s}\n", .{line.text});
-    }
-    try recordHistory(init, lines);
 }
 
 fn recordHistory(init: std.process.Init, lines: []const core.Line) !void {
