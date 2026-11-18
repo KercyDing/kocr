@@ -68,18 +68,15 @@
         .{
             .name = "list",
             .help = "List installed model packages",
-            .args = .{},
         },
         .{
             .name = "use",
             .help = "Select an installed model profile",
             .args = .{
-                .{
-                    .positional = .{
-                        .name = "profile",
-                        .help = "Model profile: tiny, small or medium",
-                        .required = true,
-                    },
+                .positional = .{
+                    .name = "profile",
+                    .help = "Model profile: tiny, small or medium",
+                    .required = true,
                 },
             },
         },
@@ -105,18 +102,15 @@
         .{
             .name = "update",
             .help = "Update the CLI to the latest release",
-            .args = .{},
         },
         .{
             .name = "uninstall",
             .help = "Remove an installed model package",
             .args = .{
-                .{
-                    .positional = .{
-                        .name = "profile",
-                        .help = "Model profile: tiny, small or medium",
-                        .required = true,
-                    },
+                .positional = .{
+                    .name = "profile",
+                    .help = "Model profile: tiny, small or medium",
+                    .required = true,
                 },
             },
         },
