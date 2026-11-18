@@ -172,9 +172,7 @@ const App = struct {
         errdefer progress.finish();
 
         const installed = core.downloader.install(
-            init.io,
-            init.gpa,
-            init.environ_map,
+            init,
             profile,
             .{
                 .force = args.force,

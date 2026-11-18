@@ -78,6 +78,11 @@
             .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.5#4fd66c9361bb37271f2d0cddbf08e5182fe80014",
             .hash = "zig_bundle-0.1.5-Ni_yYeWzFwAW59sioR5tPGkE0u1Cn6huiLxdnGRD-Jmg",
         },
+        // Downloader
+        .downloader = .{
+            .url = "git+https://github.com/KercyDing/downloader?ref=main#88e11197277564fb84900bad45034f161a8c2c6c",
+            .hash = "downloader-0.0.1-rh_FeK4-AQAy0yDCVy1m-AIyui7OG3YgUv-o5zi7C5tn",
+        },
     },
     .paths = .{
         "build.zig",

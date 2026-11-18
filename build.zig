@@ -70,6 +70,11 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    const downloader_dep = b.dependency("downloader", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const goose = if (target.result.os.tag == .linux)
         try b.dependencyLazy("goose", .{
             .target = target,
@@ -91,18 +96,21 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
         .imports = switch (target.result.os.tag) {
             .linux => &.{
+                .{ .name = "downloader", .module = downloader_dep.module("downloader") },
                 .{ .name = "ncnn", .module = ncnn.module("ncnn") },
                 .{ .name = "zignal", .module = zignal.module("zignal") },
                 .{ .name = "zqlite", .module = zqlite.module("zqlite") },
                 .{ .name = "goose", .module = goose.?.module("goose") },
             },
             .windows => &.{
+                .{ .name = "downloader", .module = downloader_dep.module("downloader") },
                 .{ .name = "ncnn", .module = ncnn.module("ncnn") },
                 .{ .name = "zignal", .module = zignal.module("zignal") },
                 .{ .name = "zqlite", .module = zqlite.module("zqlite") },
                 .{ .name = "win32", .module = win32.?.module("win32") },
             },
             else => &.{
+                .{ .name = "downloader", .module = downloader_dep.module("downloader") },
                 .{ .name = "ncnn", .module = ncnn.module("ncnn") },
                 .{ .name = "zignal", .module = zignal.module("zignal") },
                 .{ .name = "zqlite", .module = zqlite.module("zqlite") },

@@ -24,6 +24,7 @@ pub const Job = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: *const std.process.Environ.Map,
+    process_init: std.process.Init,
     kind: JobKind,
     profile: []u8,
     output_path: ?[]u8 = null,
@@ -47,7 +48,7 @@ pub const Job = struct {
 pub fn worker(job: *Job) void {
     switch (job.kind) {
         .install => {
-            const installed = core.downloader.install(job.io, job.allocator, job.environ, job.profile, .{
+            const installed = core.downloader.install(job.process_init, job.profile, .{
                 .force = false,
                 .progress = .{ .context = job, .report = reportProgress },
             }) catch |err| {
@@ -149,6 +150,7 @@ fn start(state: *State, kind: JobKind, output_path: ?[]const u8) void {
         .allocator = state.allocator,
         .io = state.io,
         .environ = state.environ,
+        .process_init = state.process_init,
         .kind = kind,
         .profile = profile,
         .output_path = owned_path,

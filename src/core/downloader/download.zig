@@ -1,6 +1,8 @@
-//! Model package download and installation using only the Zig standard library.
+//! Model package download and installation.
 
 const std = @import("std");
+
+const downloader = @import("downloader");
 
 pub const catalog = @import("catalog.zig");
 
@@ -28,12 +30,14 @@ pub const InstallError = error{
 /// Downloads, verifies and atomically installs a model package.
 /// Returns the final model directory, owned by `allocator`.
 pub fn install(
-    io: std.Io,
-    allocator: std.mem.Allocator,
-    environ: *const std.process.Environ.Map,
+    init: std.process.Init,
     profile: []const u8,
     options: InstallOptions,
 ) ![]u8 {
+    const io = init.io;
+    const allocator = init.gpa;
+    const environ = init.environ_map;
+
     const package = catalog.find(profile) orelse return InstallError.UnknownProfile;
     const root = try model.modelsRoot(allocator, environ);
     defer allocator.free(root);
@@ -62,8 +66,8 @@ pub fn install(
     defer cleanup(io, archive);
     defer cleanup(io, staging);
 
-    if (!try downloadVerified(io, allocator, package.cnb_url, archive, package.sha256, options.progress)) {
-        if (!try downloadVerified(io, allocator, package.github_url, archive, package.sha256, options.progress))
+    if (!try downloadVerified(init, package.cnb_url, archive, package.sha256, options.progress)) {
+        if (!try downloadVerified(init, package.github_url, archive, package.sha256, options.progress))
             return InstallError.DownloadFailed;
     }
 
@@ -105,56 +109,32 @@ fn cleanup(io: std.Io, path: []const u8) void {
 }
 
 fn downloadVerified(
-    io: std.Io,
-    allocator: std.mem.Allocator,
+    init: std.process.Init,
     url: []const u8,
     destination: []const u8,
     expected: []const u8,
     progress: ?Progress,
 ) !bool {
-    download(io, allocator, url, destination, progress) catch return false;
-    return verify(io, destination, expected) catch false;
+    download(init, url, destination, progress) catch return false;
+    return verify(init.io, destination, expected) catch false;
 }
 
 pub fn download(
-    io: std.Io,
-    allocator: std.mem.Allocator,
+    init: std.process.Init,
     url: []const u8,
     destination: []const u8,
     progress: ?Progress,
 ) !void {
-    var client: std.http.Client = .{ .allocator = allocator, .io = io };
-    defer client.deinit();
-
-    const uri = std.Uri.parse(url) catch return InstallError.DownloadFailed;
-    var request = client.request(.GET, uri, .{
-        .redirect_behavior = .init(5),
-    }) catch return InstallError.DownloadFailed;
-    defer request.deinit();
-    request.sendBodiless() catch return InstallError.DownloadFailed;
-
-    var header_buffer: [16 * 1024]u8 = undefined;
-    var response = request.receiveHead(&header_buffer) catch return InstallError.DownloadFailed;
-    if (response.head.status != .ok) return InstallError.DownloadFailed;
-
-    const total = response.head.content_length orelse 0;
-    if (progress) |callback| callback.report(callback.context, 0, total);
-
-    var file = try std.Io.Dir.cwd().createFile(io, destination, .{ .truncate = true });
-    defer file.close(io);
-
-    var transfer_buffer: [64 * 1024]u8 = undefined;
-    var reader = response.reader(&transfer_buffer);
-    var chunk: [64 * 1024]u8 = undefined;
-    var downloaded: u64 = 0;
-    while (true) {
-        const len = reader.readSliceShort(&chunk) catch return InstallError.DownloadFailed;
-        if (len == 0) break;
-        try file.writeStreamingAll(io, chunk[0..len]);
-        downloaded += @intCast(len);
-        if (progress) |callback| callback.report(callback.context, downloaded, total);
+    var bridge: ?downloader.Progress = null;
+    if (progress) |callback| {
+        bridge = .{ .context = callback.context, .report = callback.report };
     }
-    if (response.head.content_length != null and downloaded != total) return InstallError.DownloadFailed;
+
+    downloader.download(init, url, destination, .{
+        .retries = 2,
+        .retry_delay_ms = 500,
+        .progress = bridge,
+    }) catch return InstallError.DownloadFailed;
 }
 
 fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {

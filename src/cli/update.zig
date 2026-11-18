@@ -124,10 +124,10 @@ fn downloadRelease(
     const io = init.io;
     const signature_url = try std.mem.concat(allocator, u8, &.{ url, ".minisig" });
     defer allocator.free(signature_url);
-    try downloader.download(io, allocator, signature_url, signature, null);
+    try downloader.download(init, signature_url, signature, null);
     const contents = try std.Io.Dir.cwd().readFileAlloc(io, signature, allocator, .limited(4096));
     defer allocator.free(contents);
-    try downloader.download(io, allocator, url, archive, progress);
+    try downloader.download(init, url, archive, progress);
     try public_key.verify(io, archive, contents, asset_name);
 }
 

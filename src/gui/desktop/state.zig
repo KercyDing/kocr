@@ -22,6 +22,7 @@ pub const State = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: *const std.process.Environ.Map,
+    process_init: std.process.Init,
     main_window: ?*nui.Window = null,
     app: ?*nui.App = null,
     about_window: ?*nui.Window = null,
@@ -58,6 +59,7 @@ pub const State = struct {
             .allocator = process_init.gpa,
             .io = process_init.io,
             .environ = process_init.environ_map,
+            .process_init = process_init,
             .main_status = status,
             .settings_status = settings_status,
         };
