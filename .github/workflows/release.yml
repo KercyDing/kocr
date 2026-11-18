@@ -260,3 +260,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
         run: gh workflow run aur.yml --repo "$GITHUB_REPOSITORY" --ref main -f "tag=$TAG"
+
+      # The release is created with GITHUB_TOKEN, and GitHub does not start new
+      # runs for events it produces, so `release: published` alone never fires.
+      - name: Sync the release to CNB
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: gh workflow run sync-to-cnb.yml --repo "$GITHUB_REPOSITORY" --ref main -f "tag=$TAG"
