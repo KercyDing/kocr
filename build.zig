@@ -5,6 +5,7 @@ const bundler = @import("bundle");
 const zommand = @import("zommand");
 
 pub fn build(b: *std.Build) !void {
+    const version = @import("build.zig.zon").version;
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
@@ -138,6 +139,9 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "cli", .module = cli },
         },
     });
+    const version_options = b.addOptions();
+    version_options.addOption([]const u8, "version", version);
+    exe_mod.addOptions("build_options", version_options);
 
     const exe = b.addExecutable(.{
         .name = "kocr",
@@ -178,10 +182,7 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    // The About window shows it; build.zig.zon keeps the one copy.
-    const gui_options = b.addOptions();
-    gui_options.addOption([]const u8, "version", @import("build.zig.zon").version);
-    gui_mod.addOptions("build_options", gui_options);
+    gui_mod.addOptions("build_options", version_options);
 
     const gui = b.addExecutable(.{
         .name = "kocr-gui",
@@ -216,8 +217,6 @@ pub fn build(b: *std.Build) !void {
     gui_cmd.addPassthruArgs();
     const gui_run = b.step("run-gui", "Run the native GUI");
     gui_run.dependOn(&gui_cmd.step);
-
-    const version = @import("build.zig.zon").version;
 
     const gui_app: bundler.App = .{
         .name = "kocr",

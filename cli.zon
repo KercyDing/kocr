@@ -103,6 +103,11 @@
             },
         },
         .{
+            .name = "update",
+            .help = "Update the CLI to the latest release",
+            .args = .{},
+        },
+        .{
             .name = "uninstall",
             .help = "Remove an installed model package",
             .args = .{

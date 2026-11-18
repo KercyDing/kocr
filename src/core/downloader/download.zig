@@ -116,7 +116,7 @@ fn downloadVerified(
     return verify(io, destination, expected) catch false;
 }
 
-fn download(
+pub fn download(
     io: std.Io,
     allocator: std.mem.Allocator,
     url: []const u8,
@@ -127,7 +127,9 @@ fn download(
     defer client.deinit();
 
     const uri = std.Uri.parse(url) catch return InstallError.DownloadFailed;
-    var request = client.request(.GET, uri, .{}) catch return InstallError.DownloadFailed;
+    var request = client.request(.GET, uri, .{
+        .redirect_behavior = .init(5),
+    }) catch return InstallError.DownloadFailed;
     defer request.deinit();
     request.sendBodiless() catch return InstallError.DownloadFailed;
 
@@ -152,9 +154,10 @@ fn download(
         downloaded += @intCast(len);
         if (progress) |callback| callback.report(callback.context, downloaded, total);
     }
+    if (response.head.content_length != null and downloaded != total) return InstallError.DownloadFailed;
 }
 
-fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {
+pub fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {
     var file = try std.Io.Dir.cwd().openFile(io, path, .{});
     defer file.close(io);
     var file_buffer: [64 * 1024]u8 = undefined;
@@ -173,7 +176,7 @@ fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {
     return std.mem.eql(u8, &hex, expected);
 }
 
-fn extract(io: std.Io, archive: []const u8, destination: []const u8) !void {
+pub fn extract(io: std.Io, archive: []const u8, destination: []const u8) !void {
     var file = try std.Io.Dir.cwd().openFile(io, archive, .{});
     defer file.close(io);
     var file_buffer: [64 * 1024]u8 = undefined;

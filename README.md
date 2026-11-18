@@ -71,6 +71,7 @@ For scripts and agents; the GUI covers everyday use.
 kocr install tiny            # download a model pack: tiny, small or medium
 kocr use tiny                # make it the default
 kocr list                    # what is installed, and where
+kocr update                  # update the standalone kocr executable
 
 kocr image images/1.png      # print the recognized text
 kocr image shot.png --line   # one cropped line of text
@@ -78,6 +79,8 @@ kocr image shot.png --detect # print the detected boxes too
 ```
 
 `kocr list` prints each profile's status and path. `kocr image` uses the selected profile unless `--profile` or `--model_dir` says otherwise. Model packs download on demand and are checked against their SHA-256.
+
+`kocr update` verifies the release archive's SHA-256 and replaces the standalone CLI in its current location. It tries CNB first and falls back to GitHub. For a package-manager installation, update through the package manager.
 
 ## Build from source
 
