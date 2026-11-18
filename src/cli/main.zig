@@ -45,7 +45,7 @@ fn stderrPrint(io: std.Io, comptime format: []const u8, args: anytype) void {
 const App = struct {
     out: *std.Io.Writer,
 
-    pub fn handleInstall(self: *App, init: std.process.Init, args: cli.Install) !void {
+    pub fn handleInstall(self: *const App, init: std.process.Init, args: cli.Install) !void {
         const out = self.out;
         const profile = args.profile;
         validateProfile(profile);
@@ -84,7 +84,7 @@ const App = struct {
         try out.print("now using {s}\n", .{profile});
     }
 
-    pub fn handleList(self: *App, init: std.process.Init) !void {
+    pub fn handleList(self: *const App, init: std.process.Init) !void {
         const out = self.out;
         var parsed = try config.load(init.gpa, init.io, init.environ_map);
         defer parsed.deinit();
@@ -120,7 +120,7 @@ const App = struct {
         }
     }
 
-    pub fn handleUninstall(self: *App, init: std.process.Init, args: cli.Uninstall) !void {
+    pub fn handleUninstall(self: *const App, init: std.process.Init, args: cli.Uninstall) !void {
         const out = self.out;
         const profile = args.profile;
         validateProfile(profile);
@@ -157,7 +157,7 @@ const App = struct {
         }
     }
 
-    pub fn handleUse(self: *App, init: std.process.Init, args: cli.Use) !void {
+    pub fn handleUse(self: *const App, init: std.process.Init, args: cli.Use) !void {
         const out = self.out;
         const profile = args.profile;
         _ = try requireInstalled(init, profile);
@@ -208,7 +208,7 @@ const App = struct {
         std.process.exit(1);
     }
 
-    pub fn handleImage(self: *App, init: std.process.Init, args: cli.Image) !void {
+    pub fn handleImage(self: *const App, init: std.process.Init, args: cli.Image) !void {
         const out = self.out;
         const threads = try parseThreads(args.threads);
 
