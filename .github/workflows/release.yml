@@ -124,6 +124,8 @@ jobs:
             args: ""
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    env:
+      KOCR_MINISIGN_PUBLIC_KEY: ${{ vars.KOCR_MINISIGN_PUBLIC_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -139,7 +141,11 @@ jobs:
           use-cache: false
 
       - name: Build
-        run: zig build -Doptimize=fast -Dstrip=true ${{ matrix.args }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${KOCR_MINISIGN_PUBLIC_KEY:?Set the KOCR_MINISIGN_PUBLIC_KEY repository variable}"
+          zig build -Doptimize=fast -Dstrip=true ${{ matrix.args }}
 
       - name: Bundle
         run: zig build bundle -Doptimize=fast -Dstrip=true ${{ matrix.args }}
@@ -160,38 +166,11 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ needs.validate.outputs.version }}"
-          stale="$(find zig-out/bundle -type f ! -name '*.sha256' ! -name "*${version}*" -print -quit)"
+          stale="$(find zig-out/bundle -type f ! -name "*${version}*" -print -quit)"
           if [ -n "$stale" ]; then
             echo "unexpected bundle output: $stale" >&2
             exit 1
           fi
-
-      - name: Checksums (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          set -euo pipefail
-          find zig-out/bundle -type f ! -name '*.sha256' -print0 | while IFS= read -r -d '' file; do
-            sha256sum "$file" > "$file.sha256"
-          done
-
-      - name: Checksums (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          set -euo pipefail
-          find zig-out/bundle -type f ! -name '*.sha256' -print0 | while IFS= read -r -d '' file; do
-            shasum -a 256 "$file" > "$file.sha256"
-          done
-
-      - name: Checksums (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Get-ChildItem zig-out\bundle -Recurse -File |
-            Where-Object { $_.Extension -ne '.sha256' } |
-            ForEach-Object {
-              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-              "$hash  $($_.Name)" | Set-Content "$($_.FullName).sha256"
-            }
 
       - name: Upload assets
         uses: actions/upload-artifact@v7.0.2
@@ -204,7 +183,7 @@ jobs:
   release:
     name: Publish release
     needs: [validate, build]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Download release assets
@@ -213,6 +192,27 @@ jobs:
           pattern: release-*
           path: artifacts
           merge-multiple: true
+
+      - name: Install Minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Sign release assets
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.KOCR_MINISIGN_SECRET_KEY }}
+          MINISIGN_PUBLIC_KEY: ${{ vars.KOCR_MINISIGN_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          : "${MINISIGN_SECRET_KEY:?Set the KOCR_MINISIGN_SECRET_KEY repository secret}"
+          : "${MINISIGN_PUBLIC_KEY:?Set the KOCR_MINISIGN_PUBLIC_KEY repository variable}"
+          umask 077
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
+          find artifacts -type f ! -name '*.minisig' -print0 | while IFS= read -r -d '' file; do
+            name="${file##*/}"
+            minisign -S -s "$key" -m "$file" -t "$name" </dev/null
+            minisign -V -H -q -P "$MINISIGN_PUBLIC_KEY" -m "$file"
+          done
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2.6.2

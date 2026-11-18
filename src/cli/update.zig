@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const downloader = @import("core").downloader;
+const core = @import("core");
+const downloader = core.downloader;
+const minisign = core.minisign;
 
 pub const current_version = @import("build_options").version;
 
@@ -29,6 +31,7 @@ pub fn run(init: std.process.Init, progress: downloader.Progress) !?[]const u8 {
     };
     const io = init.io;
     const allocator = init.arena.allocator();
+    const public_key = try minisign.PublicKey.parse(@import("update_options").public_key);
     const current = try std.SemanticVersion.parse(current_version);
 
     const release = latest(init, cnb ++ "/badge/release.link") catch
@@ -54,7 +57,7 @@ pub fn run(init: std.process.Init, progress: downloader.Progress) !?[]const u8 {
     try cwd.createDir(io, staging, .default_dir);
     defer cwd.deleteTree(io, staging) catch {};
     const archive = try std.fs.path.join(allocator, &.{ staging, "archive" });
-    const checksum = try std.fs.path.join(allocator, &.{ staging, "checksum" });
+    const signature = try std.fs.path.join(allocator, &.{ staging, "signature.minisig" });
     const unpacked = try std.fs.path.join(allocator, &.{ staging, "unpacked" });
     try cwd.createDir(io, unpacked, .default_dir);
 
@@ -65,10 +68,10 @@ pub fn run(init: std.process.Init, progress: downloader.Progress) !?[]const u8 {
     });
     const relative = try std.fmt.allocPrint(allocator, "/releases/download/v{s}/{s}", .{ version, name });
     const cnb_url = try std.mem.concat(allocator, u8, &.{ cnb, relative });
-    downloadRelease(init, cnb_url, archive, checksum, progress) catch |err| {
+    downloadRelease(init, public_key, cnb_url, name, archive, signature, progress) catch |err| {
         std.log.warn("CNB download failed ({s}), trying GitHub", .{@errorName(err)});
         const github_url = try std.mem.concat(allocator, u8, &.{ github, relative });
-        try downloadRelease(init, github_url, archive, checksum, progress);
+        try downloadRelease(init, public_key, github_url, name, archive, signature, progress);
     };
 
     if (windows) {
@@ -110,26 +113,22 @@ fn latest(init: std.process.Init, url: []const u8) !std.SemanticVersion {
 
 fn downloadRelease(
     init: std.process.Init,
+    public_key: minisign.PublicKey,
     url: []const u8,
+    asset_name: []const u8,
     archive: []const u8,
-    checksum: []const u8,
+    signature: []const u8,
     progress: downloader.Progress,
 ) !void {
     const allocator = init.gpa;
     const io = init.io;
-    const checksum_url = try std.mem.concat(allocator, u8, &.{ url, ".sha256" });
-    defer allocator.free(checksum_url);
-    try downloader.download(io, allocator, checksum_url, checksum, null);
-    const contents = try std.Io.Dir.cwd().readFileAlloc(io, checksum, allocator, .limited(4096));
+    const signature_url = try std.mem.concat(allocator, u8, &.{ url, ".minisig" });
+    defer allocator.free(signature_url);
+    try downloader.download(io, allocator, signature_url, signature, null);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(io, signature, allocator, .limited(4096));
     defer allocator.free(contents);
-    var fields = std.mem.tokenizeAny(u8, contents, " \t\r\n");
-    const hash = fields.next() orelse return error.InvalidReleaseChecksum;
-    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
-    if (hash.len != digest.len * 2) return error.InvalidReleaseChecksum;
-    _ = std.fmt.hexToBytes(&digest, hash) catch return error.InvalidReleaseChecksum;
-    const expected = std.fmt.bytesToHex(digest, .lower);
     try downloader.download(io, allocator, url, archive, progress);
-    if (!try downloader.verify(io, archive, &expected)) return error.ReleaseChecksumMismatch;
+    try public_key.verify(io, archive, contents, asset_name);
 }
 
 fn extractTar(io: std.Io, archive: []const u8, destination: []const u8) !void {

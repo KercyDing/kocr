@@ -23,7 +23,7 @@ permissions:
 jobs:
   publish:
     name: Publish the AUR packages
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Resolve the release tag
@@ -62,28 +62,41 @@ jobs:
             "kocr_${VERSION}-1_amd64.deb" \
             "kocr_${VERSION}-1_arm64.deb"; do
             for _ in $(seq 1 30); do
-              curl -fsSIL -o /dev/null "$base/$name" && continue 2
+              if curl -fsSIL -o /dev/null "$base/$name" &&
+                 curl -fsSIL -o /dev/null "$base/$name.minisig"; then
+                continue 2
+              fi
               sleep 10
             done
             echo "Missing release asset: $name" >&2
             exit 1
           done
 
-      - name: Set the version and checksums
+      - name: Install Minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Verify release assets and update PKGBUILDs
         env:
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
+          MINISIGN_PUBLIC_KEY: ${{ vars.KOCR_MINISIGN_PUBLIC_KEY }}
         run: |
           set -euo pipefail
+          : "${MINISIGN_PUBLIC_KEY:?Set the KOCR_MINISIGN_PUBLIC_KEY repository variable}"
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
-          sum() {
-            local hash
-            hash="$(curl -fsSL "$base/$1.sha256" | awk '{ print $1 }')"
-            if [[ ! "$hash" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "No checksum for $1" >&2
-              exit 1
+          assets="$(mktemp -d)"
+          trap 'rm -rf "$assets"' EXIT
+          verify_and_sum() {
+            local name="$1" file comment
+            file="$assets/$name"
+            curl -fsSL "$base/$name" -o "$file" || return 1
+            curl -fsSL "$base/$name.minisig" -o "$file.minisig" || return 1
+            comment="$(minisign -V -H -Q -P "$MINISIGN_PUBLIC_KEY" -m "$file")" || return 1
+            if [[ "$comment" != "$name" ]]; then
+              echo "Signed asset name does not match $name" >&2
+              return 1
             fi
-            printf '%s' "$hash"
+            sha256sum "$file" | cut -d ' ' -f 1
           }
           for pkg in kocr-bin kocr-gui-bin; do
             case "$pkg" in
@@ -96,11 +109,13 @@ jobs:
                 arm64="kocr_${VERSION}-1_arm64.deb"
                 ;;
             esac
+            amd64_hash="$(verify_and_sum "$amd64")"
+            arm64_hash="$(verify_and_sum "$arm64")"
             dir="packaging/linux/${pkg}"
             sed -i "s/^pkgver=.*/pkgver=${VERSION}/" "$dir/PKGBUILD"
             sed -i "s/^pkgrel=.*/pkgrel=1/" "$dir/PKGBUILD"
-            sed -i "s|^sha256sums_x86_64=.*|sha256sums_x86_64=('$(sum "$amd64")')|" "$dir/PKGBUILD"
-            sed -i "s|^sha256sums_aarch64=.*|sha256sums_aarch64=('$(sum "$arm64")')|" "$dir/PKGBUILD"
+            sed -i "s|^sha256sums_x86_64=.*|sha256sums_x86_64=('$amd64_hash')|" "$dir/PKGBUILD"
+            sed -i "s|^sha256sums_aarch64=.*|sha256sums_aarch64=('$arm64_hash')|" "$dir/PKGBUILD"
           done
 
       - name: Write .SRCINFO

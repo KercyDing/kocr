@@ -17,7 +17,7 @@ source_x86_64=(
 source_aarch64=(
     "kocr-cli-${pkgver}-aarch64-linux.tar.gz::${url}/releases/download/v${pkgver}/kocr-cli-${pkgver}-aarch64-linux.tar.gz"
 )
-# The release workflow fills these from the release's .sha256 files.
+# The AUR workflow computes these after verifying the release signatures.
 sha256sums_x86_64=('SKIP')
 sha256sums_aarch64=('SKIP')
 

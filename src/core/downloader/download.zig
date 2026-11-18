@@ -157,7 +157,7 @@ pub fn download(
     if (response.head.content_length != null and downloaded != total) return InstallError.DownloadFailed;
 }
 
-pub fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {
+fn verify(io: std.Io, path: []const u8, expected: []const u8) !bool {
     var file = try std.Io.Dir.cwd().openFile(io, path, .{});
     defer file.close(io);
     var file_buffer: [64 * 1024]u8 = undefined;

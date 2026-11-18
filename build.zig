@@ -142,6 +142,9 @@ pub fn build(b: *std.Build) !void {
     const version_options = b.addOptions();
     version_options.addOption([]const u8, "version", version);
     exe_mod.addOptions("build_options", version_options);
+    const update_options = b.addOptions();
+    update_options.addOption([]const u8, "public_key", b.graph.environ_map.get("KOCR_MINISIGN_PUBLIC_KEY") orelse "");
+    exe_mod.addOptions("update_options", update_options);
 
     const exe = b.addExecutable(.{
         .name = "kocr",

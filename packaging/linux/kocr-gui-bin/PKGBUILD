@@ -22,7 +22,7 @@ source_x86_64=(
 source_aarch64=(
     "kocr_${pkgver}-1_arm64.deb::${url}/releases/download/v${pkgver}/kocr_${pkgver}-1_arm64.deb"
 )
-# The release workflow fills these from the release's .sha256 files.
+# The AUR workflow computes these after verifying the release signatures.
 sha256sums_x86_64=('SKIP')
 sha256sums_aarch64=('SKIP')
 

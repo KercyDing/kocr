@@ -80,7 +80,9 @@ kocr image shot.png --detect # print the detected boxes too
 
 `kocr list` prints each profile's status and path. `kocr image` uses the selected profile unless `--profile` or `--model_dir` says otherwise. Model packs download on demand and are checked against their SHA-256.
 
-`kocr update` verifies the release archive's SHA-256 and replaces the standalone CLI in its current location. It tries CNB first and falls back to GitHub. For a package-manager installation, update through the package manager.
+`kocr update` verifies the release archive's Minisign signature using the public key embedded in the CLI, then replaces the executable in its current location. It tries CNB first and falls back to GitHub. For a package-manager installation, update through the package manager.
+
+For release builds, set the GitHub repository variable `KOCR_MINISIGN_PUBLIC_KEY` to the base64 public key printed by Minisign. Set the repository secret `KOCR_MINISIGN_SECRET_KEY` to the full contents of a matching CI signing key created with `minisign -G -W`. For local builds, set the public key as the environment variable `KOCR_MINISIGN_PUBLIC_KEY` before building to enable `kocr update`.
 
 ## Build from source
 
