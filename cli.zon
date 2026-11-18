@@ -1,6 +1,6 @@
 .{
     .name = "kocr",
-    .version = "0.5.10",
+    .version = "0.5.11",
     .help = "Offline OCR for images",
     .commands = .{
         .{
