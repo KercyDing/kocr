@@ -53,8 +53,8 @@
         },
         // GUI
         .nanoui = .{
-            .url = "git+https://github.com/justrach/nanoui?ref=v0.14.10#fcf9364bb06bf181442adb98f15147b5d1197069",
-            .hash = "nanoui-0.14.10-we0KMb8nYgD4MnZMaGhaaGre4mVeOZdMkbTReTxy1_m_",
+            .url = "git+https://github.com/justrach/nanoui?ref=v0.14.12#36a9f2114d96f4de7b45a8e7b8ae4c1c433de84a",
+            .hash = "nanoui-0.14.12-we0KMSElZAD98FuDS64AOqDfuza1clLRLoPdeUIdZKfv",
         },
         // Sqlite
         .zqlite = .{
