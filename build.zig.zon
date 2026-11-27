@@ -75,8 +75,8 @@
         },
         // Bundle
         .bundle = .{
-            .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.5#4fd66c9361bb37271f2d0cddbf08e5182fe80014",
-            .hash = "zig_bundle-0.1.5-Ni_yYeWzFwAW59sioR5tPGkE0u1Cn6huiLxdnGRD-Jmg",
+            .url = "git+https://github.com/KercyDing/zig-bundle?ref=v0.1.6#d75bfbc2397a4fb3cc1f68cebf54f88fe43be9b4",
+            .hash = "zig_bundle-0.1.6-Ni_yYarIFwC2fytyldjFakFOfrtRFtocOIJ8n5DuY_Ax",
         },
         // Downloader
         .downloader = .{
